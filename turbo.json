@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["DATABASE_URL", "AUTH_SECRET", "REDIS_URL", "NEON_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build", "^generate"],
