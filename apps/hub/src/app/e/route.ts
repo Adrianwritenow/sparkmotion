@@ -10,6 +10,7 @@ import {
 import type { CachedBand, CachedEventStatus } from "@sparkmotion/redis";
 
 export const runtime = "nodejs"; // needs DB/Redis access
+export const maxDuration = 10; // Keep serverless function alive for async logging
 
 export async function GET(request: NextRequest) {
   const bandId = request.nextUrl.searchParams.get("bandId");
@@ -54,7 +55,14 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Log tap asynchronously — don't block redirect
-    logTap(bandData, request).catch(() => {});
+    logTap(bandData, request).catch((error) => {
+      console.error('Tap logging failed:', {
+        bandId: bandData.bandId,
+        eventId: bandData.eventId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
 
     // 4. Redirect
     return NextResponse.redirect(bandData.redirectUrl, 302);
@@ -149,12 +157,17 @@ async function logTap(bandData: CachedBand, request: NextRequest): Promise<void>
         ipAddress,
       },
     }),
+    // Atomic firstTapAt update — only sets on first tap
+    db.band.updateMany({
+      where: { bandId: bandData.bandId, firstTapAt: null },
+      data: { firstTapAt: new Date() },
+    }),
+    // Always update lastTapAt and increment tapCount
     db.band.update({
       where: { bandId: bandData.bandId },
       data: {
         lastTapAt: new Date(),
         tapCount: { increment: 1 },
-        firstTapAt: undefined, // Prisma will only set if null via a raw query — we'll handle this simply
       },
     }),
     recordTap(bandData.eventId, bandData.bandId, bandData.currentMode),
