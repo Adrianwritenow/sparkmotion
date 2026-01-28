@@ -1,21 +1,26 @@
-import NextAuth from "next-auth";
-import { authConfig } from "@sparkmotion/auth/auth.config";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-const { auth } = NextAuth(authConfig);
+const COOKIE_PREFIX = process.env.AUTH_COOKIE_PREFIX || "authjs";
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
-  const isAuthPage = req.nextUrl.pathname.startsWith("/auth");
+export function middleware(request: NextRequest) {
+  const token =
+    request.cookies.get(`${COOKIE_PREFIX}.session-token`) ??
+    request.cookies.get(`__Secure-${COOKIE_PREFIX}.session-token`);
 
-  if (!isLoggedIn && !isAuthPage) {
-    return Response.redirect(new URL("/auth/signin", req.url));
+  const isAuthPage = request.nextUrl.pathname.startsWith("/auth");
+
+  if (!token && !isAuthPage) {
+    return NextResponse.redirect(new URL("/auth/signin", request.url));
   }
 
-  if (isLoggedIn && isAuthPage) {
-    return Response.redirect(new URL("/", req.url));
+  if (token && isAuthPage) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
-});
+
+  return NextResponse.next();
+}
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/events/:path*", "/api/trpc/:path*"],
+  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };

@@ -4,6 +4,10 @@
   "private": true,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth.config": "./src/auth.config.ts"
+  },
   "dependencies": {
     "next-auth": "5.0.0-beta.25",
     "bcryptjs": "^2.4.3",

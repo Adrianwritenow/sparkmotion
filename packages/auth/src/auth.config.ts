@@ -1,7 +1,21 @@
 import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 
+const cookiePrefix = process.env.AUTH_COOKIE_PREFIX || "authjs";
+
 export const authConfig = {
+  secret: process.env.AUTH_SECRET,
+  cookies: {
+    sessionToken: {
+      name: `${cookiePrefix}.session-token`,
+    },
+    callbackUrl: {
+      name: `${cookiePrefix}.callback-url`,
+    },
+    csrfToken: {
+      name: `${cookiePrefix}.csrf-token`,
+    },
+  },
   pages: {
     signIn: "/auth/signin",
   },
