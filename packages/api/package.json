@@ -8,8 +8,10 @@
     "@trpc/server": "^10.45.0",
     "superjson": "^2.2.0",
     "zod": "^3.24.0",
+    "next-auth": "5.0.0-beta.25",
     "@sparkmotion/database": "workspace:*",
-    "@sparkmotion/redis": "workspace:*"
+    "@sparkmotion/redis": "workspace:*",
+    "@sparkmotion/auth": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

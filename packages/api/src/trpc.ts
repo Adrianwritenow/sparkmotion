@@ -1,9 +1,27 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import type { User } from "@sparkmotion/database";
+import type { Session } from "next-auth";
+import { auth } from "@sparkmotion/auth";
+import { db } from "@sparkmotion/database";
+// Import type augmentation
+import "@sparkmotion/auth/src/types/next-auth";
 
 export interface TRPCContext {
-  user: User | null;
+  db: typeof db;
+  session: Session | null;
+  user: Session["user"] | null;
+  headers: Headers;
+}
+
+export async function createTRPCContext(opts?: { headers?: Headers }) {
+  const session = await auth();
+
+  return {
+    db,
+    session,
+    user: session?.user ?? null,
+    headers: opts?.headers ?? new Headers(),
+  };
 }
 
 const t = initTRPC.context<TRPCContext>().create({
@@ -29,7 +47,7 @@ const isAdmin = middleware(({ ctx, next }) => {
 });
 
 const isCustomer = middleware(({ ctx, next }) => {
-  if (!ctx.user || ctx.user.role !== "CUSTOMER") {
+  if (!ctx.user || ctx.user.role !== "CUSTOMER" || !ctx.user.orgId) {
     throw new TRPCError({ code: "FORBIDDEN" });
   }
   return next({ ctx: { user: ctx.user } });

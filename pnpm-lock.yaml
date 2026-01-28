@@ -179,6 +179,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@sparkmotion/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@sparkmotion/database':
         specifier: workspace:*
         version: link:../database
@@ -188,6 +191,9 @@ importers:
       '@trpc/server':
         specifier: ^10.45.0
         version: 10.45.4
+      next-auth:
+        specifier: 5.0.0-beta.25
+        version: 5.0.0-beta.25(next@14.2.35(react-dom@18.3.1(react@19.2.4))(react@19.2.4))(react@19.2.4)
       superjson:
         specifier: ^2.2.0
         version: 2.2.6
