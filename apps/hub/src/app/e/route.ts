@@ -46,8 +46,10 @@ export async function GET(request: NextRequest) {
         redirectUrl,
       };
 
-      // Cache for next lookup
-      await setCachedBand(bandId, bandData);
+      // Cache for next lookup (fire-and-forget, don't block response)
+      setCachedBand(bandId, bandData).catch((err) =>
+        console.error('Band cache write failed:', { bandId, error: err instanceof Error ? err.message : String(err) })
+      );
     }
 
     if (bandData.status !== "ACTIVE") {
@@ -123,7 +125,10 @@ async function resolveEventStatus(eventId: string): Promise<CachedEventStatus> {
     postUrl: event.postUrl,
   };
 
-  await setCachedEventStatus(eventId, status);
+  // Cache for next lookup (fire-and-forget, don't block response)
+  setCachedEventStatus(eventId, status).catch((err) =>
+    console.error('Event status cache write failed:', { eventId, error: err instanceof Error ? err.message : String(err) })
+  );
   return status;
 }
 
