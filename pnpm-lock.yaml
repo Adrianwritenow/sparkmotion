@@ -20,6 +20,9 @@ importers:
       '@sparkmotion/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@sparkmotion/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@sparkmotion/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -44,6 +47,9 @@ importers:
       next:
         specifier: ^14.2.0
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next-auth:
+        specifier: ^5.0.0-beta.25
+        version: 5.0.0-beta.25(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       react:
         specifier: ^18.3.0
         version: 18.3.1
@@ -81,6 +87,9 @@ importers:
       '@sparkmotion/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@sparkmotion/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@sparkmotion/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -105,6 +114,9 @@ importers:
       next:
         specifier: ^14.2.0
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next-auth:
+        specifier: ^5.0.0-beta.25
+        version: 5.0.0-beta.25(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       react:
         specifier: ^18.3.0
         version: 18.3.1
@@ -1538,6 +1550,12 @@ snapshots:
       thenify-all: 1.6.0
 
   nanoid@3.3.11: {}
+
+  next-auth@5.0.0-beta.25(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@auth/core': 0.37.2
+      next: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react: 18.3.1
 
   next-auth@5.0.0-beta.25(next@14.2.35(react-dom@18.3.1(react@19.2.4))(react@19.2.4))(react@19.2.4):
     dependencies:
