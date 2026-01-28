@@ -1,15 +1,12 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { appRouter } from "@sparkmotion/api";
-import type { TRPCContext } from "@sparkmotion/api";
+import { appRouter, createTRPCContext } from "@sparkmotion/api";
 
 const handler = (req: Request) =>
   fetchRequestHandler({
     endpoint: "/api/trpc",
     req,
     router: appRouter,
-    createContext: (): TRPCContext => ({
-      user: null, // TODO: wire up real auth
-    }),
+    createContext: () => createTRPCContext({ headers: req.headers }),
   });
 
 export { handler as GET, handler as POST };
