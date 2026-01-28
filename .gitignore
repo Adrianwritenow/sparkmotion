@@ -9,3 +9,10 @@ dist
 next-env.d.ts
 .DS_Store
 .vercel
+CLAUDE.md
+SYSTEM.md
+PHASES.md
+CONTEXT.md
+PROJECT.md
+.planning/
+.claude/
