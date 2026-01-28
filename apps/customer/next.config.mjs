@@ -12,9 +12,9 @@ const nextConfig = {
       "node_modules/.pnpm/**/.prisma/client/**",
     ],
   },
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   experimental: {
     serverComponentsExternalPackages: ["@prisma/client", "prisma"],
-    outputFileTracingRoot: path.join(__dirname, "../.."),
   },
 };
 
