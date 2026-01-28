@@ -13,6 +13,7 @@ export const runtime = "nodejs"; // needs DB/Redis access
 export const maxDuration = 10; // Keep serverless function alive for async logging
 
 export async function GET(request: NextRequest) {
+  const startTime = performance.now();
   const bandId = request.nextUrl.searchParams.get("bandId");
   if (!bandId) {
     return NextResponse.json({ error: "bandId is required" }, { status: 400 });
@@ -67,6 +68,8 @@ export async function GET(request: NextRequest) {
     });
 
     // 4. Redirect
+    const duration = (performance.now() - startTime).toFixed(1);
+    console.log(`[perf] redirect resolved in ${duration}ms`, { bandId, cached: !!bandData });
     return NextResponse.redirect(bandData.redirectUrl, 302);
   } catch (error) {
     console.error("Redirect error:", error);
