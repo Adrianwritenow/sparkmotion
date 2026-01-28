@@ -4,7 +4,7 @@ import type { Session } from "next-auth";
 import { auth } from "@sparkmotion/auth";
 import { db } from "@sparkmotion/database";
 // Import type augmentation
-import "@sparkmotion/auth/src/types/next-auth";
+import "@sparkmotion/auth/types/next-auth";
 
 export interface TRPCContext {
   db: typeof db;
