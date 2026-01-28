@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+}
+
+enum OrgRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum EventStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum WindowType {
+  PRE
+  LIVE
+  POST
+}
+
+enum BandStatus {
+  ACTIVE
+  DISABLED
+  LOST
+}
+
+model Organization {
+  id           String    @id @default(cuid())
+  name         String
+  slug         String    @unique
+  brandingJson Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  events   Event[]
+  orgUsers OrgUser[]
+
+  @@index([slug])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orgUsers OrgUser[]
+
+  @@index([email])
+}
+
+model OrgUser {
+  id     String  @id @default(cuid())
+  userId String
+  orgId  String
+  role   OrgRole @default(VIEWER)
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+model Event {
+  id       String      @id @default(cuid())
+  orgId    String
+  name     String
+  tourName String?
+  slug     String      @unique
+  preUrl   String
+  liveUrl  String
+  postUrl  String
+  status   EventStatus @default(DRAFT)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  org     Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  windows EventWindow[]
+  bands   Band[]
+  tapLogs TapLog[]
+
+  @@index([orgId])
+  @@index([slug])
+  @@index([status])
+}
+
+model EventWindow {
+  id         String     @id @default(cuid())
+  eventId    String
+  windowType WindowType
+  startTime  DateTime?
+  endTime    DateTime?
+  isManual   Boolean    @default(false)
+  isActive   Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([eventId, isActive])
+  @@index([windowType])
+}
+
+model Band {
+  id         String     @id @default(cuid())
+  bandId     String     @unique
+  eventId    String
+  status     BandStatus @default(ACTIVE)
+  firstTapAt DateTime?
+  lastTapAt  DateTime?
+  tapCount   Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tapLogs TapLog[]
+
+  @@index([bandId])
+  @@index([eventId])
+  @@index([eventId, status])
+}
+
+model TapLog {
+  id          String   @id @default(cuid())
+  bandId      String
+  eventId     String
+  tappedAt    DateTime @default(now())
+  modeServed  String
+  redirectUrl String
+  userAgent   String?
+  ipAddress   String?
+
+  band  Band  @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([bandId])
+  @@index([eventId])
+  @@index([eventId, tappedAt])
+  @@index([tappedAt])
+}
