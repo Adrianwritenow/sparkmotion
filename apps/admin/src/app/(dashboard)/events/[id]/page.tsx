@@ -55,6 +55,9 @@ export default async function EventDetailPage({
         <Button asChild>
           <Link href={`/events/${event.id}/windows`}>Manage Windows</Link>
         </Button>
+        <Button asChild variant="outline">
+          <Link href={`/events/${event.id}/bands`}>Manage Bands</Link>
+        </Button>
       </div>
     </div>
   );
