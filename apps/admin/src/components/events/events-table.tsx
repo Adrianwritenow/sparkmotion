@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { columns } from "./columns";
 import { Event, Organization } from "@sparkmotion/database";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 type EventWithDetails = Event & {
   org: Organization;
@@ -34,6 +35,7 @@ interface EventsTableProps {
 }
 
 export function EventsTable({ data }: EventsTableProps) {
+  const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -85,7 +87,11 @@ export function EventsTable({ data }: EventsTableProps) {
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/events/${row.original.id}`)}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
