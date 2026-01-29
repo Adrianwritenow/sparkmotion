@@ -16,6 +16,5 @@ CONTEXT.md
 PROJECT.md
 .planning/
 .claude/
-.prisma
 **/.prisma
-apps/*/.prisma
+.prisma
