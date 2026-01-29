@@ -13,17 +13,29 @@ export const windowsRouter = router({
       });
     }),
 
-  create: adminProcedure
+  create: protectedProcedure
     .input(
       z.object({
         eventId: z.string(),
         windowType: z.enum(["PRE", "LIVE", "POST"]),
-        startTime: z.date().optional(),
-        endTime: z.date().optional(),
+        startTime: z.date(),
+        endTime: z.date(),
         isManual: z.boolean().default(false),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // If customer role, verify event belongs to their org
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: input.eventId },
+          select: { orgId: true },
+        });
+
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new Error("Event not found or access denied");
+        }
+      }
+
       const window = await db.eventWindow.create({ data: input });
       await invalidateEventCache(input.eventId);
       return window;
