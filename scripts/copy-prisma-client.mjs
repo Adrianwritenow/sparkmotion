@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
 const appDirArg = process.argv[2];
 if (!appDirArg) {
@@ -7,8 +8,9 @@ if (!appDirArg) {
   process.exit(1);
 }
 
-const appDir = path.resolve(process.cwd(), appDirArg);
-const repoRoot = path.resolve(appDir, "../..");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDir, "..");
+const appDir = path.resolve(repoRoot, appDirArg);
 const source = path.join(repoRoot, "node_modules/.prisma/client");
 const dest = path.join(appDir, ".prisma/client");
 
