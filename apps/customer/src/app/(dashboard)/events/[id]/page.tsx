@@ -57,24 +57,6 @@ export default async function EventDetailPage({
         </div>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">URLs</h2>
-        <div className="rounded-lg border p-4 space-y-3">
-          <div>
-            <span className="text-sm font-medium text-muted-foreground">Pre-Event:</span>
-            <p className="text-sm break-all">{event.preUrl}</p>
-          </div>
-          <div>
-            <span className="text-sm font-medium text-muted-foreground">Live Event:</span>
-            <p className="text-sm break-all">{event.liveUrl}</p>
-          </div>
-          <div>
-            <span className="text-sm font-medium text-muted-foreground">Post-Event:</span>
-            <p className="text-sm break-all">{event.postUrl}</p>
-          </div>
-        </div>
-      </div>
-
       <div className="flex gap-4">
         <Button asChild>
           <Link href={`/events/${event.id}/windows`}>Manage Windows</Link>

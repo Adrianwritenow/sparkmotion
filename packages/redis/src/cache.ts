@@ -12,9 +12,7 @@ export interface CachedBand {
 export interface CachedEventStatus {
   currentMode: string;
   activeWindowId: string | null;
-  preUrl: string;
-  liveUrl: string;
-  postUrl: string;
+  redirectUrl: string | null;
 }
 
 const BAND_TTL = 300; // 5 minutes

@@ -21,9 +21,6 @@ export function EventFormWrapper({ orgId }: EventFormWrapperProps) {
     name: string;
     tourName?: string;
     slug: string;
-    preUrl: string;
-    liveUrl: string;
-    postUrl: string;
   }) => {
     await createEvent.mutateAsync({
       ...values,

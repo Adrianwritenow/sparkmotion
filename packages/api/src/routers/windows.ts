@@ -18,6 +18,7 @@ export const windowsRouter = router({
       z.object({
         eventId: z.string(),
         windowType: z.enum(["PRE", "LIVE", "POST"]),
+        url: z.string().url(),
         startTime: z.date(),
         endTime: z.date(),
         isManual: z.boolean().default(false),

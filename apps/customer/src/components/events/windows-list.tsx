@@ -59,6 +59,7 @@ export function WindowsList({ eventId }: WindowsListProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Mode</TableHead>
+            <TableHead>URL</TableHead>
             <TableHead>Start Time</TableHead>
             <TableHead>End Time</TableHead>
             <TableHead>Toggle</TableHead>
@@ -72,6 +73,9 @@ export function WindowsList({ eventId }: WindowsListProps) {
                 <ModeIndicator
                   mode={window.windowType.toLowerCase() as "pre" | "live" | "post"}
                 />
+              </TableCell>
+              <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                {window.url}
               </TableCell>
               <TableCell>
                 {window.startTime

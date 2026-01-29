@@ -25,6 +25,7 @@ import { trpc } from "@/lib/trpc";
 const windowFormSchema = z
   .object({
     windowType: z.enum(["PRE", "LIVE", "POST"]),
+    url: z.string().url("Must be a valid URL"),
     startTime: z.string().min(1, "Start time is required"),
     endTime: z.string().min(1, "End time is required"),
   })
@@ -53,6 +54,7 @@ export function WindowForm({ eventId }: WindowFormProps) {
     resolver: zodResolver(windowFormSchema),
     defaultValues: {
       windowType: "PRE",
+      url: "",
       startTime: "",
       endTime: "",
     },
@@ -69,6 +71,7 @@ export function WindowForm({ eventId }: WindowFormProps) {
     await createWindow.mutateAsync({
       eventId,
       windowType: values.windowType,
+      url: values.url,
       startTime: new Date(values.startTime),
       endTime: new Date(values.endTime),
       isManual: false,
@@ -96,6 +99,24 @@ export function WindowForm({ eventId }: WindowFormProps) {
                   <SelectItem value="POST">POST</SelectItem>
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="url"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Redirect URL</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="https://example.com/page"
+                  type="url"
+                  {...field}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}

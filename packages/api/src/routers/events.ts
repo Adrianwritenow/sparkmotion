@@ -54,9 +54,6 @@ export const eventsRouter = router({
         name: z.string().min(1),
         tourName: z.string().optional(),
         slug: z.string().min(1),
-        preUrl: z.string().url(),
-        liveUrl: z.string().url(),
-        postUrl: z.string().url(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -75,9 +72,6 @@ export const eventsRouter = router({
         name: z.string().min(1).optional(),
         tourName: z.string().optional(),
         slug: z.string().min(1).optional(),
-        preUrl: z.string().url().optional(),
-        liveUrl: z.string().url().optional(),
-        postUrl: z.string().url().optional(),
         status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
       })
     )

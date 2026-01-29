@@ -18,9 +18,6 @@ const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
   tourName: z.string().optional(),
   slug: z.string().min(1, "Slug is required"),
-  preUrl: z.string().url("Must be a valid URL"),
-  liveUrl: z.string().url("Must be a valid URL"),
-  postUrl: z.string().url("Must be a valid URL"),
 });
 
 type EventFormValues = z.infer<typeof eventFormSchema>;
@@ -37,9 +34,6 @@ export function EventForm({ onSubmit, isPending }: EventFormProps) {
       name: "",
       tourName: "",
       slug: "",
-      preUrl: "",
-      liveUrl: "",
-      postUrl: "",
     },
   });
 
@@ -104,60 +98,6 @@ export function EventForm({ onSubmit, isPending }: EventFormProps) {
               <FormLabel>Tour Name (Optional)</FormLabel>
               <FormControl>
                 <Input placeholder="Compassion Tour 2026" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="preUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Pre-Event URL</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="https://example.com/pre"
-                  type="url"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="liveUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Live Event URL</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="https://example.com/live"
-                  type="url"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="postUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Post-Event URL</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="https://example.com/post"
-                  type="url"
-                  {...field}
-                />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -84,9 +84,6 @@ model Event {
   name     String
   tourName String?
   slug     String      @unique
-  preUrl   String
-  liveUrl  String
-  postUrl  String
   status   EventStatus @default(DRAFT)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -105,6 +102,7 @@ model EventWindow {
   id         String     @id @default(cuid())
   eventId    String
   windowType WindowType
+  url        String
   startTime  DateTime?
   endTime    DateTime?
   isManual   Boolean    @default(false)

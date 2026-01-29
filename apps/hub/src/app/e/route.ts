@@ -37,14 +37,17 @@ export async function GET(request: NextRequest) {
 
       // Determine current mode from event windows
       const eventStatus = await resolveEventStatus(band.eventId);
-      const redirectUrl = getRedirectUrl(eventStatus);
+
+      if (!eventStatus.redirectUrl) {
+        return NextResponse.json({ error: "No active window" }, { status: 404 });
+      }
 
       bandData = {
         bandId: band.bandId,
         eventId: band.eventId,
         status: band.status,
         currentMode: eventStatus.currentMode,
-        redirectUrl,
+        redirectUrl: eventStatus.redirectUrl,
       };
 
       // Cache for next lookup (fire-and-forget, don't block response)
@@ -95,6 +98,7 @@ async function resolveEventStatus(eventId: string): Promise<CachedEventStatus> {
 
   let currentMode: string;
   let activeWindowId: string | null = null;
+  let redirectUrl: string | null = null;
 
   if (!activeWindow) {
     // No active windows — check scheduled windows
@@ -112,20 +116,20 @@ async function resolveEventStatus(eventId: string): Promise<CachedEventStatus> {
     if (scheduled) {
       currentMode = scheduled.windowType.toLowerCase();
       activeWindowId = scheduled.id;
+      redirectUrl = scheduled.url;
     } else {
       currentMode = "pre"; // Default to pre-event
     }
   } else {
     currentMode = activeWindow.windowType.toLowerCase();
     activeWindowId = activeWindow.id;
+    redirectUrl = activeWindow.url;
   }
 
   const status: CachedEventStatus = {
     currentMode,
     activeWindowId,
-    preUrl: event.preUrl,
-    liveUrl: event.liveUrl,
-    postUrl: event.postUrl,
+    redirectUrl,
   };
 
   // Cache for next lookup (fire-and-forget, don't block response)
@@ -133,17 +137,6 @@ async function resolveEventStatus(eventId: string): Promise<CachedEventStatus> {
     console.error('Event status cache write failed:', { eventId, error: err instanceof Error ? err.message : String(err) })
   );
   return status;
-}
-
-function getRedirectUrl(status: CachedEventStatus): string {
-  switch (status.currentMode) {
-    case "live":
-      return status.liveUrl;
-    case "post":
-      return status.postUrl;
-    default:
-      return status.preUrl;
-  }
 }
 
 async function logTap(bandData: CachedBand, request: NextRequest): Promise<void> {
