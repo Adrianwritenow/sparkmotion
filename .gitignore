@@ -18,3 +18,4 @@ PROJECT.md
 .claude/
 .prisma
 **/.prisma
+apps/*/.prisma
