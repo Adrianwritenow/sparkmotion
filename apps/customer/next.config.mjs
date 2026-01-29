@@ -1,9 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@sparkmotion/ui", "@sparkmotion/auth"],
-  serverExternalPackages: ["@prisma/client"],
-  outputFileTracingIncludes: {
-    "/api/**/*": ["./.prisma/client/**"],
+  experimental: {
+    serverComponentsExternalPackages: ["@prisma/client"],
+    outputFileTracingIncludes: {
+      "/api/**/*": ["./.prisma/client/**"],
+    },
   },
 };
 
