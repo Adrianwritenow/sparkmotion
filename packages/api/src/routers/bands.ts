@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, adminProcedure, protectedProcedure } from "../trpc";
 import { db } from "@sparkmotion/database";
 
@@ -20,14 +21,24 @@ export const bandsRouter = router({
       return { bands, nextCursor };
     }),
 
-  uploadBatch: adminProcedure
+  uploadBatch: protectedProcedure
     .input(
       z.object({
         eventId: z.string(),
         bandIds: z.array(z.string()).min(1).max(10000),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const event = await db.event.findUnique({
+        where: { id: input.eventId },
+        select: { orgId: true },
+      });
+      if (!event) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
+      }
+      if (ctx.user.role !== "ADMIN" && event.orgId !== ctx.user.orgId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
       const data = input.bandIds.map((bandId) => ({
         bandId,
         eventId: input.eventId,
