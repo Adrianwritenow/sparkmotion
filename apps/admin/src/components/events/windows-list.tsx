@@ -9,27 +9,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { WindowType } from "@sparkmotion/database";
+import { Switch } from "@/components/ui/switch";
+import { ModeIndicator } from "./mode-indicator";
 
 interface WindowsListProps {
   eventId: string;
 }
 
-const modeVariants: Record<WindowType, "default" | "secondary" | "destructive"> = {
-  PRE: "secondary",
-  LIVE: "default",
-  POST: "outline" as any,
-};
-
 export function WindowsList({ eventId }: WindowsListProps) {
   const utils = trpc.useUtils();
   const { data: windows, isLoading } = trpc.windows.list.useQuery({ eventId });
 
+  const toggleWindow = trpc.windows.toggle.useMutation({
+    onSuccess: () => {
+      utils.windows.list.invalidate({ eventId });
+      utils.events.byId.invalidate({ id: eventId });
+    },
+  });
+
   const deleteWindow = trpc.windows.delete.useMutation({
     onSuccess: () => {
       utils.windows.list.invalidate({ eventId });
+      utils.events.byId.invalidate({ id: eventId });
     },
   });
 
@@ -59,7 +61,7 @@ export function WindowsList({ eventId }: WindowsListProps) {
             <TableHead>Mode</TableHead>
             <TableHead>Start Time</TableHead>
             <TableHead>End Time</TableHead>
-            <TableHead>Active</TableHead>
+            <TableHead>Toggle</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -67,9 +69,9 @@ export function WindowsList({ eventId }: WindowsListProps) {
           {windows.map((window) => (
             <TableRow key={window.id}>
               <TableCell>
-                <Badge variant={modeVariants[window.windowType]}>
-                  {window.windowType}
-                </Badge>
+                <ModeIndicator
+                  mode={window.windowType.toLowerCase() as "pre" | "live" | "post"}
+                />
               </TableCell>
               <TableCell>
                 {window.startTime
@@ -82,9 +84,13 @@ export function WindowsList({ eventId }: WindowsListProps) {
                   : "—"}
               </TableCell>
               <TableCell>
-                <Badge variant={window.isActive ? "default" : "secondary"}>
-                  {window.isActive ? "Active" : "Inactive"}
-                </Badge>
+                <Switch
+                  checked={window.isActive}
+                  onCheckedChange={(checked) =>
+                    toggleWindow.mutate({ id: window.id, isActive: checked })
+                  }
+                  disabled={toggleWindow.isPending}
+                />
               </TableCell>
               <TableCell className="text-right">
                 <Button
