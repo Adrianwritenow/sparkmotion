@@ -5,10 +5,14 @@ import { db } from "@sparkmotion/database";
 
 export const bandsRouter = router({
   list: protectedProcedure
-    .input(z.object({ eventId: z.string(), cursor: z.string().optional(), limit: z.number().min(1).max(100).default(50) }))
+    .input(z.object({ eventId: z.string(), search: z.string().optional(), cursor: z.string().optional(), limit: z.number().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
+      const where: any = { eventId: input.eventId };
+      if (input.search) {
+        where.bandId = { contains: input.search, mode: "insensitive" };
+      }
       const bands = await db.band.findMany({
-        where: { eventId: input.eventId },
+        where,
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
         orderBy: { createdAt: "desc" },
@@ -45,6 +49,28 @@ export const bandsRouter = router({
       }));
       const result = await db.band.createMany({ data, skipDuplicates: true });
       return { created: result.count };
+    }),
+
+  update: protectedProcedure
+    .input(z.object({ id: z.string(), bandId: z.string().optional(), status: z.enum(["ACTIVE", "DISABLED", "LOST"]).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const band = await db.band.findUnique({ where: { id: input.id }, include: { event: { select: { orgId: true } } } });
+      if (!band) throw new TRPCError({ code: "NOT_FOUND", message: "Band not found" });
+      if (ctx.user.role !== "ADMIN" && band.event.orgId !== ctx.user.orgId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      return db.band.update({ where: { id: input.id }, data: { ...(input.bandId && { bandId: input.bandId }), ...(input.status && { status: input.status }) } });
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const band = await db.band.findUnique({ where: { id: input.id }, include: { event: { select: { orgId: true } } } });
+      if (!band) throw new TRPCError({ code: "NOT_FOUND", message: "Band not found" });
+      if (ctx.user.role !== "ADMIN" && band.event.orgId !== ctx.user.orgId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      return db.band.delete({ where: { id: input.id } });
     }),
 
   tapHistory: protectedProcedure

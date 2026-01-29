@@ -1,6 +1,7 @@
 import { db } from "@sparkmotion/database";
 import { notFound } from "next/navigation";
 import { BandCsvUpload } from "@/components/bands/band-csv-upload";
+import { BandsTable } from "@/components/bands/bands-table";
 
 export default async function BandsPage({
   params,
@@ -22,6 +23,7 @@ export default async function BandsPage({
         Bands &mdash; {event.name}
       </h1>
       <BandCsvUpload eventId={event.id} />
+      <BandsTable eventId={event.id} />
     </div>
   );
 }
