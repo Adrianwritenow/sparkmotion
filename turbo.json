@@ -1,6 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["DATABASE_URL", "AUTH_SECRET", "REDIS_URL", "NEON_URL"],
+  "globalEnv": [
+    "DATABASE_URL",
+    "AUTH_SECRET",
+    "REDIS_URL",
+    "NEON_URL",
+    "AUTH_URL",
+    "AUTH_REMOTE_URL",
+    "NEXT_PUBLIC_API_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build", "^generate"],

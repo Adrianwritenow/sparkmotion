@@ -1,22 +1,12 @@
-import { db } from "@sparkmotion/database";
+"use client";
+
 import { EventsTable } from "@/components/events/events-table";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { trpc } from "@/lib/trpc";
 
-export default async function EventsPage() {
-  const events = await db.event.findMany({
-    include: {
-      org: true,
-      _count: {
-        select: {
-          bands: true,
-        },
-      },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+export default function EventsPage() {
+  const { data: events, isLoading } = trpc.events.list.useQuery();
 
   return (
     <div>
@@ -27,7 +17,7 @@ export default async function EventsPage() {
         </Button>
       </div>
 
-      <EventsTable data={events} />
+      {isLoading ? <div>Loading...</div> : <EventsTable data={events ?? []} />}
     </div>
   );
 }

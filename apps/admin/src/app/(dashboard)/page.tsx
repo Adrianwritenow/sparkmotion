@@ -1,24 +1,15 @@
-import { db } from "@sparkmotion/database";
+"use client";
+
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { trpc } from "@/lib/trpc";
 
-export default async function DashboardPage() {
-  // Fetch basic stats
-  const [eventCount, bandCount, recentTaps] = await db.$transaction([
-    db.event.count(),
-    db.band.count(),
-    db.tapLog.count({
-      where: {
-        tappedAt: {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
-        },
-      },
-    }),
-  ]);
+export default function DashboardPage() {
+  const { data, isLoading } = trpc.admin.dashboardStats.useQuery();
 
   return (
     <div>
@@ -32,7 +23,7 @@ export default async function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{eventCount}</div>
+            <div className="text-2xl font-bold">{isLoading ? "—" : data?.eventCount ?? 0}</div>
           </CardContent>
         </Card>
 
@@ -43,7 +34,7 @@ export default async function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{bandCount}</div>
+            <div className="text-2xl font-bold">{isLoading ? "—" : data?.bandCount ?? 0}</div>
           </CardContent>
         </Card>
 
@@ -54,7 +45,7 @@ export default async function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{recentTaps}</div>
+            <div className="text-2xl font-bold">{isLoading ? "—" : data?.recentTaps ?? 0}</div>
           </CardContent>
         </Card>
       </div>

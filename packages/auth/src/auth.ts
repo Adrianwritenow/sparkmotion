@@ -1,7 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config";
-import { db } from "@sparkmotion/database";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -28,13 +27,29 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
 
         const { email, password } = validated.data;
 
+        const remoteUrl = process.env.AUTH_REMOTE_URL;
+        if (remoteUrl) {
+          const response = await fetch(`${remoteUrl}/api/auth/credentials`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+
+          if (!response.ok) {
+            return null;
+          }
+
+          return response.json();
+        }
+
+        const { db } = await import("@sparkmotion/database");
         const user = await db.user.findUnique({
           where: { email },
           include: {
             orgUsers: {
               take: 1,
               orderBy: {
-                id: 'asc',
+                id: "asc",
               },
             },
           },

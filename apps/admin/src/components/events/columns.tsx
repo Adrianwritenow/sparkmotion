@@ -2,15 +2,12 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
-import { Event, Organization, EventStatus } from "@sparkmotion/database";
+import type { AppRouter } from "@sparkmotion/api";
+import type { inferRouterOutputs } from "@trpc/server";
 
-// Type for event with org and band count
-type EventWithDetails = Event & {
-  org: Organization;
-  _count: {
-    bands: number;
-  };
-};
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type EventWithDetails = RouterOutputs["events"]["list"][number];
+type EventStatus = EventWithDetails["status"];
 
 // Status variant mapping
 const statusVariants: Record<EventStatus, "default" | "secondary" | "destructive" | "outline"> = {

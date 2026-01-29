@@ -19,15 +19,12 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { columns } from "./columns";
-import { Event, Organization } from "@sparkmotion/database";
+import type { AppRouter } from "@sparkmotion/api";
+import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 
-type EventWithDetails = Event & {
-  org: Organization;
-  _count: {
-    bands: number;
-  };
-};
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type EventWithDetails = RouterOutputs["events"]["list"][number];
 
 interface EventsTableProps {
   data: EventWithDetails[];
