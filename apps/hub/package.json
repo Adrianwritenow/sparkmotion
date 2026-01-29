@@ -13,7 +13,8 @@
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "@sparkmotion/database": "workspace:*",
-    "@sparkmotion/redis": "workspace:*"
+    "@sparkmotion/redis": "workspace:*",
+    "@sparkmotion/api": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20",
