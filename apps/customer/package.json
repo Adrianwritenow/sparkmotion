@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",
+    "postbuild": "node ../../scripts/copy-prisma-client.mjs apps/customer",
     "start": "next start --port 3001",
     "lint": "eslint ."
   },
