@@ -27,7 +27,7 @@ export const eventsRouter = router({
       });
     }),
 
-  create: adminProcedure
+  create: protectedProcedure
     .input(
       z.object({
         orgId: z.string(),
@@ -39,8 +39,13 @@ export const eventsRouter = router({
         postUrl: z.string().url(),
       })
     )
-    .mutation(async ({ input }) => {
-      return db.event.create({ data: input });
+    .mutation(async ({ ctx, input }) => {
+      // Role-based orgId enforcement
+      const orgId = ctx.user.role === "CUSTOMER"
+        ? ctx.user.orgId!
+        : input.orgId;
+
+      return db.event.create({ data: { ...input, orgId } });
     }),
 
   update: adminProcedure
