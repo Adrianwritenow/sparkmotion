@@ -41,21 +41,43 @@ export const windowsRouter = router({
       return window;
     }),
 
-  toggle: adminProcedure
+  toggle: protectedProcedure
     .input(z.object({ id: z.string(), isActive: z.boolean() }))
-    .mutation(async ({ input }) => {
-      const window = await db.eventWindow.update({
+    .mutation(async ({ input, ctx }) => {
+      // Fetch window with event to check org ownership
+      const window = await db.eventWindow.findUniqueOrThrow({
+        where: { id: input.id },
+        include: { event: true },
+      });
+
+      // If customer role, verify event belongs to their org
+      if (ctx.user.role === "CUSTOMER" && window.event.orgId !== ctx.user.orgId) {
+        throw new Error("Access denied");
+      }
+
+      const updated = await db.eventWindow.update({
         where: { id: input.id },
         data: { isActive: input.isActive },
       });
       await invalidateEventCache(window.eventId);
-      return window;
+      return updated;
     }),
 
-  delete: adminProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const window = await db.eventWindow.delete({ where: { id: input.id } });
+    .mutation(async ({ input, ctx }) => {
+      // Fetch window with event to check org ownership
+      const window = await db.eventWindow.findUniqueOrThrow({
+        where: { id: input.id },
+        include: { event: true },
+      });
+
+      // If customer role, verify event belongs to their org
+      if (ctx.user.role === "CUSTOMER" && window.event.orgId !== ctx.user.orgId) {
+        throw new Error("Access denied");
+      }
+
+      await db.eventWindow.delete({ where: { id: input.id } });
       await invalidateEventCache(window.eventId);
     }),
 });

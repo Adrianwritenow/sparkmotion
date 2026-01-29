@@ -21,10 +21,30 @@ export const eventsRouter = router({
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      return db.event.findUniqueOrThrow({
+      const event = await db.event.findUniqueOrThrow({
         where: { id: input.id },
         include: { org: true, windows: true, bands: { take: 100 }, _count: { select: { bands: true, tapLogs: true } } },
       });
+
+      // Compute currentMode from active windows
+      const activeWindows = event.windows.filter((w) => w.isActive);
+      let currentMode: "pre" | "live" | "post" = "pre";
+
+      if (activeWindows.length > 0) {
+        // Priority: LIVE > POST > PRE
+        const hasLive = activeWindows.some((w) => w.windowType === "LIVE");
+        const hasPost = activeWindows.some((w) => w.windowType === "POST");
+
+        if (hasLive) {
+          currentMode = "live";
+        } else if (hasPost) {
+          currentMode = "post";
+        } else {
+          currentMode = "pre";
+        }
+      }
+
+      return { ...event, currentMode };
     }),
 
   create: protectedProcedure
