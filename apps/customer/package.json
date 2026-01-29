@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3001",
+    "prebuild": "node ../../scripts/copy-prisma-client.mjs apps/customer",
     "build": "next build",
-    "postbuild": "node ../../scripts/copy-prisma-client.mjs apps/customer",
     "start": "next start --port 3001",
     "lint": "eslint ."
   },
