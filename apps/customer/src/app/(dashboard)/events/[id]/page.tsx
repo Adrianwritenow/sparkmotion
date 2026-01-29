@@ -1,17 +1,9 @@
 import { auth } from "@sparkmotion/auth";
 import { db } from "@sparkmotion/database";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { EventStatus } from "@sparkmotion/database";
-
-const statusVariants: Record<EventStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  ACTIVE: "default",
-  DRAFT: "secondary",
-  COMPLETED: "outline",
-  CANCELLED: "destructive",
-};
+import { EventModeHeader } from "@/components/events/event-mode-header";
 
 export default async function EventDetailPage({
   params,
@@ -42,15 +34,7 @@ export default async function EventDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">{event.name}</h1>
-          <Badge variant={statusVariants[event.status]}>{event.status}</Badge>
-        </div>
-        {event.tourName && (
-          <p className="text-muted-foreground mt-2">Tour: {event.tourName}</p>
-        )}
-      </div>
+      <EventModeHeader eventId={params.id} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border bg-card p-6">
