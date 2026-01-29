@@ -8,6 +8,7 @@ const nextConfig = {
   transpilePackages: ["@sparkmotion/api", "@sparkmotion/database", "@sparkmotion/ui", "@sparkmotion/auth"],
   outputFileTracingIncludes: {
     "/**/*": [
+      ".prisma/client/**",
       "node_modules/.prisma/client/**",
       "node_modules/.pnpm/**/.prisma/client/**",
     ],
