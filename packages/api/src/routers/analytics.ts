@@ -6,8 +6,8 @@ import { Prisma } from "@sparkmotion/database";
 
 // Shared input schema for date range queries
 const dateRangeInput = z.object({
-  from: z.string().datetime(),
-  to: z.string().datetime(),
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
   eventId: z.string().optional(),
 });
 
