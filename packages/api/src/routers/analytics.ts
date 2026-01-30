@@ -128,7 +128,7 @@ export const analyticsRouter = router({
         : Prisma.sql`AND 1=1`;
 
       // Use raw SQL for date bucketing with PostgreSQL DATE_TRUNC
-      const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>`
+      const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
         SELECT
           DATE_TRUNC('day', "tappedAt")::date as date,
           COUNT(*)::int as count
@@ -138,7 +138,7 @@ export const analyticsRouter = router({
           ${eventFilter}
         GROUP BY DATE_TRUNC('day', "tappedAt")
         ORDER BY date ASC
-      `;
+      `);
 
       // Convert to expected format
       return results.map((row) => ({
@@ -171,7 +171,7 @@ export const analyticsRouter = router({
         : Prisma.sql`AND 1=1`;
 
       // Use raw SQL to join TapLog with Event and group by event
-      const results = await db.$queryRaw<Array<{ eventId: string; eventName: string; tapCount: bigint }>>`
+      const results = await db.$queryRaw<Array<{ eventId: string; eventName: string; tapCount: bigint }>>(Prisma.sql`
         SELECT
           t."eventId",
           e."name" as "eventName",
@@ -184,7 +184,7 @@ export const analyticsRouter = router({
         GROUP BY t."eventId", e."name"
         ORDER BY "tapCount" DESC
         LIMIT 10
-      `;
+      `);
 
       // Convert to expected format
       return results.map((row) => ({
