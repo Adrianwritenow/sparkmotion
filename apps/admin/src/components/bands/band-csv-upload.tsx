@@ -33,6 +33,7 @@ export function BandCsvUpload({ eventId }: { eventId: string }) {
   const [result, setResult] = useState<{ created: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const utils = trpc.useUtils();
   const uploadBatch = trpc.bands.uploadBatch.useMutation();
 
   const downloadTemplate = () => {
@@ -93,6 +94,7 @@ export function BandCsvUpload({ eventId }: { eventId: string }) {
     const res = await uploadBatch.mutateAsync({ eventId, bandIds });
     setResult({ created: res.created, total: bandIds.length });
     setStep("result");
+    utils.bands.list.invalidate();
   };
 
   const reset = () => {

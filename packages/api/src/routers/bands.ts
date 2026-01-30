@@ -5,7 +5,7 @@ import { db } from "@sparkmotion/database";
 
 export const bandsRouter = router({
   list: protectedProcedure
-    .input(z.object({ eventId: z.string(), search: z.string().optional(), cursor: z.string().optional(), limit: z.number().min(1).max(100).default(50) }))
+    .input(z.object({ eventId: z.string(), search: z.string().nullish(), cursor: z.string().nullish(), limit: z.number().min(1).max(100).default(50) }))
     .query(async ({ input }) => {
       const where: any = { eventId: input.eventId };
       if (input.search) {

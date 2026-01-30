@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -51,11 +51,11 @@ export function BandsTable({ eventId }: { eventId: string }) {
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     trpc.bands.list.useInfiniteQuery(
-      { eventId, search: debouncedSearch || undefined, limit: 50 },
+      { eventId, search: debouncedSearch, limit: 50 },
       { getNextPageParam: (last) => last.nextCursor }
     );
 
-  const bands = data?.pages.flatMap((p) => p.bands) ?? [];
+  const bands = useMemo(() => data?.pages.flatMap((p) => p.bands) ?? [], [data]);
 
   const table = useReactTable({
     data: bands,
