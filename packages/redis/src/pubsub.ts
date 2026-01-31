@@ -8,7 +8,6 @@ import { KEYS } from "./keys";
 export function createSubscriberClient(): Redis {
   return new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
     maxRetriesPerRequest: 3,
-    lazyConnect: true,
   });
 }
 
@@ -41,13 +40,7 @@ export function createTapSubscriber(
   const subscriber = createSubscriberClient();
   const channel = KEYS.tapChannel(eventId);
 
-  subscriber.subscribe(channel, (err) => {
-    if (err) {
-      console.error("Failed to subscribe:", err);
-      return;
-    }
-  });
-
+  // Set up message listener BEFORE subscribing to avoid race condition
   subscriber.on("message", (ch, message) => {
     if (ch === channel) {
       try {
@@ -56,6 +49,13 @@ export function createTapSubscriber(
       } catch (error) {
         console.error("Failed to parse tap update message:", error);
       }
+    }
+  });
+
+  subscriber.subscribe(channel, (err) => {
+    if (err) {
+      console.error("Failed to subscribe:", err);
+      return;
     }
   });
 
