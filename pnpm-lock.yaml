@@ -44,6 +44,9 @@ importers:
       '@sparkmotion/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@sparkmotion/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
       '@sparkmotion/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -165,6 +168,9 @@ importers:
       '@sparkmotion/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@sparkmotion/redis':
+        specifier: workspace:*
+        version: link:../../packages/redis
       '@sparkmotion/ui':
         specifier: workspace:*
         version: link:../../packages/ui

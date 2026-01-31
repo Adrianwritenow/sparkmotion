@@ -6,6 +6,9 @@ import {
   getCachedEventStatus,
   setCachedEventStatus,
   recordTap,
+  getAnalytics,
+  publishTapUpdate,
+  redis,
 } from "@sparkmotion/redis";
 import type { CachedBand, CachedEventStatus } from "@sparkmotion/redis";
 
@@ -173,4 +176,25 @@ async function logTap(bandData: CachedBand, request: NextRequest): Promise<void>
     }),
     recordTap(bandData.eventId, bandData.bandId, bandData.currentMode),
   ]);
+
+  // Publish tap update to pub/sub (fire-and-forget, non-blocking)
+  getAnalytics(bandData.eventId)
+    .then((analytics) => {
+      publishTapUpdate(redis, bandData.eventId, {
+        totalTaps: analytics.totalTaps,
+        uniqueTaps: analytics.uniqueTaps,
+        mode: bandData.currentMode,
+      }).catch((err) =>
+        console.error('Tap update publish failed:', {
+          eventId: bandData.eventId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+    })
+    .catch((err) =>
+      console.error('Analytics fetch for publish failed:', {
+        eventId: bandData.eventId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
 }
