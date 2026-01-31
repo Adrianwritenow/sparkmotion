@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
-import { getAnalytics } from "@sparkmotion/redis";
+import { getAnalytics, getVelocityHistory } from "@sparkmotion/redis";
 import { db } from "@sparkmotion/database";
 import { Prisma } from "@sparkmotion/database";
 
@@ -16,6 +16,12 @@ export const analyticsRouter = router({
     .input(z.object({ eventId: z.string() }))
     .query(async ({ input }) => {
       return getAnalytics(input.eventId);
+    }),
+
+  velocityHistory: protectedProcedure
+    .input(z.object({ eventId: z.string() }))
+    .query(async ({ input }) => {
+      return getVelocityHistory(input.eventId);
     }),
 
   tapsByHour: protectedProcedure
