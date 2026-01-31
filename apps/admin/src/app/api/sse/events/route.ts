@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTapSubscriber, getAnalytics } from "@sparkmotion/redis";
+import { auth } from "@sparkmotion/auth";
 
 export const runtime = "nodejs"; // Required for ioredis
 export const maxDuration = 300; // Vercel Fluid Compute max
@@ -12,6 +13,12 @@ function formatSSE(event: string, data: object): Uint8Array {
 }
 
 export async function GET(request: NextRequest) {
+  // Auth-gate: require authenticated session
+  const session = await auth();
+  if (!session) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const eventId = request.nextUrl.searchParams.get("eventId");
 
   if (!eventId) {

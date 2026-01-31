@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTapSubscriber, getAnalytics } from "@sparkmotion/redis";
+import { auth } from "@sparkmotion/auth";
+import { db } from "@sparkmotion/database";
 
 export const runtime = "nodejs"; // Required for ioredis
 export const maxDuration = 300; // Vercel Fluid Compute max
@@ -12,10 +14,27 @@ function formatSSE(event: string, data: object): Uint8Array {
 }
 
 export async function GET(request: NextRequest) {
+  // Auth-gate: require authenticated session
+  const session = await auth();
+  if (!session) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const eventId = request.nextUrl.searchParams.get("eventId");
 
   if (!eventId) {
     return NextResponse.json({ error: "eventId is required" }, { status: 400 });
+  }
+
+  // Org-scoping for CUSTOMER role: verify event belongs to user's org
+  if (session.user.role === "CUSTOMER") {
+    const event = await db.event.findUnique({
+      where: { id: eventId },
+      select: { orgId: true },
+    });
+    if (!event || event.orgId !== session.user.orgId) {
+      return new Response("Forbidden", { status: 403 });
+    }
   }
 
   const stream = new ReadableStream({

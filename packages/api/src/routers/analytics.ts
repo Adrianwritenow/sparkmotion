@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../trpc";
 import { getAnalytics, getVelocityHistory } from "@sparkmotion/redis";
 import { db } from "@sparkmotion/database";
 import { Prisma } from "@sparkmotion/database";
+import { TRPCError } from "@trpc/server";
 
 // Shared input schema for date range queries
 const dateRangeInput = z.object({
@@ -14,13 +15,33 @@ const dateRangeInput = z.object({
 export const analyticsRouter = router({
   realtime: protectedProcedure
     .input(z.object({ eventId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Org-scoping for CUSTOMER role
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: input.eventId },
+          select: { orgId: true },
+        });
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
       return getAnalytics(input.eventId);
     }),
 
   velocityHistory: protectedProcedure
     .input(z.object({ eventId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Org-scoping for CUSTOMER role
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: input.eventId },
+          select: { orgId: true },
+        });
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
       return getVelocityHistory(input.eventId);
     }),
 
