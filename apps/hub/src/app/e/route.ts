@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
       }
 
       bandData = {
+        id: band.id,
         bandId: band.bandId,
         eventId: band.eventId,
         status: band.status,
@@ -153,7 +154,7 @@ async function logTap(bandData: CachedBand, request: NextRequest): Promise<void>
   await Promise.all([
     db.tapLog.create({
       data: {
-        bandId: bandData.bandId,
+        bandId: bandData.id,
         eventId: bandData.eventId,
         modeServed: bandData.currentMode,
         redirectUrl: bandData.redirectUrl,

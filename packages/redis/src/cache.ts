@@ -2,6 +2,7 @@ import { redis } from "./client";
 import { KEYS } from "./keys";
 
 export interface CachedBand {
+  id: string;
   bandId: string;
   eventId: string;
   status: string;
