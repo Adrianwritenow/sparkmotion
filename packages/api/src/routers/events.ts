@@ -10,7 +10,7 @@ export const eventsRouter = router({
       const where =
         ctx.user.role === "ADMIN"
           ? input?.orgId ? { orgId: input.orgId } : {}
-          : undefined; // customer scoping handled at app level
+          : { orgId: ctx.user.orgId! };
       return db.event.findMany({
         where,
         include: { org: true, windows: true, _count: { select: { bands: true } } },
