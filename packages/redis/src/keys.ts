@@ -7,4 +7,7 @@ export const KEYS = {
     `analytics:${eventId}:taps:hourly:${hour}` as const,
   tapsMode: (eventId: string, mode: string) =>
     `analytics:${eventId}:mode:${mode}` as const,
+  tapChannel: (eventId: string) => `tap-updates:${eventId}` as const,
+  velocityBucket: (eventId: string, bucket: number) =>
+    `analytics:${eventId}:velocity:${bucket}` as const,
 } as const;
