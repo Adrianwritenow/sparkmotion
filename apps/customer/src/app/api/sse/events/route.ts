@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createTapSubscriber } from "@sparkmotion/redis";
+import { createTapSubscriber, getAnalytics } from "@sparkmotion/redis";
 
 export const runtime = "nodejs"; // Required for ioredis
 export const maxDuration = 300; // Vercel Fluid Compute max
@@ -20,6 +20,19 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
+      // Send current analytics immediately so UI doesn't show skeleton
+      getAnalytics(eventId)
+        .then((analytics) => {
+          controller.enqueue(
+            formatSSE("tap-update", {
+              totalTaps: analytics.totalTaps,
+              uniqueTaps: analytics.uniqueTaps,
+              mode: "pre", // Default mode; will update on next real tap
+            })
+          );
+        })
+        .catch((err) => console.error("Failed to send initial analytics:", err));
+
       // Subscribe to tap updates
       const cleanup = createTapSubscriber(eventId, (data) => {
         controller.enqueue(formatSSE("tap-update", data));
