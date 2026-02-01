@@ -1,7 +1,6 @@
 import { auth } from "@sparkmotion/auth";
 import { db } from "@sparkmotion/database";
 import { notFound, redirect } from "next/navigation";
-import { WindowForm } from "@/components/events/window-form";
 import { WindowsList } from "@/components/events/windows-list";
 
 export default async function EventWindowsPage({
@@ -31,17 +30,7 @@ export default async function EventWindowsPage({
         <p className="text-muted-foreground mt-2">{event.name}</p>
       </div>
 
-      <div className="max-w-2xl">
-        <div className="rounded-lg border bg-card p-6">
-          <h2 className="text-lg font-semibold mb-4">Create New Window</h2>
-          <WindowForm eventId={event.id} />
-        </div>
-      </div>
-
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Scheduled Windows</h2>
-        <WindowsList eventId={event.id} />
-      </div>
+      <WindowsList eventId={event.id} />
     </div>
   );
 }

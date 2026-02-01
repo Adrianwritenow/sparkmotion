@@ -64,6 +64,35 @@ export const windowsRouter = router({
       return updated;
     }),
 
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        windowType: z.enum(["PRE", "LIVE", "POST"]),
+        url: z.string().url(),
+        startTime: z.date(),
+        endTime: z.date(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const existing = await db.eventWindow.findUniqueOrThrow({
+        where: { id: input.id },
+        include: { event: true },
+      });
+
+      if (ctx.user.role === "CUSTOMER" && existing.event.orgId !== ctx.user.orgId) {
+        throw new Error("Access denied");
+      }
+
+      const { id, ...data } = input;
+      const updated = await db.eventWindow.update({
+        where: { id },
+        data,
+      });
+      await invalidateEventCache(existing.eventId);
+      return updated;
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
