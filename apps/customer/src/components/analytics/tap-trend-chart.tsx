@@ -3,8 +3,16 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
 import { format } from "date-fns";
+
+const chartConfig = {
+  count: {
+    label: "Taps",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig;
 
 interface TapTrendChartProps {
   from: string;
@@ -39,31 +47,29 @@ export function TapTrendChart({ from, to }: TapTrendChartProps) {
         <CardTitle>Tap Trends</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-              />
-              <Line
-                type="monotone"
-                dataKey="count"
-                stroke="hsl(var(--chart-1))"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartContainer config={chartConfig} className="h-64 w-full">
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="date"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+            />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+            />
+            <Line
+              type="monotone"
+              dataKey="count"
+              stroke="var(--color-count)"
+              strokeWidth={2}
+              dot={false}
+            />
+          </LineChart>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

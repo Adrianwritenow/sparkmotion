@@ -2,7 +2,15 @@
 
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { LineChart, Line } from "recharts";
+
+const chartConfig = {
+  value: {
+    label: "Velocity",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig;
 
 interface VelocitySparklineProps {
   eventId: string;
@@ -47,8 +55,8 @@ export function VelocitySparkline({ eventId }: VelocitySparklineProps) {
     const latest = values[values.length - 1];
 
     if (avg === 0 || latest === undefined) return '#9ca3af'; // gray for no data
-    if (latest > avg * 5) return '#ef4444'; // red
     if (latest > avg * 2) return '#f59e0b'; // yellow
+    if (latest > avg * 5) return '#ef4444'; // red
     return '#10b981'; // green
   };
 
@@ -62,15 +70,17 @@ export function VelocitySparkline({ eventId }: VelocitySparklineProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <LineChart width={200} height={80} data={chartData}>
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke={strokeColor}
-            strokeWidth={2}
-            dot={{ r: 2 }}
-          />
-        </LineChart>
+        <ChartContainer config={chartConfig} className="h-[80px] w-[200px]">
+          <LineChart data={chartData}>
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={strokeColor}
+              strokeWidth={2}
+              dot={{ r: 2 }}
+            />
+          </LineChart>
+        </ChartContainer>
       </CardContent>
     </Card>
   );
