@@ -10,6 +10,7 @@ const dateRangeInput = z.object({
   from: z.string().datetime({ offset: true }),
   to: z.string().datetime({ offset: true }),
   eventId: z.string().optional(),
+  orgId: z.string().optional(),
 });
 
 export const analyticsRouter = router({
@@ -54,13 +55,15 @@ export const analyticsRouter = router({
   kpis: protectedProcedure
     .input(dateRangeInput)
     .query(async ({ ctx, input }) => {
-      const { from, to, eventId } = input;
+      const { from, to, eventId, orgId } = input;
+      const fromDate = new Date(from);
+      const toDate = new Date(to);
 
       // Build base where clause for date range
       const dateWhere: Prisma.TapLogWhereInput = {
         tappedAt: {
-          gte: new Date(from),
-          lte: new Date(to),
+          gte: fromDate,
+          lte: toDate,
         },
       };
 
@@ -68,7 +71,10 @@ export const analyticsRouter = router({
       let eventWhere: Prisma.EventWhereInput = {};
       if (ctx.user.role === "CUSTOMER") {
         eventWhere.orgId = ctx.user.orgId!;
-      } else if (ctx.user.role === "ADMIN" && eventId) {
+      } else if (ctx.user.role === "ADMIN" && orgId) {
+        eventWhere.orgId = orgId;
+      }
+      if (ctx.user.role === "ADMIN" && eventId) {
         eventWhere.id = eventId;
       }
 
@@ -104,23 +110,92 @@ export const analyticsRouter = router({
         }),
       ]);
 
+      const uniqueBands = uniqueBandsResult.length;
+
+      // Calculate TPM (taps per minute)
+      const minutesInRange = Math.max(1, (toDate.getTime() - fromDate.getTime()) / 60000);
+      const tpm = Math.round((totalTaps / minutesInRange) * 100) / 100;
+
+      // Build event filter for raw SQL query
+      const eventFilter = eventId
+        ? Prisma.sql`AND "eventId" = ${eventId}`
+        : eventIds.length > 0
+        ? Prisma.sql`AND "eventId" IN (${Prisma.join(eventIds)})`
+        : Prisma.sql`AND 1=1`;
+
+      // Execute additional queries in parallel
+      const [peakTpmResult, totalBands, modeDist] = await Promise.all([
+        // Peak TPM: max taps in any single minute
+        db.$queryRaw<Array<{ minute: Date; count: bigint }>>(Prisma.sql`
+          SELECT DATE_TRUNC('minute', "tappedAt") as minute, COUNT(*)::int as count
+          FROM "TapLog"
+          WHERE "tappedAt" >= ${fromDate} AND "tappedAt" <= ${toDate}
+            ${eventFilter}
+          GROUP BY DATE_TRUNC('minute', "tappedAt")
+          ORDER BY count DESC
+          LIMIT 1
+        `),
+
+        // Total bands (for activity calculation)
+        db.band.count({
+          where: eventIds.length > 0
+            ? { eventId: { in: eventIds } }
+            : eventId
+            ? { eventId }
+            : {},
+        }),
+
+        // Mode distribution
+        db.tapLog.groupBy({
+          by: ["modeServed"],
+          where: tapLogWhere,
+          _count: true,
+        }),
+      ]);
+
+      const peakTpm = peakTpmResult[0] ? Number(peakTpmResult[0].count) : 0;
+
+      // Band activity %
+      const bandActivityPercent = totalBands > 0
+        ? Math.round((uniqueBands / totalBands) * 100)
+        : 0;
+
+      // Avg taps/band
+      const avgTapsPerBand = uniqueBands > 0
+        ? Math.round((totalTaps / uniqueBands) * 100) / 100
+        : 0;
+
+      // Mode distribution with all modes
+      const modeDistribution: Record<string, number> = { PRE: 0, LIVE: 0, POST: 0 };
+      modeDist.forEach(({ modeServed, _count }) => {
+        modeDistribution[modeServed] = _count;
+      });
+
       return {
         totalTaps,
-        uniqueBands: uniqueBandsResult.length,
+        uniqueBands,
         activeEvents: activeEventsResult.length,
+        tpm,
+        peakTpm,
+        bandActivityPercent,
+        avgTapsPerBand,
+        modeDistribution,
       };
     }),
 
   tapsByDay: protectedProcedure
     .input(dateRangeInput)
     .query(async ({ ctx, input }) => {
-      const { from, to, eventId } = input;
+      const { from, to, eventId, orgId } = input;
 
       // Build org-scoping for events
       let eventWhere: Prisma.EventWhereInput = {};
       if (ctx.user.role === "CUSTOMER") {
         eventWhere.orgId = ctx.user.orgId!;
-      } else if (ctx.user.role === "ADMIN" && eventId) {
+      } else if (ctx.user.role === "ADMIN" && orgId) {
+        eventWhere.orgId = orgId;
+      }
+      if (ctx.user.role === "ADMIN" && eventId) {
         eventWhere.id = eventId;
       }
 
@@ -202,6 +277,49 @@ export const analyticsRouter = router({
         eventId: row.eventId,
         eventName: row.eventName,
         tapCount: Number(row.tapCount),
+      }));
+    }),
+
+  topOrgs: protectedProcedure
+    .input(z.object({
+      from: z.string().datetime({ offset: true }),
+      to: z.string().datetime({ offset: true }),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== "ADMIN") {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const { from, to } = input;
+      const fromDate = new Date(from);
+      const toDate = new Date(to);
+
+      const results = await db.$queryRaw<
+        Array<{ orgId: string; orgName: string; eventCount: bigint; tapCount: bigint }>
+      >(Prisma.sql`
+        SELECT
+          o."id" as "orgId",
+          o."name" as "orgName",
+          COUNT(DISTINCT e."id")::int as "eventCount",
+          COUNT(t."id")::int as "tapCount"
+        FROM "Organization" o
+        LEFT JOIN "Event" e ON e."orgId" = o."id"
+        LEFT JOIN "TapLog" t ON t."eventId" = e."id"
+          AND t."tappedAt" >= ${fromDate}
+          AND t."tappedAt" <= ${toDate}
+        GROUP BY o."id", o."name"
+        ORDER BY "tapCount" DESC
+        LIMIT 20
+      `);
+
+      const minutesInRange = Math.max(1, (toDate.getTime() - fromDate.getTime()) / 60000);
+
+      return results.map((row) => ({
+        orgId: row.orgId,
+        orgName: row.orgName,
+        eventCount: Number(row.eventCount),
+        tapCount: Number(row.tapCount),
+        tpm: Math.round((Number(row.tapCount) / minutesInRange) * 100) / 100,
       }));
     }),
 });
