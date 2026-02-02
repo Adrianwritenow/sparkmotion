@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -17,7 +16,6 @@ interface UsersContentProps {
 }
 
 export function UsersContent({ data }: UsersContentProps) {
-  const [nameFilter, setNameFilter] = useState("");
   const [orgFilter, setOrgFilter] = useState("");
 
   const orgNames = useMemo(() => {
@@ -32,12 +30,6 @@ export function UsersContent({ data }: UsersContentProps) {
   return (
     <>
       <div className="flex items-center gap-2 mb-6">
-        <Input
-          placeholder="Filter users..."
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
-          className="max-w-sm"
-        />
         <Select
           value={orgFilter || "all"}
           onValueChange={(value) => setOrgFilter(value === "all" ? "" : value)}
@@ -56,7 +48,7 @@ export function UsersContent({ data }: UsersContentProps) {
         </Select>
       </div>
 
-      <UsersTable data={data} nameFilter={nameFilter} orgFilter={orgFilter} />
+      <UsersTable data={data} orgFilter={orgFilter} />
     </>
   );
 }
