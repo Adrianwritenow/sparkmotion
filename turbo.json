@@ -3,6 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build", "^generate"],
+      "env": ["DATABASE_URL", "REDIS_URL", "AUTH_SECRET", "AUTH_URL"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {
