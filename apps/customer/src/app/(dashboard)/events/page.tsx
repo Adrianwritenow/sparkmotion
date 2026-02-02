@@ -1,6 +1,7 @@
 import { auth } from "@sparkmotion/auth";
 import { db } from "@sparkmotion/database";
 import { EventsTable } from "@/components/events/events-table";
+import { EventsAnalytics } from "@/components/events/events-analytics";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -49,7 +50,10 @@ export default async function EventsPage() {
           </div>
         </div>
       ) : (
-        <EventsTable data={events} />
+        <>
+          <EventsAnalytics />
+          <EventsTable data={events} />
+        </>
       )}
     </div>
   );

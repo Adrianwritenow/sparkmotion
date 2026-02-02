@@ -17,10 +17,12 @@ const chartConfig = {
 interface TapTrendChartProps {
   from: string;
   to: string;
+  eventId?: string;
+  orgId?: string;
 }
 
-export function TapTrendChart({ from, to }: TapTrendChartProps) {
-  const { data, isLoading } = trpc.analytics.tapsByDay.useQuery({ from, to });
+export function TapTrendChart({ from, to, eventId, orgId }: TapTrendChartProps) {
+  const { data, isLoading } = trpc.analytics.tapsByDay.useQuery({ from, to, eventId, orgId });
 
   if (isLoading) {
     return (

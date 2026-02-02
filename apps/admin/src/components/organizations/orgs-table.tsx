@@ -19,33 +19,22 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { columns } from "./columns";
-import { Event, Organization } from "@sparkmotion/database";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Organization } from "@sparkmotion/database";
+import { useState } from "react";
 
-type EventWithDetails = Event & {
-  org: Organization;
+type OrgWithCounts = Organization & {
   _count: {
-    bands: number;
+    events: number;
   };
 };
 
-interface EventsTableProps {
-  data: EventWithDetails[];
-  orgFilter?: string;
+interface OrgsTableProps {
+  data: OrgWithCounts[];
 }
 
-export function EventsTable({ data, orgFilter }: EventsTableProps) {
-  const router = useRouter();
+export function OrgsTable({ data }: OrgsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [nameFilter, setNameFilter] = useState("");
-
-  const columnFilters = useMemo<ColumnFiltersState>(() => {
-    const filters: ColumnFiltersState = [];
-    if (nameFilter) filters.push({ id: "name", value: nameFilter });
-    if (orgFilter) filters.push({ id: "organization", value: orgFilter });
-    return filters;
-  }, [nameFilter, orgFilter]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const table = useReactTable({
     data,
@@ -54,6 +43,7 @@ export function EventsTable({ data, orgFilter }: EventsTableProps) {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
     state: {
       sorting,
       columnFilters,
@@ -64,9 +54,11 @@ export function EventsTable({ data, orgFilter }: EventsTableProps) {
     <div className="space-y-4">
       <div className="flex items-center">
         <Input
-          placeholder="Filter events..."
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
+          placeholder="Filter organizations..."
+          value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+          onChange={(event) =>
+            table.getColumn("name")?.setFilterValue(event.target.value)
+          }
           className="max-w-sm"
         />
       </div>
@@ -92,11 +84,7 @@ export function EventsTable({ data, orgFilter }: EventsTableProps) {
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="cursor-pointer"
-                  onClick={() => router.push(`/events/${row.original.id}`)}
-                >
+                <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
@@ -113,7 +101,7 @@ export function EventsTable({ data, orgFilter }: EventsTableProps) {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No events found.
+                  No organizations found.
                 </TableCell>
               </TableRow>
             )}

@@ -1,5 +1,5 @@
 import { db } from "@sparkmotion/database";
-import { EventsTable } from "@/components/events/events-table";
+import { EventsContent } from "@/components/events/events-content";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -27,7 +27,7 @@ export default async function EventsPage() {
         </Button>
       </div>
 
-      <EventsTable data={events} />
+      <EventsContent data={events} />
     </div>
   );
 }

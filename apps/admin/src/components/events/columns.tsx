@@ -29,10 +29,15 @@ export const columns: ColumnDef<EventWithDetails>[] = [
     },
   },
   {
-    accessorKey: "org.name",
+    id: "organization",
+    accessorFn: (row) => row.org.name,
     header: "Organization",
     cell: ({ row }) => {
       return <div>{row.original.org.name}</div>;
+    },
+    filterFn: (row, _columnId, filterValue) => {
+      if (!filterValue) return true;
+      return row.original.org.name === filterValue;
     },
   },
   {
