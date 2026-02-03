@@ -8,6 +8,11 @@ const nextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../.."),
   transpilePackages: ["@sparkmotion/api", "@sparkmotion/database", "@sparkmotion/ui", "@sparkmotion/auth"],
+  experimental: {
+    outputFileTracingIncludes: {
+      '/*': ['./node_modules/.prisma/**/*', '../../node_modules/.prisma/**/*'],
+    },
+  },
 };
 
 export default nextConfig;
