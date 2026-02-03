@@ -11,7 +11,7 @@ const nextConfig = {
     serverComponentsExternalPackages: ["@prisma/client", "prisma"],
     outputFileTracingRoot: path.join(__dirname, "../.."),
     outputFileTracingIncludes: {
-      '/*': ['./node_modules/.prisma/**/*', '../../node_modules/.prisma/**/*'],
+      '/*': ['../../packages/database/generated/**/*'],
     },
   },
 };

@@ -10,7 +10,7 @@ const nextConfig = {
   transpilePackages: ["@sparkmotion/api", "@sparkmotion/database", "@sparkmotion/ui", "@sparkmotion/auth"],
   experimental: {
     outputFileTracingIncludes: {
-      '/*': ['./node_modules/.prisma/**/*', '../../node_modules/.prisma/**/*'],
+      '/*': ['../../packages/database/generated/**/*'],
     },
   },
 };
