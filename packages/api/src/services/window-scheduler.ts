@@ -1,5 +1,6 @@
 import { db } from "@sparkmotion/database";
 import { invalidateEventCache } from "@sparkmotion/redis";
+import { generateRedirectMap } from "./redirect-map-generator";
 
 /**
  * Updates EventWindow active states based on current time.
@@ -72,9 +73,19 @@ export async function updateEventWindows() {
     )
   );
 
+  // Regenerate Cloudflare KV redirect map after any window transitions
+  let redirectMapResult = { bandsWritten: 0, eventsProcessed: 0, skipped: true };
+  try {
+    redirectMapResult = await generateRedirectMap();
+  } catch (error) {
+    console.error("Redirect map generation failed:", error);
+    // Non-fatal: redirects continue working with stale KV data
+  }
+
   return {
     activated: shouldActivate.length,
     deactivated: shouldDeactivate.length,
-    eventsInvalidated: eventIdsToInvalidate.size
+    eventsInvalidated: eventIdsToInvalidate.size,
+    redirectMap: redirectMapResult,
   };
 }

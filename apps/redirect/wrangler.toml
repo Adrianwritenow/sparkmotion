@@ -1,0 +1,16 @@
+name = "sparkmotion-redirect"
+main = "src/worker.ts"
+compatibility_date = "2024-12-18"
+
+# KV namespace — replace with actual ID after: wrangler kv namespace create REDIRECT_MAP
+[[kv_namespaces]]
+binding = "REDIRECT_MAP"
+id = "PLACEHOLDER_NAMESPACE_ID"
+
+# Environment variables are set via: wrangler secret put <NAME>
+# Required secrets:
+#   UPSTASH_REDIS_REST_URL
+#   UPSTASH_REDIS_REST_TOKEN
+#   LOG_TAP_URL
+#   LOG_TAP_SECRET
+#   FALLBACK_URL
