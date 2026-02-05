@@ -5,7 +5,7 @@ compatibility_date = "2024-12-18"
 # KV namespace — replace with actual ID after: wrangler kv namespace create REDIRECT_MAP
 [[kv_namespaces]]
 binding = "REDIRECT_MAP"
-id = "PLACEHOLDER_NAMESPACE_ID"
+id = "7e64bbb39be146b5afca0fa9e557f74e"
 
 # Environment variables are set via: wrangler secret put <NAME>
 # Required secrets:
