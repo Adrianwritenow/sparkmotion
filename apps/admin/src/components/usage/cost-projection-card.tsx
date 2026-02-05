@@ -74,19 +74,23 @@ export function CostProjectionCard() {
                 <p className="text-lg font-semibold">{data.totalEstimatedAttendees.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Recommended Tasks</p>
-                <p className="text-lg font-semibold">{data.recommendedTasks}</p>
+                <p className="text-muted-foreground">Expected Taps</p>
+                <p className="text-lg font-semibold">{data.totalExpectedTaps.toLocaleString()}</p>
               </div>
             </div>
 
             <div className="pt-3 border-t space-y-2 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Fargate Cost:</span>
-                <span className="font-medium">${data.fargateCost.toFixed(2)}</span>
+                <span className="text-muted-foreground">Workers:</span>
+                <span className="font-medium">${data.workersCost.toFixed(2)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Redis Cost:</span>
-                <span className="font-medium">${data.redisCost.toFixed(2)}</span>
+                <span className="text-muted-foreground">KV Reads:</span>
+                <span className="font-medium">${data.kvCost.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Upstash:</span>
+                <span className="font-medium">${data.upstashCost.toFixed(2)}</span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t">
                 <span className="font-medium">Total Estimated Cost:</span>
@@ -96,7 +100,7 @@ export function CostProjectionCard() {
 
             <div className="pt-3 border-t text-xs text-muted-foreground">
               <p>Based on {data.upcomingEvents.length} event(s) with {data.totalWindows} window(s) across {data.uniqueEventDays} day(s)</p>
-              <p>Assumes 8 hours/day, 1 tap per attendee per window ({data.totalExpectedTaps.toLocaleString()} total taps)</p>
+              <p>1 tap per attendee per window ({data.totalExpectedTaps.toLocaleString()} total taps)</p>
             </div>
           </div>
         )}

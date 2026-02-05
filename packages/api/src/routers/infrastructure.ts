@@ -4,26 +4,6 @@ import { router, adminProcedure } from "../trpc";
 import { db } from "@sparkmotion/database";
 import { redis } from "@sparkmotion/redis";
 import { generateRedirectMap } from "../services/redirect-map-generator";
-import {
-  ECSClient,
-  DescribeServicesCommand,
-  UpdateServiceCommand,
-} from "@aws-sdk/client-ecs";
-
-// ECS client - connection reuse at module level
-const ecsClient = new ECSClient({
-  region: process.env.SPARKMOTION_AWS_REGION ?? "us-east-1",
-  credentials: process.env.SPARKMOTION_AWS_ACCESS_KEY_ID
-    ? {
-        accessKeyId: process.env.SPARKMOTION_AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.SPARKMOTION_AWS_SECRET_ACCESS_KEY!,
-      }
-    : undefined,
-});
-
-// Environment variables for ECS configuration
-const ECS_CLUSTER = process.env.SPARKMOTION_ECS_CLUSTER;
-const ECS_SERVICE = process.env.SPARKMOTION_ECS_SERVICE;
 
 // Redis key for redirect map metadata
 const REDIRECT_MAP_META_KEY = "redirect-map:meta";
@@ -32,103 +12,6 @@ const REDIRECT_MAP_META_KEY = "redirect-map:meta";
 const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
 export const infrastructureRouter = router({
-  /**
-   * Get ECS service status (running/desired count, health, deployments)
-   */
-  getServiceStatus: adminProcedure.query(async () => {
-    // Check if ECS is configured
-    if (!ECS_CLUSTER || !ECS_SERVICE) {
-      return {
-        runningCount: 0,
-        desiredCount: 0,
-        status: "NOT_CONFIGURED" as const,
-        deployments: [],
-        configured: false,
-      };
-    }
-
-    try {
-      const command = new DescribeServicesCommand({
-        cluster: ECS_CLUSTER,
-        services: [ECS_SERVICE],
-      });
-
-      const response = await ecsClient.send(command);
-      const service = response.services?.[0];
-
-      if (!service) {
-        return {
-          runningCount: 0,
-          desiredCount: 0,
-          status: "NOT_FOUND" as const,
-          deployments: [],
-          configured: true,
-        };
-      }
-
-      return {
-        runningCount: service.runningCount ?? 0,
-        desiredCount: service.desiredCount ?? 0,
-        status: service.status ?? "UNKNOWN",
-        deployments: (service.deployments ?? []).map((d) => ({
-          id: d.id,
-          status: d.status,
-          runningCount: d.runningCount ?? 0,
-          desiredCount: d.desiredCount ?? 0,
-          createdAt: d.createdAt?.toISOString(),
-        })),
-        configured: true,
-      };
-    } catch (error) {
-      console.error("ECS DescribeServices error:", error);
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to fetch ECS service status",
-      });
-    }
-  }),
-
-  /**
-   * Scale ECS service to a specified task count
-   */
-  scale: adminProcedure
-    .input(
-      z.object({
-        desiredCount: z.number().int().min(2).max(100),
-      })
-    )
-    .mutation(async ({ input }) => {
-      // Check if ECS is configured
-      if (!ECS_CLUSTER || !ECS_SERVICE) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "ECS not configured. Set SPARKMOTION_ECS_CLUSTER and SPARKMOTION_ECS_SERVICE environment variables.",
-        });
-      }
-
-      try {
-        const command = new UpdateServiceCommand({
-          cluster: ECS_CLUSTER,
-          service: ECS_SERVICE,
-          desiredCount: input.desiredCount,
-        });
-
-        await ecsClient.send(command);
-
-        return {
-          success: true,
-          desiredCount: input.desiredCount,
-        };
-      } catch (error) {
-        console.error("ECS UpdateService error:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to scale ECS service",
-        });
-      }
-    }),
-
   /**
    * Get redirect map metadata (lastRefreshed, bandCount, sizeBytes)
    */
@@ -172,7 +55,7 @@ export const infrastructureRouter = router({
   }),
 
   /**
-   * Trigger redirect map refresh
+   * Trigger redirect map refresh (syncs active bands to Cloudflare KV)
    */
   refreshMap: adminProcedure.mutation(async () => {
     try {
@@ -213,6 +96,7 @@ export const infrastructureRouter = router({
 
   /**
    * Project costs based on upcoming events with estimatedAttendees
+   * Uses Cloudflare Workers + KV pricing model
    */
   costProjection: adminProcedure
     .input(
@@ -225,8 +109,6 @@ export const infrastructureRouter = router({
       const now = new Date();
       const endDate = new Date(now.getTime() + daysNum * 24 * 60 * 60 * 1000);
 
-      // Get upcoming active events with estimatedAttendees in the date range
-      // We'll look for events with windows starting within the range
       const upcomingEvents = await db.event.findMany({
         where: {
           status: "ACTIVE",
@@ -253,52 +135,40 @@ export const infrastructureRouter = router({
         },
       });
 
-      // Calculate metrics
       const totalEstimatedAttendees = upcomingEvents.reduce(
         (sum, event) => sum + (event.estimatedAttendees ?? 0),
         0
       );
 
-      // Count unique event days (days with at least one window)
-      const eventDays = new Set<string>();
+      const uniqueEventDays = new Set<string>();
       for (const event of upcomingEvents) {
         for (const window of event.windows) {
           if (window.startTime) {
             const dateStr = window.startTime.toISOString().split("T")[0];
             if (dateStr) {
-              eventDays.add(dateStr);
+              uniqueEventDays.add(dateStr);
             }
           }
         }
       }
-      const uniqueEventDays = eventDays.size;
 
-      // Calculate total expected taps: each attendee taps once per window
+      // Each attendee taps once per window
       const totalExpectedTaps = upcomingEvents.reduce(
         (sum, event) => sum + (event.estimatedAttendees ?? 0) * event.windows.length,
         0
       );
       const totalWindows = upcomingEvents.reduce((sum, event) => sum + event.windows.length, 0);
 
-      // Calculate recommended tasks
-      // 10K req/s per task, based on peak concurrent attendees per window
-      // Minimum 2 tasks for redundancy
-      const recommendedTasks = Math.max(
-        2,
-        Math.ceil(totalEstimatedAttendees / 10000)
-      );
+      // Cloudflare Workers: $0.50 per million requests (paid plan)
+      const workersCost = (totalExpectedTaps / 1_000_000) * 0.50;
 
-      // Calculate hours (8 hours per event day)
-      const eventHours = uniqueEventDays * 8;
+      // Cloudflare KV: $0.50 per million reads (1 read per redirect)
+      const kvCost = (totalExpectedTaps / 1_000_000) * 0.50;
 
-      // Fargate cost: $0.04048 per vCPU-hour (1 vCPU per task)
-      const fargateCost = recommendedTasks * eventHours * 0.04048;
+      // Upstash Redis: ~$0.20 per 100K commands, 7 pipeline commands per tap
+      const upstashCost = ((totalExpectedTaps * 7) / 100_000) * 0.20;
 
-      // Redis cost: 1 tap per attendee per window, 2 commands per tap, $0.20 per 1M commands
-      const redisCost = (totalExpectedTaps * 2 / 1000000) * 0.20;
-
-      // Total cost
-      const totalCost = fargateCost + redisCost;
+      const totalCost = workersCost + kvCost + upstashCost;
 
       return {
         upcomingEvents: upcomingEvents.map((e) => ({
@@ -310,11 +180,10 @@ export const infrastructureRouter = router({
         totalEstimatedAttendees,
         totalExpectedTaps,
         totalWindows,
-        uniqueEventDays,
-        recommendedTasks,
-        eventHours,
-        fargateCost: Math.round(fargateCost * 100) / 100,
-        redisCost: Math.round(redisCost * 100) / 100,
+        uniqueEventDays: uniqueEventDays.size,
+        workersCost: Math.round(workersCost * 100) / 100,
+        kvCost: Math.round(kvCost * 100) / 100,
+        upstashCost: Math.round(upstashCost * 100) / 100,
         totalCost: Math.round(totalCost * 100) / 100,
         projectionDays: daysNum,
       };
