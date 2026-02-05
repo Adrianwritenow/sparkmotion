@@ -65,7 +65,8 @@ export function DevTestPanel() {
   const selectedEvent = selectedOrg?.events.find((e) => e.id === selectedEventId);
   const canScan = selectedBandId !== "";
 
-  const handleScan = () => {
+  const handleScan = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!selectedBandId) return;
     // Open the Cloudflare Worker redirect URL to simulate NFC scan
     window.open(
@@ -90,7 +91,10 @@ export function DevTestPanel() {
 
       {/* Panel */}
       {isOpen && (
-        <div className="fixed bottom-16 right-4 z-50 w-80 bg-white border border-gray-200 rounded-lg shadow-xl p-4">
+        <div
+          className="fixed bottom-16 right-4 z-50 w-80 bg-white border border-gray-200 rounded-lg shadow-xl p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
           <h3 className="font-semibold text-gray-900 mb-3">NFC Scan Simulator</h3>
 
           {loading && <p className="text-gray-500 text-sm">Loading...</p>}
@@ -159,7 +163,7 @@ export function DevTestPanel() {
 
               {/* Scan button */}
               <button
-                onClick={handleScan}
+                onClick={(e) => handleScan(e)}
                 disabled={!canScan}
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-md font-medium text-sm mt-2"
               >
