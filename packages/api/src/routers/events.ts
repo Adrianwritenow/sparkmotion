@@ -54,6 +54,7 @@ export const eventsRouter = router({
         name: z.string().min(1),
         tourName: z.string().optional(),
         slug: z.string().min(1),
+        estimatedAttendees: z.number().int().positive().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -73,6 +74,7 @@ export const eventsRouter = router({
         tourName: z.string().optional(),
         slug: z.string().min(1).optional(),
         status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
+        estimatedAttendees: z.number().int().positive().nullable().optional(),
       })
     )
     .mutation(async ({ input }) => {

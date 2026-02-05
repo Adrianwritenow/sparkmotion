@@ -26,6 +26,9 @@ const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
   tourName: z.string().optional(),
   slug: z.string().min(1, "Slug is required"),
+  estimatedAttendees: z.union([z.number().int().positive(), z.nan()]).optional().transform(val =>
+    val === undefined || Number.isNaN(val) ? undefined : val
+  ),
 });
 
 type EventFormValues = z.infer<typeof eventFormSchema>;
@@ -44,6 +47,7 @@ export function EventForm({ onSubmit, isPending, orgs }: EventFormProps) {
       name: "",
       tourName: "",
       slug: "",
+      estimatedAttendees: undefined,
     },
   });
 
@@ -133,6 +137,27 @@ export function EventForm({ onSubmit, isPending, orgs }: EventFormProps) {
               <FormLabel>Tour Name (Optional)</FormLabel>
               <FormControl>
                 <Input placeholder="Compassion Tour 2026" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="estimatedAttendees"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Estimated Attendees (Optional)</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="5000"
+                  {...field}
+                  value={field.value ?? ""}
+                  onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

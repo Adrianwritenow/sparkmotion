@@ -22,6 +22,9 @@ const eventSchema = z.object({
   tourName: z.string().optional(),
   slug: z.string().min(1, "Slug is required"),
   status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]),
+  estimatedAttendees: z.union([z.number().int().positive(), z.nan(), z.null()]).optional().transform(val =>
+    val === undefined || val === null || Number.isNaN(val) ? null : val
+  ),
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
@@ -47,6 +50,7 @@ export function EventEditForm({ event }: EventEditFormProps) {
       tourName: event.tourName ?? "",
       slug: event.slug,
       status: event.status,
+      estimatedAttendees: event.estimatedAttendees ?? undefined,
     },
   });
 
@@ -67,6 +71,7 @@ export function EventEditForm({ event }: EventEditFormProps) {
       tourName: data.tourName || undefined,
       slug: data.slug,
       status: data.status,
+      estimatedAttendees: data.estimatedAttendees,
     });
   };
 
@@ -91,6 +96,17 @@ export function EventEditForm({ event }: EventEditFormProps) {
             id="tourName"
             {...register("tourName")}
             placeholder="2026 Spring Tour"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="estimatedAttendees">Estimated Attendees</Label>
+          <Input
+            id="estimatedAttendees"
+            type="number"
+            min="0"
+            {...register("estimatedAttendees", { valueAsNumber: true })}
+            placeholder="5000"
           />
         </div>
 
