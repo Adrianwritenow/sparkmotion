@@ -1,0 +1,174 @@
+"use client";
+
+import { useState, useEffect } from "react";
+
+interface Band {
+  id: string;
+  bandId: string;
+}
+
+interface Event {
+  id: string;
+  name: string;
+  bands: Band[];
+}
+
+interface Org {
+  id: string;
+  name: string;
+  events: Event[];
+}
+
+interface TestData {
+  orgs: Org[];
+}
+
+export function DevTestPanel() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [data, setData] = useState<TestData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("");
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [selectedBandId, setSelectedBandId] = useState<string>("");
+
+  // Fetch data when panel opens
+  useEffect(() => {
+    if (isOpen && !data) {
+      setLoading(true);
+      fetch("/api/dev/test-data")
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.error) {
+            setError(json.error);
+          } else {
+            setData(json);
+          }
+        })
+        .catch((err) => setError(err.message))
+        .finally(() => setLoading(false));
+    }
+  }, [isOpen, data]);
+
+  // Reset downstream selections when parent changes
+  useEffect(() => {
+    setSelectedEventId("");
+    setSelectedBandId("");
+  }, [selectedOrgId]);
+
+  useEffect(() => {
+    setSelectedBandId("");
+  }, [selectedEventId]);
+
+  const selectedOrg = data?.orgs.find((o) => o.id === selectedOrgId);
+  const selectedEvent = selectedOrg?.events.find((e) => e.id === selectedEventId);
+  const canScan = selectedBandId !== "";
+
+  const handleScan = () => {
+    if (!selectedBandId) return;
+    // Open the Cloudflare Worker redirect URL to simulate NFC scan
+    window.open(
+      `https://sparkmotion-redirect.sparkmotion.workers.dev/e?bandId=${selectedBandId}`,
+      "_blank"
+    );
+  };
+
+  if (error === "Not available") {
+    return null;
+  }
+
+  return (
+    <>
+      {/* Toggle button */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="fixed bottom-4 right-4 z-50 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg shadow-lg font-medium"
+      >
+        {isOpen ? "Close" : "Dev Test"}
+      </button>
+
+      {/* Panel */}
+      {isOpen && (
+        <div className="fixed bottom-16 right-4 z-50 w-80 bg-white border border-gray-200 rounded-lg shadow-xl p-4">
+          <h3 className="font-semibold text-gray-900 mb-3">NFC Scan Simulator</h3>
+
+          {loading && <p className="text-gray-500 text-sm">Loading...</p>}
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+
+          {data && (
+            <div className="space-y-3">
+              {/* Org selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Organization
+                </label>
+                <select
+                  value={selectedOrgId}
+                  onChange={(e) => setSelectedOrgId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="">Select org...</option>
+                  {data.orgs.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name} ({org.events.length} active events)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Event selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Active Event
+                </label>
+                <select
+                  value={selectedEventId}
+                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  disabled={!selectedOrgId}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm disabled:bg-gray-100"
+                >
+                  <option value="">Select event...</option>
+                  {selectedOrg?.events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.name} ({event.bands.length} bands)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Band selector */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Band
+                </label>
+                <select
+                  value={selectedBandId}
+                  onChange={(e) => setSelectedBandId(e.target.value)}
+                  disabled={!selectedEventId}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm disabled:bg-gray-100"
+                >
+                  <option value="">Select band...</option>
+                  {selectedEvent?.bands.map((band) => (
+                    <option key={band.id} value={band.bandId}>
+                      {band.bandId}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Scan button */}
+              <button
+                onClick={handleScan}
+                disabled={!canScan}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-md font-medium text-sm mt-2"
+              >
+                Simulate NFC Scan
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
