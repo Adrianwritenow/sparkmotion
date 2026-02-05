@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
       activated: result.activated,
       deactivated: result.deactivated,
       eventsInvalidated: result.eventsInvalidated,
+      redirectMap: result.redirectMap,
     });
   } catch (error) {
     console.error("Cron execution failed:", error);
