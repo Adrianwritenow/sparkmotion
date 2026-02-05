@@ -10,6 +10,7 @@ const navItems = [
   { href: "/organizations", label: "Organizations" },
   { href: "/users", label: "Users" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/usage", label: "Usage" },
 ];
 
 export function Sidebar() {
