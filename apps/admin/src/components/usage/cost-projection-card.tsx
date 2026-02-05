@@ -95,8 +95,8 @@ export function CostProjectionCard() {
             </div>
 
             <div className="pt-3 border-t text-xs text-muted-foreground">
-              <p>Based on {data.upcomingEvents.length} event(s) with {data.uniqueEventDays} unique day(s)</p>
-              <p>Assumes 8 hours/day, 3 taps/attendee</p>
+              <p>Based on {data.upcomingEvents.length} event(s) with {data.totalWindows} window(s) across {data.uniqueEventDays} day(s)</p>
+              <p>Assumes 8 hours/day, 1 tap per attendee per window ({data.totalExpectedTaps.toLocaleString()} total taps)</p>
             </div>
           </div>
         )}

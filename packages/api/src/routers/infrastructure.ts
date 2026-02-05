@@ -264,18 +264,28 @@ export const infrastructureRouter = router({
       for (const event of upcomingEvents) {
         for (const window of event.windows) {
           if (window.startTime) {
-            eventDays.add(window.startTime.toISOString().split("T")[0]);
+            const dateStr = window.startTime.toISOString().split("T")[0];
+            if (dateStr) {
+              eventDays.add(dateStr);
+            }
           }
         }
       }
       const uniqueEventDays = eventDays.size;
 
+      // Calculate total expected taps: each attendee taps once per window
+      const totalExpectedTaps = upcomingEvents.reduce(
+        (sum, event) => sum + (event.estimatedAttendees ?? 0) * event.windows.length,
+        0
+      );
+      const totalWindows = upcomingEvents.reduce((sum, event) => sum + event.windows.length, 0);
+
       // Calculate recommended tasks
-      // 10K req/s per task, assuming 3 taps per attendee spread over event duration
+      // 10K req/s per task, based on peak concurrent attendees per window
       // Minimum 2 tasks for redundancy
       const recommendedTasks = Math.max(
         2,
-        Math.ceil(totalEstimatedAttendees / 10000 / 3)
+        Math.ceil(totalEstimatedAttendees / 10000)
       );
 
       // Calculate hours (8 hours per event day)
@@ -284,8 +294,8 @@ export const infrastructureRouter = router({
       // Fargate cost: $0.04048 per vCPU-hour (1 vCPU per task)
       const fargateCost = recommendedTasks * eventHours * 0.04048;
 
-      // Redis cost: 3 taps * 2 commands per tap * $0.20 per 1M commands
-      const redisCost = (totalEstimatedAttendees * 3 * 2 / 1000000) * 0.20;
+      // Redis cost: 1 tap per attendee per window, 2 commands per tap, $0.20 per 1M commands
+      const redisCost = (totalExpectedTaps * 2 / 1000000) * 0.20;
 
       // Total cost
       const totalCost = fargateCost + redisCost;
@@ -298,6 +308,8 @@ export const infrastructureRouter = router({
           windowCount: e.windows.length,
         })),
         totalEstimatedAttendees,
+        totalExpectedTaps,
+        totalWindows,
         uniqueEventDays,
         recommendedTasks,
         eventHours,
