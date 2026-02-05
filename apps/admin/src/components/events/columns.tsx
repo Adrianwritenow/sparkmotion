@@ -3,6 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Event, Organization, EventStatus } from "@sparkmotion/database";
+import { EventActions } from "./event-actions";
 
 // Type for event with org and band count
 type EventWithDetails = Event & {
@@ -80,6 +81,18 @@ export const columns: ColumnDef<EventWithDetails>[] = [
             year: "numeric",
           })}
         </div>
+      );
+    },
+  },
+  {
+    id: "actions",
+    header: "",
+    cell: ({ row }) => {
+      return (
+        <EventActions
+          eventId={row.original.id}
+          currentStatus={row.original.status}
+        />
       );
     },
   },

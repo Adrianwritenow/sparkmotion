@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EventModeHeader } from "@/components/events/event-mode-header";
+import { EventEditForm } from "@/components/events/event-edit-form";
 
 export default async function EventDetailPage({
   params,
@@ -49,6 +50,11 @@ export default async function EventDetailPage({
             })}
           </p>
         </div>
+      </div>
+
+      <div className="rounded-lg border bg-card p-6">
+        <h2 className="text-lg font-semibold mb-4">Edit Event</h2>
+        <EventEditForm event={event} />
       </div>
 
       <div className="flex gap-4">
