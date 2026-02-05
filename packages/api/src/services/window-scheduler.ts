@@ -73,13 +73,17 @@ export async function updateEventWindows() {
     )
   );
 
-  // Regenerate Cloudflare KV redirect map after any window transitions
+  // Regenerate Cloudflare KV redirect map only for affected events
   let redirectMapResult = { bandsWritten: 0, eventsProcessed: 0, skipped: true };
-  try {
-    redirectMapResult = await generateRedirectMap();
-  } catch (error) {
-    console.error("Redirect map generation failed:", error);
-    // Non-fatal: redirects continue working with stale KV data
+  if (eventIdsToInvalidate.size > 0) {
+    try {
+      redirectMapResult = await generateRedirectMap({
+        eventIds: Array.from(eventIdsToInvalidate),
+      });
+    } catch (error) {
+      console.error("Redirect map generation failed:", error);
+      // Non-fatal: redirects continue working with stale KV data
+    }
   }
 
   return {

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/update-windows",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/flush-taps",
+      "schedule": "* * * * *"
     }
   ]
 }

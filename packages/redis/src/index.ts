@@ -9,5 +9,5 @@ export {
   invalidateEventCache,
 } from "./cache";
 export type { CachedBand, CachedEventStatus } from "./cache";
-export { recordTap, getAnalytics, getVelocityHistory } from "./analytics";
+export { recordTap, getAnalytics, getHourlyAnalytics, getVelocityHistory } from "./analytics";
 export { publishTapUpdate, createTapSubscriber, createSubscriberClient } from "./pubsub";

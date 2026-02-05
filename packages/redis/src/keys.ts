@@ -10,4 +10,5 @@ export const KEYS = {
   tapChannel: (eventId: string) => `tap-updates:${eventId}` as const,
   velocityBucket: (eventId: string, bucket: number) =>
     `analytics:${eventId}:velocity:${bucket}` as const,
+  tapLogPending: () => "tap-log:pending" as const,
 } as const;

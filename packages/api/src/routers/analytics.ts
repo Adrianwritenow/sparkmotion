@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
-import { getVelocityHistory } from "@sparkmotion/redis";
+import { getVelocityHistory, getAnalytics, getHourlyAnalytics } from "@sparkmotion/redis";
 import { db } from "@sparkmotion/database";
 import { Prisma } from "@sparkmotion/database";
 import { TRPCError } from "@trpc/server";
@@ -33,23 +33,21 @@ export const analyticsRouter = router({
   tapsByHour: protectedProcedure
     .input(z.object({ eventId: z.string(), hours: z.number().min(1).max(168).default(24) }))
     .query(async ({ input }) => {
-      const since = new Date(Date.now() - input.hours * 60 * 60 * 1000);
-      return db.tapLog.groupBy({
-        by: ["modeServed"],
-        where: { eventId: input.eventId, tappedAt: { gte: since } },
-        _count: true,
-      });
+      return getHourlyAnalytics(input.eventId, input.hours);
     }),
 
   eventSummary: protectedProcedure
     .input(z.object({ eventId: z.string() }))
     .query(async ({ input }) => {
-      const [bandCount, tapCount, uniqueBands] = await Promise.all([
+      const [redisAnalytics, bandCount] = await Promise.all([
+        getAnalytics(input.eventId),
         db.band.count({ where: { eventId: input.eventId } }),
-        db.tapLog.count({ where: { eventId: input.eventId } }),
-        db.band.count({ where: { eventId: input.eventId, tapCount: { gt: 0 } } }),
       ]);
-      return { bandCount, tapCount, uniqueBands };
+      return {
+        bandCount,
+        tapCount: redisAnalytics.totalTaps,
+        uniqueBands: redisAnalytics.uniqueTaps,
+      };
     }),
 
   kpis: protectedProcedure
@@ -59,6 +57,43 @@ export const analyticsRouter = router({
       const fromDate = new Date(from);
       const toDate = new Date(to);
 
+      // Redis fast-path: single event with date range including "now"
+      const now = new Date();
+      const isLive = eventId && toDate >= now && fromDate <= now;
+
+      if (isLive) {
+        const [redisAnalytics, totalBands] = await Promise.all([
+          getAnalytics(eventId),
+          db.band.count({ where: { eventId } }),
+        ]);
+
+        const { totalTaps, uniqueTaps, byMode } = redisAnalytics;
+        const minutesInRange = Math.max(1, (now.getTime() - fromDate.getTime()) / 60000);
+        const tpm = Math.round((totalTaps / minutesInRange) * 100) / 100;
+        const bandActivityPercent = totalBands > 0
+          ? Math.round((uniqueTaps / totalBands) * 100)
+          : 0;
+        const avgTapsPerBand = uniqueTaps > 0
+          ? Math.round((totalTaps / uniqueTaps) * 100) / 100
+          : 0;
+
+        return {
+          totalTaps,
+          uniqueBands: uniqueTaps,
+          activeEvents: 1,
+          tpm,
+          peakTpm: 0, // Not available from Redis — acceptable for live view
+          bandActivityPercent,
+          avgTapsPerBand,
+          modeDistribution: {
+            PRE: byMode.pre,
+            LIVE: byMode.live,
+            POST: byMode.post,
+          },
+        };
+      }
+
+      // DB path: historical/cross-event reports
       // Build base where clause for date range
       const dateWhere: Prisma.TapLogWhereInput = {
         tappedAt: {

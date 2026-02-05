@@ -37,6 +37,37 @@ export async function getAnalytics(eventId: string) {
 }
 
 /**
+ * Get hourly tap counts from Redis for the last N hours.
+ * Uses the same hourly keys the Worker writes to.
+ */
+export async function getHourlyAnalytics(
+  eventId: string,
+  hours: number = 24
+): Promise<Array<{ hour: string; count: number }>> {
+  const now = new Date();
+  const pipeline = redis.pipeline();
+  const hourKeys: string[] = [];
+
+  for (let i = hours - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+    const hour = d.toISOString().slice(0, 13); // YYYY-MM-DDTHH
+    hourKeys.push(hour);
+    pipeline.get(KEYS.tapsHourly(eventId, hour));
+  }
+
+  const results = await pipeline.exec();
+  if (!results) return [];
+
+  return results.map((result, index) => {
+    const [err, value] = result;
+    return {
+      hour: hourKeys[index]!,
+      count: err ? 0 : parseInt((value as string) ?? "0", 10),
+    };
+  });
+}
+
+/**
  * Get velocity history for sparkline rendering.
  * Returns last N buckets (default 180 = 30 min of 10s buckets).
  * Missing buckets return count: 0.

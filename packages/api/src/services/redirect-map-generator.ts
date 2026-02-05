@@ -16,7 +16,7 @@ const CF_KV_BULK_LIMIT = 10_000; // Cloudflare bulk write limit per request
  *
  * Gracefully skips if Cloudflare env vars are not set (local dev).
  */
-export async function generateRedirectMap(): Promise<{
+export async function generateRedirectMap(options?: { eventIds?: string[] }): Promise<{
   bandsWritten: number;
   eventsProcessed: number;
   skipped: boolean;
@@ -30,9 +30,12 @@ export async function generateRedirectMap(): Promise<{
     return { bandsWritten: 0, eventsProcessed: 0, skipped: true };
   }
 
-  // Fetch all active events with their active windows and bands
+  // Fetch active events (scoped to specific events if provided)
   const events = await db.event.findMany({
-    where: { status: "ACTIVE" },
+    where: {
+      status: "ACTIVE",
+      ...(options?.eventIds && { id: { in: options.eventIds } }),
+    },
     include: {
       windows: {
         where: { isActive: true },

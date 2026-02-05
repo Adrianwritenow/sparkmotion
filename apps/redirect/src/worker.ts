@@ -4,8 +4,6 @@ interface Env {
   REDIRECT_MAP: KVNamespace;
   UPSTASH_REDIS_REST_URL: string;
   UPSTASH_REDIS_REST_TOKEN: string;
-  LOG_TAP_URL: string;
-  LOG_TAP_SECRET: string;
   FALLBACK_URL: string;
 }
 
@@ -58,7 +56,7 @@ async function logTap(env: Env, bandId: string, entry: KVEntry, request: Request
       token: env.UPSTASH_REDIS_REST_TOKEN,
     });
 
-    // Pipeline: 7 commands in 1 HTTP request
+    // Pipeline: 8 commands in 1 HTTP request (analytics + tap log queue)
     const pipeline = upstash.pipeline();
     pipeline.incr(`analytics:${eventId}:taps:total`);
     pipeline.pfadd(`analytics:${eventId}:taps:unique`, bandId);
@@ -67,6 +65,19 @@ async function logTap(env: Env, bandId: string, entry: KVEntry, request: Request
     pipeline.incr(`analytics:${eventId}:mode:${mode}`);
     pipeline.incr(`analytics:${eventId}:velocity:${bucket}`);
     pipeline.expire(`analytics:${eventId}:velocity:${bucket}`, 1800);
+
+    // Queue tap for batch DB flush (replaces per-tap HTTP POST)
+    pipeline.lpush("tap-log:pending", JSON.stringify({
+      bandId,
+      eventId,
+      mode,
+      redirectUrl: entry.url,
+      userAgent: request.headers.get("user-agent") ?? undefined,
+      ipAddress: request.headers.get("cf-connecting-ip") ??
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        undefined,
+      tappedAt: new Date().toISOString(),
+    }));
 
     const results = await pipeline.exec();
 
@@ -80,32 +91,5 @@ async function logTap(env: Env, bandId: string, entry: KVEntry, request: Request
     }));
   } catch (err) {
     console.error("Upstash analytics failed:", err);
-  }
-
-  // POST to hub for DB writes (best-effort)
-  try {
-    const userAgent = request.headers.get("user-agent") ?? undefined;
-    const ipAddress =
-      request.headers.get("cf-connecting-ip") ??
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      undefined;
-
-    await fetch(env.LOG_TAP_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.LOG_TAP_SECRET}`,
-      },
-      body: JSON.stringify({
-        bandId,
-        eventId,
-        mode,
-        redirectUrl: entry.url,
-        userAgent,
-        ipAddress,
-      }),
-    });
-  } catch (err) {
-    console.error("Log-tap POST failed:", err);
   }
 }
