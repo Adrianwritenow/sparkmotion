@@ -6,7 +6,6 @@ import { analyticsRouter } from "./routers/analytics";
 import { organizationsRouter } from "./routers/organizations";
 import { usersRouter } from "./routers/users";
 import { infrastructureRouter } from "./routers/infrastructure";
-import { loadTestReportsRouter } from "./routers/load-test-reports";
 
 export const appRouter = router({
   events: eventsRouter,
@@ -16,7 +15,6 @@ export const appRouter = router({
   organizations: organizationsRouter,
   users: usersRouter,
   infrastructure: infrastructureRouter,
-  loadTestReports: loadTestReportsRouter,
 });
 
 export type AppRouter = typeof appRouter;
