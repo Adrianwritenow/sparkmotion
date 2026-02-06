@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { redis, KEYS } from "@sparkmotion/redis";
-import { db } from "@sparkmotion/database";
+import { db, Prisma } from "@sparkmotion/database";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,15 +36,25 @@ export async function GET(request: NextRequest) {
   let batchCount = 0;
 
   try {
+    // Lua script: atomically read and remove up to BATCH_SIZE items from the list.
+    // Returns the items that were removed — no race condition with overlapping crons.
+    const DRAIN_SCRIPT = `
+      local key = KEYS[1]
+      local count = tonumber(ARGV[1])
+      local items = redis.call('lrange', key, 0, count - 1)
+      if #items > 0 then
+        redis.call('ltrim', key, #items, -1)
+      end
+      return items
+    `;
+
     while (Date.now() - startTime < 50_000) {
-      // Grab up to BATCH_SIZE items atomically
       const key = KEYS.tapLogPending();
-      const items = await redis.lrange(key, 0, BATCH_SIZE - 1);
 
-      if (items.length === 0) break;
+      // Atomically drain up to BATCH_SIZE items
+      const items = (await redis.eval(DRAIN_SCRIPT, 1, key, BATCH_SIZE)) as string[];
 
-      // Trim the items we just read
-      await redis.ltrim(key, items.length, -1);
+      if (!items || items.length === 0) break;
 
       // Parse tap entries
       const taps: PendingTap[] = items.map((item) =>
@@ -101,27 +111,37 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Batch update bands in a single transaction
+      // Batch update bands with two raw SQL queries instead of 2N individual updates
       if (bandAggregates.size > 0) {
         const updates = Array.from(bandAggregates.entries());
+        const ids = updates.map(([id]) => id);
+        const tapCounts = updates.map(([, agg]) => agg.tapCount);
+        const lastTapAts = updates.map(([, agg]) => agg.lastTapAt);
+        const firstTapAts = updates.map(([, agg]) => agg.firstTapAt);
+
         await db.$transaction([
-          // Increment tapCount and update lastTapAt for all bands
-          ...updates.map(([internalId, agg]) =>
-            db.band.update({
-              where: { id: internalId },
-              data: {
-                tapCount: { increment: agg.tapCount },
-                lastTapAt: agg.lastTapAt,
-              },
-            })
-          ),
-          // Set firstTapAt only for bands that haven't been tapped before
-          ...updates.map(([internalId, agg]) =>
-            db.band.updateMany({
-              where: { id: internalId, firstTapAt: null },
-              data: { firstTapAt: agg.firstTapAt },
-            })
-          ),
+          // Single UPDATE for tapCount + lastTapAt using unnest arrays
+          db.$executeRaw(Prisma.sql`
+            UPDATE "Band" AS b SET
+              "tapCount" = b."tapCount" + v."inc",
+              "lastTapAt" = GREATEST(b."lastTapAt", v."last_tap")
+            FROM (
+              SELECT unnest(${ids}::text[]) AS id,
+                     unnest(${tapCounts}::int[]) AS inc,
+                     unnest(${lastTapAts}::timestamptz[]) AS last_tap
+            ) AS v
+            WHERE b."id" = v."id"
+          `),
+          // Single UPDATE for firstTapAt (only where null)
+          db.$executeRaw(Prisma.sql`
+            UPDATE "Band" AS b SET
+              "firstTapAt" = v."first_tap"
+            FROM (
+              SELECT unnest(${ids}::text[]) AS id,
+                     unnest(${firstTapAts}::timestamptz[]) AS first_tap
+            ) AS v
+            WHERE b."id" = v."id" AND b."firstTapAt" IS NULL
+          `),
         ]);
       }
 

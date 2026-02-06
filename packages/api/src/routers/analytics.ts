@@ -127,25 +127,30 @@ export const analyticsRouter = router({
         ...(eventId && { eventId }),
       };
 
-      // Execute 3 queries in parallel
-      const [totalTaps, uniqueBandsResult, activeEventsResult] = await Promise.all([
+      // Build event filter for distinct counts query
+      const distinctEventFilter = eventId
+        ? Prisma.sql`AND "eventId" = ${eventId}`
+        : eventIds.length > 0
+        ? Prisma.sql`AND "eventId" IN (${Prisma.join(eventIds)})`
+        : Prisma.sql``;
+
+      // Execute queries in parallel — use COUNT(DISTINCT) instead of groupBy
+      const [totalTaps, distinctCounts] = await Promise.all([
         // Total taps in date range
         db.tapLog.count({ where: tapLogWhere }),
 
-        // Unique bands (distinct bandId)
-        db.tapLog.groupBy({
-          by: ["bandId"],
-          where: tapLogWhere,
-        }),
-
-        // Active events (events with at least 1 tap)
-        db.tapLog.groupBy({
-          by: ["eventId"],
-          where: tapLogWhere,
-        }),
+        // Unique bands + active events in a single query
+        db.$queryRaw<[{ unique_bands: bigint; active_events: bigint }]>(Prisma.sql`
+          SELECT
+            COUNT(DISTINCT "bandId")::int AS unique_bands,
+            COUNT(DISTINCT "eventId")::int AS active_events
+          FROM "TapLog"
+          WHERE "tappedAt" >= ${fromDate} AND "tappedAt" <= ${toDate}
+            ${distinctEventFilter}
+        `),
       ]);
 
-      const uniqueBands = uniqueBandsResult.length;
+      const uniqueBands = Number(distinctCounts[0]?.unique_bands ?? 0);
 
       // Calculate TPM (taps per minute)
       const minutesInRange = Math.max(1, (toDate.getTime() - fromDate.getTime()) / 60000);
@@ -209,7 +214,7 @@ export const analyticsRouter = router({
       return {
         totalTaps,
         uniqueBands,
-        activeEvents: activeEventsResult.length,
+        activeEvents: Number(distinctCounts[0]?.active_events ?? 0),
         tpm,
         peakTpm,
         bandActivityPercent,

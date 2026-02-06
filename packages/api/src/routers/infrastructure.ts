@@ -165,8 +165,8 @@ export const infrastructureRouter = router({
       // Cloudflare KV: $0.50 per million reads (1 read per redirect)
       const kvCost = (totalExpectedTaps / 1_000_000) * 0.50;
 
-      // Upstash Redis: ~$0.20 per 100K commands, 7 pipeline commands per tap
-      const upstashCost = ((totalExpectedTaps * 7) / 100_000) * 0.20;
+      // Upstash Redis: ~$0.20 per 100K commands, 9 commands per tap (8 pipeline + 1 publish)
+      const upstashCost = ((totalExpectedTaps * 9) / 100_000) * 0.20;
 
       const totalCost = workersCost + kvCost + upstashCost;
 

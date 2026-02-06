@@ -23,7 +23,7 @@ export const eventsRouter = router({
     .query(async ({ input }) => {
       const event = await db.event.findUniqueOrThrow({
         where: { id: input.id },
-        include: { org: true, windows: true, bands: { take: 100 }, _count: { select: { bands: true, tapLogs: true } } },
+        include: { org: true, windows: true, bands: { take: 100 }, _count: { select: { bands: true } } },
       });
 
       // Compute currentMode from active windows
