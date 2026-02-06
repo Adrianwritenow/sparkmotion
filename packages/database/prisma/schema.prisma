@@ -157,3 +157,15 @@ model TapLog {
   @@index([eventId, tappedAt])
   @@index([tappedAt])
 }
+
+model LoadTestReport {
+  id          String   @id @default(cuid())
+  name        String
+  testType    String
+  summaryJson Json     @db.JsonB
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt(sort: Desc)])
+  @@index([testType])
+}
