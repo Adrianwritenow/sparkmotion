@@ -124,10 +124,10 @@ The root domain `sparkmotion.net` hosts the existing marketing site on Squarespa
 | CNAME | `www` | Squarespace target | DNS only (gray cloud) |
 | CNAME | `admin` | `cname.vercel-dns.com` | DNS only (gray cloud) |
 | CNAME | `app` | `cname.vercel-dns.com` | DNS only (gray cloud) |
-| CNAME | `hub` | `cname.vercel-dns.com` | DNS only (gray cloud) |
+| CNAME | `geo` | `cname.vercel-dns.com` | DNS only (gray cloud) |
 | CNAME | `*` | Worker route (see below) | Proxied (orange cloud) |
 
-> **Important:** Root + `www` + `admin` + `app` + `hub` must be gray-cloud (DNS only) so Cloudflare doesn't intercept those. Only the wildcard `*` gets orange-cloud (proxied) so the Worker can handle it.
+> **Important:** Root + `www` + `admin` + `app` + `geo` must be gray-cloud (DNS only) so Cloudflare doesn't intercept those. Only the wildcard `*` gets orange-cloud (proxied) so the Worker can handle it.
 
 ### Worker Route
 
@@ -140,17 +140,20 @@ All wildcard subdomain traffic hits the Worker. The Worker decides:
 - `/health` → health check
 - Everything else → proxy to Webflow microsite (`WEBFLOW_ORIGIN`)
 
-Explicit CNAME records for `admin`, `app`, `hub` (gray-cloud) bypass the Cloudflare proxy entirely and go straight to Vercel.
+Explicit CNAME records for `admin`, `app`, `geo` (gray-cloud) bypass the Cloudflare proxy entirely and go straight to Vercel.
 
 ### Migration Steps
 
-- [ ] Add `sparkmotion.net` to Cloudflare dashboard (Cloudflare scans existing DNS records)
-- [ ] Recreate all existing Squarespace DNS records in Cloudflare (copy ALL records before switching)
-- [ ] Add the DNS records listed above
-- [ ] Update nameservers at Squarespace to point to Cloudflare's assigned nameservers
-- [ ] Wait for DNS propagation (usually <1 hour, can take up to 48h)
-- [ ] Configure Worker route: `*.sparkmotion.net/*` → `sparkmotion-redirect`
-- [ ] Add `geo.sparkmotion.net` as custom domain on the **hub** Vercel project
+- [x] Add `sparkmotion.net` to Cloudflare dashboard (Cloudflare scans existing DNS records)
+- [x] Recreate all existing Squarespace DNS records in Cloudflare (4x A records, CNAME www, MX records, TXT)
+- [x] Add DNS records: `admin`, `app`, `geo` CNAMEs (gray cloud) + wildcard `*` AAAA `100::` (orange cloud)
+- [x] Update nameservers at Squarespace → `edna.ns.cloudflare.com` + `pete.ns.cloudflare.com`
+- [x] Configure Worker route: `*.sparkmotion.net/*` → `sparkmotion-redirect`
+- [x] Deploy Worker with Webflow proxy (`pnpm wrangler deploy`)
+- [x] Set `WEBFLOW_ORIGIN` secret on Worker
+- [ ] Wait for DNS propagation (nameservers submitted, pending Cloudflare activation)
+- [ ] Re-enable Domain Lock at Squarespace after propagation confirmed
+- [ ] Add `geo.sparkmotion.net` as custom domain on the **geo** Vercel project (`sparkmotion-geo`)
 - [ ] Add `admin.sparkmotion.net` as custom domain on the **admin** Vercel project
 - [ ] Add `app.sparkmotion.net` as custom domain on the **customer** Vercel project
 - [ ] Verify SSL certificates are provisioned for all domains
