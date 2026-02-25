@@ -1,5 +1,7 @@
 import { BandReviewTable } from "@/components/bands/band-review-table";
 
+export const dynamic = "force-dynamic";
+
 export default function BandsPage() {
   return (
     <div className="space-y-6">

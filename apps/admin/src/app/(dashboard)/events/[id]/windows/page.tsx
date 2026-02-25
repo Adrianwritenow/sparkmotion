@@ -2,6 +2,8 @@ import { db } from "@sparkmotion/database";
 import { notFound } from "next/navigation";
 import { WindowsList } from "@/components/events/windows-list";
 
+export const dynamic = "force-dynamic";
+
 export default async function EventWindowsPage({
   params,
 }: {

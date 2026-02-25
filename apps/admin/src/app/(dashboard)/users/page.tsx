@@ -1,6 +1,8 @@
 import { db } from "@sparkmotion/database";
 import { UsersContent } from "@/components/users/users-content";
 
+export const dynamic = "force-dynamic";
+
 export default async function UsersPage() {
   const users = await db.user.findMany({
     select: {
