@@ -7,6 +7,8 @@ import { TimezoneSelector } from "@/components/settings/timezone-selector";
 import { auth } from "@sparkmotion/auth";
 import { db } from "@sparkmotion/database";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   const session = await auth();
   const userName = session?.user?.name || "User";

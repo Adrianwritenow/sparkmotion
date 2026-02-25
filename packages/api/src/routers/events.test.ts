@@ -43,6 +43,7 @@ vi.mock('../services/evaluate-schedule', () => ({
 import { createTestCaller, createMockEvent } from '../test-utils';
 import { prismaMock } from '../test-mocks';
 import { invalidateEventCache } from '@sparkmotion/redis';
+import { getEventEngagement } from '../lib/engagement';
 
 // ─── Setup ─────────────────────────────────────────────────────────────────────
 beforeEach(() => {
@@ -129,7 +130,9 @@ describe('events.byId', () => {
       _count: { bands: 3 },
     };
     prismaMock.event.findUniqueOrThrow.mockResolvedValue(mockEvent as any);
-    prismaMock.$queryRaw.mockResolvedValue([{ total_taps: BigInt(10) }]);
+    vi.mocked(getEventEngagement).mockResolvedValueOnce(
+      new Map([['event-1', { totalTaps: 10, engagementPercent: 0, elapsedWindows: 0, engagedPairs: 0 }]])
+    );
 
     const result = await caller.events.byId({ id: 'event-1' });
 
@@ -209,6 +212,7 @@ describe('events.delete', () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const existing = createMockEvent();
     prismaMock.event.findUniqueOrThrow.mockResolvedValue(existing as any);
+    prismaMock.band.findMany.mockResolvedValue([]);
     prismaMock.event.delete.mockResolvedValue(existing as any);
 
     await caller.events.delete({ id: 'event-1' });

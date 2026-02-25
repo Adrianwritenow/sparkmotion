@@ -6,6 +6,7 @@ interface Env {
   UPSTASH_REDIS_REST_TOKEN: string;
   FALLBACK_URL: string;
   HUB_URL: string;
+  WEBFLOW_ORIGIN: string; // e.g. "https://compassion-sparkmotion.webflow.io"
 }
 
 interface KVEntry {
@@ -65,7 +66,18 @@ export default {
     }
 
     if (url.pathname !== "/e") {
-      return new Response("Not Found", { status: 404 });
+      // Proxy non-redirect traffic to Webflow microsite
+      const webflowUrl = new URL(url.pathname + url.search, env.WEBFLOW_ORIGIN);
+      const response = await fetch(webflowUrl.toString(), {
+        headers: {
+          "Host": new URL(env.WEBFLOW_ORIGIN).hostname,
+          "X-Forwarded-Host": url.hostname,
+        },
+      });
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
     }
 
     const bandId = url.searchParams.get("bandId");

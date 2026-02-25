@@ -1,6 +1,8 @@
 import { db } from "@sparkmotion/database";
 import { BandReviewTable } from "@/components/bands/band-review-table";
 
+export const dynamic = "force-dynamic";
+
 export default async function BandsPage() {
   const orgs = await db.organization.findMany({
     select: { id: true, name: true },

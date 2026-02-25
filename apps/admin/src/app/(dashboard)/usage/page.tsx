@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { CurrentActivityCard } from "@/components/usage/current-activity-card";
 import { InfrastructureControlCard } from "@/components/usage/infrastructure-control-card";
 import { UpcomingEventsCard } from "@/components/usage/upcoming-events-card";

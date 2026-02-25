@@ -5,16 +5,24 @@
 NFC redirect traffic flows through a **Cloudflare Worker** at the edge, with the **Vercel Hub** as a fallback for complex logic:
 
 ```
-NFC Tap → *.sparkmotion.net/e?bandId=XXX
+*.sparkmotion.net (wildcard subdomain, proxied through Cloudflare)
   │
-  ├─ Cloudflare Worker (edge, <15ms):
+  ├─ /e?bandId=XXX → Cloudflare Worker (edge, <15ms):
   │    KV lookup by bandId
   │    HIT (99% during live event) → 302 redirect + async analytics
   │    MISS → proxy to Hub
+  │         └─ Hub /e route (Vercel, ~200ms):
+  │              Auto-assignment, GeoIP routing, DB access
+  │              Hub handles its own analytics (no double-count)
   │
-  └─ Hub /e route (Vercel, ~200ms):
-       Auto-assignment, GeoIP routing, DB access
-       Hub handles its own analytics (no double-count)
+  └─ /* (all other paths) → Cloudflare Worker proxies to Webflow:
+       Org microsite (e.g. compassion-sparkmotion.webflow.io)
+       Landing pages, about, etc.
+
+admin.sparkmotion.net → Vercel (DNS only, gray cloud)
+app.sparkmotion.net   → Vercel (DNS only, gray cloud)
+geo.sparkmotion.net   → Vercel (DNS only, gray cloud)
+sparkmotion.net       → Squarespace (DNS only, gray cloud)
 ```
 
 - **KV hit path** (~99% of live-event traffic): Worker reads from globally-replicated Cloudflare KV, fires async Upstash analytics, returns 302. Sub-15ms.
@@ -91,10 +99,11 @@ For each project:
 
 | Secret | Description |
 |--------|-------------|
-| `HUB_URL` | Hub origin URL, e.g. `https://hub.sparkmotion.net` |
+| `HUB_URL` | Hub origin URL, e.g. `https://geo.sparkmotion.net` |
 | `UPSTASH_REDIS_REST_URL` | Upstash Redis REST endpoint |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token |
 | `FALLBACK_URL` | Generic fallback URL (e.g. `https://sparkmotion.io`) |
+| `WEBFLOW_ORIGIN` | Webflow microsite origin, e.g. `https://compassion-sparkmotion.webflow.io` |
 
 KV namespace binding: `REDIRECT_MAP` (configured in `wrangler.toml`).
 
@@ -105,26 +114,57 @@ cd apps/redirect && pnpm wrangler deploy
 
 ## Domains & DNS
 
-The root domain `sparkmotion.net` hosts the existing marketing site on DigitalOcean — **do not change it**. NFC wristbands are programmed with URLs like `https://compassion.sparkmotion.net/e?bandId=00000001`. The Cloudflare Worker intercepts all wildcard subdomain traffic at the edge; on KV miss, the Worker proxies to `hub.sparkmotion.net` on Vercel. Explicit CNAME records for `admin` and `app` override the wildcard for those subdomains.
+The root domain `sparkmotion.net` hosts the existing marketing site on Squarespace. DNS must be migrated to Cloudflare so the wildcard `*.sparkmotion.net` can be proxied through a Cloudflare Worker. NFC wristbands use URLs like `https://compassion.sparkmotion.net/e?bandId=00000001`. The Worker handles `/e` (NFC redirect) and `/health` at the edge; all other paths are proxied to the org's Webflow microsite.
 
-| Service | Domain | DNS Record | Target |
-|---------|--------|-----------|--------|
-| Marketing site | `sparkmotion.net` | (existing) | DigitalOcean (unchanged) |
-| NFC redirect (edge) | `*.sparkmotion.net` | Proxied via Cloudflare | Cloudflare Worker route |
-| Hub (Worker fallback) | `hub.sparkmotion.net` | CNAME | `cname.vercel-dns.com` |
-| Admin app | `admin.sparkmotion.net` | CNAME | `cname.vercel-dns.com` |
-| Customer app | `app.sparkmotion.net` | CNAME | `cname.vercel-dns.com` |
+### DNS Records (Cloudflare)
 
-> **How it works:** The wildcard `*.sparkmotion.net` is proxied through Cloudflare, where a Worker route handles `/e` requests at the edge via KV lookup. On KV miss, the Worker proxies to `hub.sparkmotion.net` (Vercel) for auto-assignment and GeoIP routing. Explicit CNAME records for `admin`, `app`, and `hub` take priority over the wildcard. The root `sparkmotion.net` (no subdomain) is unaffected.
+| Type | Name | Target | Proxy |
+|------|------|--------|-------|
+| A/CNAME | `@` (root) | Squarespace target | DNS only (gray cloud) |
+| CNAME | `www` | Squarespace target | DNS only (gray cloud) |
+| CNAME | `admin` | `cname.vercel-dns.com` | DNS only (gray cloud) |
+| CNAME | `app` | `cname.vercel-dns.com` | DNS only (gray cloud) |
+| CNAME | `geo` | `cname.vercel-dns.com` | DNS only (gray cloud) |
+| CNAME | `*` | Worker route (see below) | Proxied (orange cloud) |
 
-- [ ] Configure `*.sparkmotion.net` on Cloudflare with Worker route for `/e` path
-- [ ] Add `hub.sparkmotion.net` as custom domain on the **hub** Vercel project
+> **Important:** Root + `www` + `admin` + `app` + `geo` must be gray-cloud (DNS only) so Cloudflare doesn't intercept those. Only the wildcard `*` gets orange-cloud (proxied) so the Worker can handle it.
+
+### Worker Route
+
+In Cloudflare dashboard → Workers Routes:
+- Route pattern: `*.sparkmotion.net/*`
+- Worker: `sparkmotion-redirect`
+
+All wildcard subdomain traffic hits the Worker. The Worker decides:
+- `/e` → NFC redirect logic (KV lookup, Hub fallback)
+- `/health` → health check
+- Everything else → proxy to Webflow microsite (`WEBFLOW_ORIGIN`)
+
+Explicit CNAME records for `admin`, `app`, `geo` (gray-cloud) bypass the Cloudflare proxy entirely and go straight to Vercel.
+
+### Migration Steps
+
+- [x] Add `sparkmotion.net` to Cloudflare dashboard (Cloudflare scans existing DNS records)
+- [x] Recreate all existing Squarespace DNS records in Cloudflare (4x A records, CNAME www, MX records, TXT)
+- [x] Add DNS records: `admin`, `app`, `geo` CNAMEs (gray cloud) + wildcard `*` AAAA `100::` (orange cloud)
+- [x] Update nameservers at Squarespace → `edna.ns.cloudflare.com` + `pete.ns.cloudflare.com`
+- [x] Configure Worker route: `*.sparkmotion.net/*` → `sparkmotion-redirect`
+- [x] Deploy Worker with Webflow proxy (`pnpm wrangler deploy`)
+- [x] Set `WEBFLOW_ORIGIN` secret on Worker
+- [ ] Wait for DNS propagation (nameservers submitted, pending Cloudflare activation)
+- [ ] Re-enable Domain Lock at Squarespace after propagation confirmed
+- [ ] Add `geo.sparkmotion.net` as custom domain on the **geo** Vercel project (`sparkmotion-geo`)
 - [ ] Add `admin.sparkmotion.net` as custom domain on the **admin** Vercel project
 - [ ] Add `app.sparkmotion.net` as custom domain on the **customer** Vercel project
-- [ ] Create CNAME record: `hub.sparkmotion.net` → `cname.vercel-dns.com`
-- [ ] Create CNAME record: `admin.sparkmotion.net` → `cname.vercel-dns.com`
-- [ ] Create CNAME record: `app.sparkmotion.net` → `cname.vercel-dns.com`
 - [ ] Verify SSL certificates are provisioned for all domains
+- [ ] Verify `sparkmotion.net` still serves Squarespace site after nameserver change
+
+### Concerns
+
+- **Squarespace nameserver change**: Squarespace may show a warning when nameservers move away. The site continues to work as long as the A/CNAME records in Cloudflare point to the same Squarespace targets.
+- **Webflow asset paths**: The Worker proxies the full path, so relative paths resolve correctly. Test thoroughly after deploy.
+- **Webflow SSL**: Worker fetches from `*.webflow.io` (valid SSL). No custom domain config needed in Webflow.
+- **Multi-tenant future**: When adding more orgs, replace the single `WEBFLOW_ORIGIN` env var with a KV lookup (org slug → Webflow origin URL).
 
 ## Database Production
 
@@ -150,12 +190,18 @@ The root domain `sparkmotion.net` hosts the existing marketing site on DigitalOc
 ## Deploy Order
 
 1. **Database** — Enable `cube` + `earthdistance` extensions, run `prisma migrate deploy`, create admin user
-2. **Hub app** — Deploy first. Must be live before the Worker can proxy to it. Cron endpoints must be live before `flush-taps` runs.
-3. **Cloudflare Worker** — Deploy `apps/redirect` via `pnpm wrangler deploy`. Set secrets (`HUB_URL`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `FALLBACK_URL`). Bind `REDIRECT_MAP` KV namespace.
-4. **DNS** — Point `*.sparkmotion.net` through Cloudflare with Worker route. Add `hub.sparkmotion.net` CNAME to Vercel.
-5. **Admin app** — Deploy, verify admin UI loads
-6. **Customer app** — Deploy last (depends on admin URL being live)
-7. **Verify end-to-end** — Open `https://compassion.sparkmotion.net/e?bandId=00000001` → confirm KV hit redirects instantly at edge. Test with unknown bandId → confirm Worker proxies to Hub → Hub responds with 302. Check Redis analytics keys, trigger flush-taps cron, verify tap log appears in DB.
+2. **Cloudflare DNS migration** — Add `sparkmotion.net` to Cloudflare, recreate all existing DNS records, update nameservers at Squarespace, wait for propagation
+3. **Hub app** — Deploy first. Must be live before the Worker can proxy to it. Cron endpoints must be live before `flush-taps` runs.
+4. **Cloudflare Worker** — Deploy `apps/redirect` via `pnpm wrangler deploy`. Set secrets (`HUB_URL`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `FALLBACK_URL`, `WEBFLOW_ORIGIN`). Bind `REDIRECT_MAP` KV namespace. Configure Worker route: `*.sparkmotion.net/*` → `sparkmotion-redirect`.
+5. **Admin app** — Deploy, verify admin UI loads at `admin.sparkmotion.net`
+6. **Customer app** — Deploy last (depends on admin URL being live), verify at `app.sparkmotion.net`
+7. **Verify end-to-end:**
+   - `sparkmotion.net` → Squarespace marketing site (unchanged)
+   - `compassion.sparkmotion.net` → Webflow microsite
+   - `compassion.sparkmotion.net/e?bandId=00000001` → NFC redirect (302)
+   - `admin.sparkmotion.net` → Admin dashboard (Vercel)
+   - `app.sparkmotion.net` → Customer portal (Vercel)
+   - Check Redis analytics keys, trigger flush-taps cron, verify tap log appears in DB
 8. **Enable Vercel crons** — Confirm `flush-taps` and `update-windows` crons are scheduled in hub's `vercel.json`
 
 ## Staging-First Approach

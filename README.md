@@ -121,9 +121,9 @@ Per-app variables are documented in each app's README:
 
 | Domain | Target | Purpose |
 |--------|--------|---------|
-| `sparkmotion.net` | DigitalOcean | Marketing site (existing) |
-| `*.sparkmotion.net` | Cloudflare Worker | NFC redirect edge handler |
-| `hub.sparkmotion.net` | Vercel | Hub fallback + crons |
+| `sparkmotion.net` | Squarespace | Marketing site (existing) |
+| `*.sparkmotion.net` | Cloudflare Worker | NFC redirect + Webflow proxy |
+| `geo.sparkmotion.net` | Vercel | Hub fallback + crons |
 | `admin.sparkmotion.net` | Vercel | Admin dashboard |
 | `app.sparkmotion.net` | Vercel | Customer portal |
 
