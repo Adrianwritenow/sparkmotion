@@ -13,3 +13,19 @@ id = "3cddf6ee74324904a34cb1b08a87a0a6"
 #   UPSTASH_REDIS_REST_URL     — Upstash Redis REST endpoint
 #   UPSTASH_REDIS_REST_TOKEN   — Upstash Redis REST token
 #   FALLBACK_URL               — Generic fallback URL (e.g. https://sparkmotion.io)
+
+# Staging environment — deploy with: npx wrangler deploy --env staging
+[env.staging]
+name = "sparkmotion-redirect-staging"
+
+# Create with: wrangler kv namespace create REDIRECT_MAP --env staging
+# Then replace the id below with the actual namespace ID
+[[env.staging.kv_namespaces]]
+binding = "REDIRECT_MAP"
+id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
+
+# Set staging secrets with:
+#   wrangler secret put HUB_URL --env staging
+#   wrangler secret put UPSTASH_REDIS_REST_URL --env staging
+#   wrangler secret put UPSTASH_REDIS_REST_TOKEN --env staging
+#   wrangler secret put FALLBACK_URL --env staging
