@@ -1,0 +1,205 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  output        = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+}
+
+enum OrgRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum EventStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum WindowType {
+  PRE
+  LIVE
+  POST
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+model Organization {
+  id           String    @id @default(cuid())
+  name         String
+  slug         String    @unique
+  websiteUrl   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  events    Event[]
+  campaigns Campaign[]
+  users     User[]
+
+  @@index([slug])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  role      UserRole @default(CUSTOMER)
+  orgId     String?
+  orgRole   OrgRole  @default(VIEWER)
+  timezone  String?  // User's preferred timezone for display, null = use browser default
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([orgId])
+}
+
+model Event {
+  id                 String      @id @default(cuid())
+  orgId              String
+  campaignId         String?
+  name               String
+  city               String?
+  state              String?
+  country            String?
+  zipcode            String?
+  location           String?     // "City, ST" format for display
+  venueName          String?     // Venue name from Google Places (e.g., "Bridgestone Arena")
+  formattedAddress   String?     // Full formatted address from Google Places (e.g., "501 Broadway, Nashville, TN 37203, USA")
+  latitude           Decimal?    @db.Decimal(9, 6) // Geographic coordinate - 9 total digits, 6 after decimal
+  longitude          Decimal?    @db.Decimal(9, 6) // Geographic coordinate - 9 total digits, 6 after decimal
+  timezone           String      @default("UTC") // IANA timezone e.g. "America/New_York"
+  scheduleMode       Boolean     @default(false) // When true, cron auto-activates windows based on datetime ranges
+  fallbackUrl        String?     // Default redirect URL when no routing window is active
+  status             EventStatus @default(DRAFT)
+  estimatedAttendees Int?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  org      Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  campaign Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  windows  EventWindow[]
+  bands    Band[]
+  tapLogs  TapLog[]
+
+  @@index([orgId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([latitude, longitude])
+}
+
+model EventWindow {
+  id         String     @id @default(cuid())
+  eventId    String
+  windowType WindowType
+  title      String?
+  url        String
+  startTime  DateTime?
+  endTime    DateTime?
+  isManual   Boolean    @default(false)
+  isActive   Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tapLogs TapLog[]
+
+  @@index([eventId])
+  @@index([eventId, isActive])
+  @@index([windowType])
+}
+
+model BandTag {
+  id        String   @id @default(cuid())
+  title     String   @unique
+  createdAt DateTime @default(now())
+
+  bands Band[]
+
+  @@index([title])
+}
+
+model Band {
+  id           String    @id @default(cuid())
+  bandId       String
+  eventId      String
+  name         String?   // Optional registrant name
+  email        String?   // Optional registrant email
+  tagId        String?   // FK to BandTag (single tag per band)
+  autoAssigned       Boolean @default(false) // Tracks whether band was auto-assigned by IP geolocation vs manually assigned
+  autoAssignDistance Float?                // Distance in miles from scanner to matched event at auto-assignment (null = no geo or manual)
+  flagged            Boolean @default(false) // true when auto-assigned >50mi away — needs manual review
+  firstTapAt   DateTime?
+  lastTapAt    DateTime?
+  tapCount     Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tag     BandTag? @relation(fields: [tagId], references: [id], onDelete: SetNull)
+  tapLogs TapLog[]
+
+  @@unique([bandId, eventId])
+  @@index([bandId])
+  @@index([eventId])
+  @@index([tagId])
+  @@index([flagged])
+}
+
+model TapLog {
+  id          String       @id @default(cuid())
+  bandId      String
+  eventId     String
+  windowId    String?
+  tappedAt    DateTime     @default(now())
+  modeServed  String
+  redirectUrl String
+  userAgent   String?
+  ipAddress   String?
+
+  band   Band         @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  event  Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  window EventWindow? @relation(fields: [windowId], references: [id], onDelete: SetNull)
+
+  @@index([bandId])
+  @@index([eventId])
+  @@index([eventId, tappedAt])
+  @@index([eventId, windowId])
+  @@index([tappedAt])
+}
+
+model Campaign {
+  id        String         @id @default(cuid())
+  orgId     String
+  name      String
+  status    CampaignStatus @default(DRAFT)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  events Event[]
+
+  @@index([orgId])
+  @@index([status])
+}
+

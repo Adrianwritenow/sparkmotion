@@ -1,0 +1,15 @@
+name = "sparkmotion-redirect"
+main = "src/worker.ts"
+compatibility_date = "2024-12-18"
+
+# KV namespace — replace with actual ID after: wrangler kv namespace create REDIRECT_MAP
+[[kv_namespaces]]
+binding = "REDIRECT_MAP"
+id = "3cddf6ee74324904a34cb1b08a87a0a6"
+
+# Environment variables are set via: wrangler secret put <NAME>
+# Required secrets:
+#   HUB_URL                    — Vercel Hub origin (e.g. https://hub.sparkmotion.net)
+#   UPSTASH_REDIS_REST_URL     — Upstash Redis REST endpoint
+#   UPSTASH_REDIS_REST_TOKEN   — Upstash Redis REST token
+#   FALLBACK_URL               — Generic fallback URL (e.g. https://sparkmotion.io)
