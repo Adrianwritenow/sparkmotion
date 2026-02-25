@@ -9,10 +9,11 @@ id = "3cddf6ee74324904a34cb1b08a87a0a6"
 
 # Environment variables are set via: wrangler secret put <NAME>
 # Required secrets:
-#   HUB_URL                    — Vercel Hub origin (e.g. https://hub.sparkmotion.net)
+#   HUB_URL                    — Vercel Hub origin (e.g. https://geo.sparkmotion.net)
 #   UPSTASH_REDIS_REST_URL     — Upstash Redis REST endpoint
 #   UPSTASH_REDIS_REST_TOKEN   — Upstash Redis REST token
 #   FALLBACK_URL               — Generic fallback URL (e.g. https://sparkmotion.io)
+#   WEBFLOW_ORIGIN             — Webflow microsite origin (e.g. https://compassion-sparkmotion.webflow.io)
 
 # Staging environment — deploy with: npx wrangler deploy --env staging
 [env.staging]
@@ -29,3 +30,4 @@ id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
 #   wrangler secret put UPSTASH_REDIS_REST_URL --env staging
 #   wrangler secret put UPSTASH_REDIS_REST_TOKEN --env staging
 #   wrangler secret put FALLBACK_URL --env staging
+#   wrangler secret put WEBFLOW_ORIGIN --env staging

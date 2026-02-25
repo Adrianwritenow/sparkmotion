@@ -5,6 +5,8 @@ import { Calendar, Activity, Users } from "lucide-react";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { RecentEventsTable } from "@/components/dashboard/recent-events-table";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const session = await auth();
 

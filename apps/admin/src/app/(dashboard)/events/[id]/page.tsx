@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Building2, Calendar, MapPin } from "lucide-react";
 import { EventDetailTabs } from "@/components/events/event-detail-tabs";
 
+export const dynamic = "force-dynamic";
+
 export default async function EventDetailPage({
   params,
   searchParams,

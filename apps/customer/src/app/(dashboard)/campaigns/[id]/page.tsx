@@ -6,6 +6,8 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { CampaignDetailTabs } from "@/components/campaigns/campaign-detail-tabs";
 
+export const dynamic = "force-dynamic";
+
 export default async function CampaignDetailPage({
   params,
   searchParams,

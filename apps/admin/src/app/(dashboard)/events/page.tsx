@@ -5,6 +5,8 @@ import { CampaignFilter } from "@/components/events/campaign-filter";
 import { EventPageActions } from "@/components/events/event-page-actions";
 import { ListFilterBar } from "@/components/list-filter-bar";
 
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 20;
 
 const EVENT_STATUS_OPTIONS = [

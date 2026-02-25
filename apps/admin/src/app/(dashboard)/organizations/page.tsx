@@ -4,6 +4,8 @@ import { Building2, Users, ArrowUpRight, MoreHorizontal, Calendar } from "lucide
 import { AddOrgButton } from "@/components/organizations/add-org-button";
 import { ListFilterBar } from "@/components/list-filter-bar";
 
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 20;
 
 export default async function OrganizationsPage({

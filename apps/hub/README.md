@@ -3,7 +3,7 @@
 NFC redirect backend and cron host. No UI dashboard — serves the `/e` redirect endpoint and runs scheduled jobs. This is the Cloudflare Worker's fallback origin for KV misses.
 
 - **Port:** 3002
-- **Production:** hub.sparkmotion.net
+- **Production:** geo.sparkmotion.net
 - **Runtime:** Node.js (Vercel serverless, not Edge — required for ioredis + Prisma)
 
 ## Environment Variables

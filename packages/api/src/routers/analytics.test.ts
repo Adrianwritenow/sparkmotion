@@ -25,6 +25,11 @@ vi.mock('@sparkmotion/redis', () => ({
   getVelocityHistory: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('../lib/engagement', () => ({
+  getEventEngagement: vi.fn().mockResolvedValue(new Map()),
+  aggregateCampaignEngagement: vi.fn(),
+}));
+
 // Import after vi.mock declarations
 import { prismaMock } from '../test-mocks';
 import { createTestCaller, createMockEvent, createMockWindow } from '../test-utils';
@@ -101,7 +106,7 @@ describe('analytics.eventSummary', () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const result = await caller.analytics.eventSummary({ eventId: 'event-1' });
 
-    expect(result).toEqual({ bandCount: 10, tapCount: 5, uniqueBands: 3 });
+    expect(result).toEqual({ bandCount: 10, tapCount: 5, uniqueBands: 3, engagementPercent: 0 });
   });
 
   it('handles empty tap results gracefully (returns zeros)', async () => {
@@ -111,7 +116,7 @@ describe('analytics.eventSummary', () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const result = await caller.analytics.eventSummary({ eventId: 'event-1' });
 
-    expect(result).toEqual({ bandCount: 0, tapCount: 0, uniqueBands: 0 });
+    expect(result).toEqual({ bandCount: 0, tapCount: 0, uniqueBands: 0, engagementPercent: 0 });
   });
 });
 
