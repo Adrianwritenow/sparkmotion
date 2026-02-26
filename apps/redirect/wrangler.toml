@@ -1,6 +1,7 @@
 name = "sparkmotion-redirect"
 main = "src/worker.ts"
 compatibility_date = "2024-12-18"
+account_id = "efeaec566e12863d8012fe1708d204fb"
 
 # KV namespace — replace with actual ID after: wrangler kv namespace create REDIRECT_MAP
 [[kv_namespaces]]
