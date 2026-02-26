@@ -50,7 +50,7 @@ describe('organizations.list', () => {
       expect.objectContaining({ orderBy: { name: 'asc' } })
     );
     expect(result).toHaveLength(2);
-    expect(result[0].id).toBe('org-1');
+    expect(result[0]!.id).toBe('org-1');
   });
 
   it('CUSTOMER is rejected with FORBIDDEN', async () => {

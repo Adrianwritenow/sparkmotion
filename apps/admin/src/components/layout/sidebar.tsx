@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Megaphone,
   Disc3,
+  Users,
 
   Sun,
   Moon,
@@ -51,6 +52,7 @@ export function Sidebar({ isMobile = false }: SidebarProps) {
     { href: "/events", label: "Events", icon: CalendarDays },
     { href: "/campaigns", label: "Campaigns", icon: Megaphone },
     { href: "/bands", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
+    { href: "/users", label: "Users", icon: Users },
   ];
 
   return (

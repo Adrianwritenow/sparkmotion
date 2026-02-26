@@ -1,21 +1,32 @@
 import crypto from "crypto";
 import { db } from "@sparkmotion/database";
 import type { UserRole } from "@sparkmotion/database";
-import { sendPasswordResetEmail } from "@sparkmotion/email";
+import { sendPasswordResetEmail, sendInviteEmail } from "@sparkmotion/email";
 
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const INVITE_TOKEN_EXPIRY_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 const ADMIN_URL =
   process.env.NEXT_PUBLIC_ADMIN_URL || "http://localhost:3000";
 const CUSTOMER_URL =
   process.env.NEXT_PUBLIC_CUSTOMER_URL || "http://localhost:3001";
 
+interface InviteOptions {
+  tokenExpiryMs?: number;
+  isInvite?: boolean;
+  invitedByName?: string | null;
+}
+
 export async function generateAndSendResetToken(
   userId: string,
   email: string,
   name: string | null,
-  role: UserRole
+  role: UserRole,
+  options?: InviteOptions
 ) {
+  const { tokenExpiryMs, isInvite, invitedByName } = options ?? {};
+  const expiry = tokenExpiryMs ?? (isInvite ? INVITE_TOKEN_EXPIRY_MS : TOKEN_EXPIRY_MS);
+
   // Invalidate any existing unused tokens for this user
   await db.passwordResetToken.updateMany({
     where: { userId, usedAt: null },
@@ -33,7 +44,7 @@ export async function generateAndSendResetToken(
     data: {
       userId,
       token: hashedToken,
-      expiresAt: new Date(Date.now() + TOKEN_EXPIRY_MS),
+      expiresAt: new Date(Date.now() + expiry),
     },
   });
 
@@ -41,5 +52,9 @@ export async function generateAndSendResetToken(
   const baseUrl = role === "ADMIN" ? ADMIN_URL : CUSTOMER_URL;
   const resetUrl = `${baseUrl}/auth/reset-password?token=${rawToken}`;
 
-  await sendPasswordResetEmail({ to: email, resetUrl, userName: name });
+  if (isInvite) {
+    await sendInviteEmail({ to: email, resetUrl, userName: name, invitedByName: invitedByName ?? null });
+  } else {
+    await sendPasswordResetEmail({ to: email, resetUrl, userName: name });
+  }
 }
