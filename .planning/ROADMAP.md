@@ -177,6 +177,27 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd:plan-phase 28 to break down)
 
+### Phase 29: Add user management page for creating/deleting Admins and Customers with email invitations
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 28
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 29 to break down)
+
+### Phase 30: Add analytics tracking for fallback and org URL taps
+
+**Goal:** Track and visualize ALL tap redirect destinations in analytics, not just event window taps. Fix hub route logging gaps for band-bearing redirect paths, add tRPC procedures to derive redirect category (FALLBACK/ORG/DEFAULT) from TapLog.redirectUrl at query time, rename charts to "Taps by Redirect Type" / "Tap Distribution", extend filter dropdown to "All Redirects", and add muted gray tones for non-window categories — across event and campaign analytics in both admin and customer apps.
+**Requirements**: [HUB-LOGGING-GAPS, ANALYTICS-REDIRECT-TYPE-PROCEDURES, CHARTS-REDIRECT-TYPE-RENAME, FILTER-DROPDOWN-EXTENSION, MUTED-COLORS-NON-WINDOW, COMPONENT-DUPLICATION-ADMIN-CUSTOMER]
+**Depends on:** Phase 29
+**Plans:** 1/2 plans executed
+
+Plans:
+- [ ] 30-01-PLAN.md — Fix hub route logging gaps + tapsByRedirectType and campaignTapsByRedirectType tRPC procedures + tests
+- [ ] 30-02-PLAN.md — Update all 4 analytics components (event+campaign x admin+customer) with renamed charts, extended filters, muted colors
+
 ---
 
 _For project context, see .planning/PROJECT.md_

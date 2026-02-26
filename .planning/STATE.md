@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 27 — Dead Code Cleanup
-Plan: 01 (COMPLETE) — delete orphaned components/procedure, update Phase 25 verification docs
-Status: Phase 27 IN PROGRESS — plan 01 executed; 4 dead files deleted, bands.register removed, 78 tests pass
-Last activity: 2026-02-24 — Phase 27-01 executed: deleted ActivityFeed/CityAutocomplete (both apps), removed bands.register procedure/tests, added Post-Phase Corrections to Phase 25 VERIFICATION.md
+Phase: 30 — Add analytics tracking for fallback and org URL taps
+Plan: 01 (COMPLETE) — hub route logging gaps fixed, tapsByRedirectType and campaignTapsByRedirectType procedures added
+Status: Phase 30 IN PROGRESS — plan 01 executed; 2 new logTapAsync calls in hub route, 2 new tRPC procedures, 98 tests pass
+Last activity: 2026-02-26 — Phase 30-01 executed: fixed hub route logging gaps (band-no-event + band-no-redirectUrl paths), added tapsByRedirectType and campaignTapsByRedirectType analytics procedures with full test coverage
 
-Progress: (1 plan complete — Phase 27 Plan 01 COMPLETE)
+Progress: (1 plan complete — Phase 30 Plan 01 COMPLETE)
 
 ## Performance Metrics
 
@@ -38,6 +38,12 @@ Progress: (1 plan complete — Phase 27 Plan 01 COMPLETE)
 ### Decisions
 
 All decisions logged in PROJECT.md Key Decisions table (43 entries).
+
+**Phase 30-01:**
+- IS NOT NULL guard required before NULL equality in SQL CASE expressions — NULL=NULL is NULL not TRUE, causing incorrect DEFAULT classification when fallbackUrl/websiteUrl is NULL
+- LEFT JOIN EventWindow (not INNER) in redirect type SQL ensures windowId=NULL tap rows are included and classified by URL comparison branches
+- logTapAsync only called when band is truthy in no-event path — TapLog.bandId is NOT NULL FK, bandless paths cannot log
+- mode logged as activeWindow.windowType.toLowerCase() or "pre" fallback on no-redirectUrl path to reflect actual window state
 
 **Phase 26-03:**
 - adminProcedure uses single isAdmin middleware — throws FORBIDDEN for both unauthenticated and non-ADMIN callers (no separate UNAUTHORIZED guard)
@@ -282,6 +288,8 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 30 added: Add analytics tracking for fallback and org URL taps
+- Phase 29 added: Add user management page for creating/deleting Admins and Customers with email invitations
 - Phase 28 added: Seed prod admin account and password reset flow for admins and customers
 - Phase 26 added: Update load tests and add core functionality testing suite
 - **Phase 25 COMPLETE** — Band Activity Tab — All 3 plans complete
@@ -345,7 +353,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-24
-Stopped at: Completed 27-01-PLAN.md — dead code cleanup (orphaned components, bands.register, Phase 25 verification docs)
+Last session: 2026-02-26
+Stopped at: Completed 30-01-PLAN.md — analytics tracking for fallback and org URL taps (hub route logging gaps + tapsByRedirectType/campaignTapsByRedirectType procedures)
 Resume file: None
-Next step: Phase 27 COMPLETE (single plan) — proceed to next planned phase
+Next step: Phase 30 Plan 02 (if exists) or next planned phase
