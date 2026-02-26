@@ -40,8 +40,8 @@ export async function middleware(request: NextRequest) {
         return response;
       }
 
-      // Force password reset redirect
-      if (token?.forcePasswordReset === true) {
+      // Force password reset redirect (skip for API routes so tRPC calls work)
+      if (token?.forcePasswordReset === true && !request.nextUrl.pathname.startsWith("/api/")) {
         return NextResponse.redirect(new URL("/auth/reset-password", request.url));
       }
     } catch {
@@ -53,5 +53,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.svg$|.*\\.png$|.*\\.ico$).*)"],
+  matcher: ["/((?!api/auth|api/trpc|_next/static|_next/image|favicon.ico|.*\\.svg$|.*\\.png$|.*\\.ico$).*)"],
 };
