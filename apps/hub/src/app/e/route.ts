@@ -477,7 +477,23 @@ export async function GET(request: NextRequest) {
 
     // 4. Band found (either existing or just auto-assigned)
     if (!band || !band.event) {
-      return NextResponse.redirect(orgWebsiteUrl || FALLBACK_URL, 302);
+      const dest = orgWebsiteUrl || FALLBACK_URL;
+      // Only log if band exists — TapLog.bandId is NOT NULL and requires a valid bandId+eventId
+      if (band) {
+        logTapAsync(request, {
+          bandId: band.bandId,
+          eventId: band.eventId,
+          mode: "pre",
+          windowId: null,
+          redirectUrl: dest,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          utmTerm,
+          utmContent,
+        });
+      }
+      return NextResponse.redirect(dest, 302);
     }
 
     // Flagged existing band: never redirect to event URL.
@@ -498,7 +514,20 @@ export async function GET(request: NextRequest) {
 
     const redirectUrl = activeWindow?.url ?? band.event.fallbackUrl;
     if (!redirectUrl) {
-      return NextResponse.redirect(band.event.org?.websiteUrl || FALLBACK_URL, 302);
+      const dest = band.event.org?.websiteUrl || FALLBACK_URL;
+      logTapAsync(request, {
+        bandId: band.bandId,
+        eventId: band.eventId,
+        mode: activeWindow?.windowType?.toLowerCase() ?? "pre",
+        windowId: null,
+        redirectUrl: dest,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmTerm,
+        utmContent,
+      });
+      return NextResponse.redirect(dest, 302);
     }
 
     cached = {
