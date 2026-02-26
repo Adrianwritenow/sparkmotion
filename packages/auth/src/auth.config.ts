@@ -4,6 +4,7 @@ import type { JWT } from "next-auth/jwt";
 const cookiePrefix = process.env.AUTH_COOKIE_PREFIX || "authjs";
 
 export const authConfig = {
+  trustHost: true,
   secret: process.env.AUTH_SECRET,
   cookies: {
     sessionToken: {
