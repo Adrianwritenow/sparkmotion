@@ -8,7 +8,8 @@
     "db:generate": "pnpm --filter @sparkmotion/database generate",
     "db:migrate": "pnpm --filter @sparkmotion/database migrate",
     "db:push": "pnpm --filter @sparkmotion/database push",
-    "db:studio": "pnpm --filter @sparkmotion/database studio"
+    "db:studio": "pnpm --filter @sparkmotion/database studio",
+    "db:seed-prod": "pnpm --filter @sparkmotion/database seed-prod"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

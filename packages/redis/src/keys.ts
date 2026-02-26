@@ -10,4 +10,6 @@ export const KEYS = {
   velocityBucket: (eventId: string, bucket: number) =>
     `analytics:${eventId}:velocity:${bucket}` as const,
   tapLogPending: () => "tap-log:pending" as const,
+  resetRateLimit: (email: string) => `rate:reset:${email}` as const,
+  loginLockout: (email: string) => `lockout:${email}` as const,
 } as const;

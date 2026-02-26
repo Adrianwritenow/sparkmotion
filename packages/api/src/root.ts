@@ -1,4 +1,5 @@
 import { router } from "./trpc";
+import { authRouter } from "./routers/auth";
 import { eventsRouter } from "./routers/events";
 import { windowsRouter } from "./routers/windows";
 import { bandsRouter } from "./routers/bands";
@@ -10,6 +11,7 @@ import { campaignsRouter } from "./routers/campaigns";
 import { tagsRouter } from "./routers/tags";
 
 export const appRouter = router({
+  auth: authRouter,
   events: eventsRouter,
   windows: windowsRouter,
   bands: bandsRouter,

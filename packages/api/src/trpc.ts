@@ -45,5 +45,6 @@ const isAdmin = middleware(({ ctx, next }) => {
   return next({ ctx: { user: ctx.user } });
 });
 
+export const publicProcedure = t.procedure;
 export const protectedProcedure = t.procedure.use(isAuthed);
 export const adminProcedure = t.procedure.use(isAdmin);
