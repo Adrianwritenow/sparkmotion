@@ -1008,6 +1008,129 @@ export const analyticsRouter = router({
       return results;
     }),
 
+  tapsByRedirectType: protectedProcedure
+    .input(z.object({
+      eventId: z.string(),
+      from: z.string().datetime({ offset: true }).optional(),
+      to: z.string().datetime({ offset: true }).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { eventId } = input;
+
+      // Org-scoping for CUSTOMER role
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: eventId },
+          select: { orgId: true },
+        });
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
+      const fromDate = input.from ? new Date(input.from) : undefined;
+      const toDate = input.to ? new Date(input.to) : undefined;
+
+      const dateFilter = fromDate && toDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate} AND tl."tappedAt" <= ${toDate}`
+        : fromDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate}`
+        : toDate
+        ? Prisma.sql`AND tl."tappedAt" <= ${toDate}`
+        : Prisma.sql``;
+
+      const results = await db.$queryRaw<Array<{ category: string; count: number }>>(Prisma.sql`
+        SELECT
+          CASE
+            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"
+            WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
+            WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
+            ELSE 'DEFAULT'
+          END AS category,
+          COUNT(*)::int AS count
+        FROM "TapLog" tl
+        INNER JOIN "Event" e ON tl."eventId" = e."id"
+        INNER JOIN "Organization" o ON e."orgId" = o."id"
+        LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
+        WHERE tl."eventId" = ${eventId}
+          ${dateFilter}
+        GROUP BY category
+        ORDER BY count DESC
+      `);
+
+      return results;
+    }),
+
+  campaignTapsByRedirectType: protectedProcedure
+    .input(z.object({
+      campaignId: z.string(),
+      eventId: z.string().optional(),
+      from: z.string().datetime({ offset: true }).optional(),
+      to: z.string().datetime({ offset: true }).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { campaignId, eventId } = input;
+
+      const campaign = await db.campaign.findUniqueOrThrow({
+        where: { id: campaignId },
+        select: {
+          orgId: true,
+          events: {
+            where: { status: { in: ["ACTIVE", "COMPLETED"] } },
+            select: { id: true },
+          },
+        },
+      });
+
+      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const eventIds = eventId
+        ? [eventId]
+        : campaign.events.map((e) => e.id);
+
+      if (eventIds.length === 0) {
+        return [];
+      }
+
+      const fromDate = input.from ? new Date(input.from) : undefined;
+      const toDate = input.to ? new Date(input.to) : undefined;
+
+      const dateFilter = fromDate && toDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate} AND tl."tappedAt" <= ${toDate}`
+        : fromDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate}`
+        : toDate
+        ? Prisma.sql`AND tl."tappedAt" <= ${toDate}`
+        : Prisma.sql``;
+
+      const eventFilter = eventIds.length === 1
+        ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
+        : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
+
+      const results = await db.$queryRaw<Array<{ category: string; count: number }>>(Prisma.sql`
+        SELECT
+          CASE
+            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"
+            WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
+            WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
+            ELSE 'DEFAULT'
+          END AS category,
+          COUNT(*)::int AS count
+        FROM "TapLog" tl
+        INNER JOIN "Event" e ON tl."eventId" = e."id"
+        INNER JOIN "Organization" o ON e."orgId" = o."id"
+        LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
+        WHERE ${eventFilter}
+          ${dateFilter}
+        GROUP BY category
+        ORDER BY count DESC
+      `);
+
+      return results;
+    }),
+
   cohortRetention: protectedProcedure
     .input(z.object({ eventId: z.string() }))
     .query(async ({ ctx, input }) => {
