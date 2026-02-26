@@ -25,6 +25,11 @@ vi.mock('@sparkmotion/database', async () => {
 
 vi.mock('@sparkmotion/redis', () => ({}));
 
+const mockSendContactEmail = vi.fn();
+vi.mock('@sparkmotion/email', () => ({
+  sendContactEmail: (...args: unknown[]) => mockSendContactEmail(...args),
+}));
+
 import { prismaMock } from '../test-mocks';
 import { createTestCaller, createMockOrg } from '../test-utils';
 
@@ -85,6 +90,104 @@ describe('organizations.byId', () => {
   });
 });
 
+// ─── organizations.create ───────────────────────────────────────────────────
+describe('organizations.create', () => {
+  it('ADMIN creates org with custom slug and contactEmail', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const created = createMockOrg({
+      slug: 'custom-slug',
+      contactEmail: 'info@example.com',
+    });
+    prismaMock.organization.create.mockResolvedValue(created as any);
+
+    const result = await caller.organizations.create({
+      name: 'Test Org',
+      slug: 'Custom Slug!',
+      websiteUrl: 'https://example.com',
+      contactEmail: 'info@example.com',
+    });
+
+    expect(prismaMock.organization.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: 'Test Org',
+          slug: 'custom-slug',
+          websiteUrl: 'https://example.com',
+          contactEmail: 'info@example.com',
+        }),
+      })
+    );
+    expect(result.slug).toBe('custom-slug');
+  });
+
+  it('ADMIN creates org without slug (auto-generated from name)', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const created = createMockOrg({ slug: 'my-org' });
+    prismaMock.organization.create.mockResolvedValue(created as any);
+
+    await caller.organizations.create({ name: 'My Org', contactEmail: 'test@example.com' });
+
+    expect(prismaMock.organization.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: 'My Org',
+          slug: 'my-org',
+        }),
+      })
+    );
+  });
+
+  it('returns CONFLICT on duplicate slug', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const { Prisma } = await import('@sparkmotion/database');
+    prismaMock.organization.create.mockRejectedValue(
+      new (Prisma.PrismaClientKnownRequestError as any)('Unique constraint', { code: 'P2002' })
+    );
+
+    await expect(
+      caller.organizations.create({ name: 'Dup Org', contactEmail: 'dup@example.com' })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+});
+
+// ─── organizations.checkSlug ─────────────────────────────────────────────────
+describe('organizations.checkSlug', () => {
+  it('returns available=true for unused slug', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    prismaMock.organization.findUnique.mockResolvedValue(null as any);
+
+    const result = await caller.organizations.checkSlug({ slug: 'New Slug' });
+
+    expect(result).toEqual({ available: true, slug: 'new-slug' });
+  });
+
+  it('returns available=false for taken slug', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    prismaMock.organization.findUnique.mockResolvedValue({ id: 'org-2' } as any);
+
+    const result = await caller.organizations.checkSlug({ slug: 'taken-slug' });
+
+    expect(result).toEqual({ available: false, slug: 'taken-slug' });
+  });
+
+  it('excludes own org from conflict check', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    prismaMock.organization.findUnique.mockResolvedValue({ id: 'org-1' } as any);
+
+    const result = await caller.organizations.checkSlug({ slug: 'my-slug', excludeOrgId: 'org-1' });
+
+    expect(result).toEqual({ available: true, slug: 'my-slug' });
+  });
+
+  it('returns available=false for empty normalized slug', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+
+    const result = await caller.organizations.checkSlug({ slug: '---' });
+
+    expect(result).toEqual({ available: false, slug: '' });
+  });
+});
+
 // ─── organizations.update (adminProcedure) ────────────────────────────────────
 describe('organizations.update', () => {
   it('ADMIN updates org name', async () => {
@@ -103,11 +206,62 @@ describe('organizations.update', () => {
     expect(result.name).toBe('New Org Name');
   });
 
+  it('ADMIN updates org slug (normalized)', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const updated = createMockOrg({ slug: 'new-slug' });
+    prismaMock.organization.update.mockResolvedValue(updated as any);
+
+    const result = await caller.organizations.update({ id: 'org-1', slug: 'New Slug!' });
+
+    expect(prismaMock.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'org-1' },
+        data: expect.objectContaining({ slug: 'new-slug' }),
+      })
+    );
+    expect(result.slug).toBe('new-slug');
+  });
+
+  it('returns CONFLICT on duplicate slug', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const { Prisma } = await import('@sparkmotion/database');
+    prismaMock.organization.update.mockRejectedValue(
+      new (Prisma.PrismaClientKnownRequestError as any)('Unique constraint', { code: 'P2002' })
+    );
+
+    await expect(
+      caller.organizations.update({ id: 'org-1', slug: 'taken-slug' })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
   it('CUSTOMER is rejected with FORBIDDEN', async () => {
     const caller = createTestCaller({ role: 'CUSTOMER', orgId: 'org-1' });
 
     await expect(
       caller.organizations.update({ id: 'org-1', name: 'Hacked' })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+// ─── organizations.delete ────────────────────────────────────────────────────
+describe('organizations.delete', () => {
+  it('ADMIN can delete an organization', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    prismaMock.organization.delete.mockResolvedValue(createMockOrg() as any);
+
+    const result = await caller.organizations.delete({ id: 'org-1' });
+
+    expect(prismaMock.organization.delete).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'org-1' } })
+    );
+    expect(result).toEqual({ success: true });
+  });
+
+  it('CUSTOMER is rejected with FORBIDDEN', async () => {
+    const caller = createTestCaller({ role: 'CUSTOMER', orgId: 'org-1' });
+
+    await expect(
+      caller.organizations.delete({ id: 'org-1' })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
@@ -143,6 +297,58 @@ describe('organizations.updateName', () => {
 
     await expect(
       caller.organizations.updateName({ orgId: 'org-2', name: 'Hacked Org' })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+// ─── organizations.sendContactEmail ─────────────────────────────────────────
+describe('organizations.sendContactEmail', () => {
+  it('ADMIN can send contact email', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null, name: 'Admin User', email: 'admin@test.com' });
+    prismaMock.organization.findUnique.mockResolvedValue({ name: 'Test Org' } as any);
+    mockSendContactEmail.mockResolvedValue(undefined);
+
+    const result = await caller.organizations.sendContactEmail({
+      orgId: 'org-1',
+      to: 'contact@testorg.com',
+      subject: 'Hello',
+      body: 'Test message',
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(mockSendContactEmail).toHaveBeenCalledWith({
+      to: 'contact@testorg.com',
+      subject: 'Hello',
+      body: 'Test message',
+      orgName: 'Test Org',
+      senderName: 'Admin User',
+    });
+  });
+
+  it('returns NOT_FOUND when org does not exist', async () => {
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    prismaMock.organization.findUnique.mockResolvedValue(null as any);
+
+    await expect(
+      caller.organizations.sendContactEmail({
+        orgId: 'nonexistent',
+        to: 'contact@testorg.com',
+        subject: 'Hello',
+        body: 'Test message',
+      })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('CUSTOMER is rejected with FORBIDDEN', async () => {
+    const caller = createTestCaller({ role: 'CUSTOMER', orgId: 'org-1' });
+
+    await expect(
+      caller.organizations.sendContactEmail({
+        orgId: 'org-1',
+        to: 'contact@testorg.com',
+        subject: 'Hello',
+        body: 'Test message',
+      })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

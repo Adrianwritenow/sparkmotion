@@ -24,14 +24,23 @@ export function AddOrganizationDialog({
   const utils = trpc.useUtils();
 
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const normalizeSlug = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
   const createOrg = trpc.organizations.create.useMutation({
     onSuccess: () => {
       utils.organizations.list.invalidate();
       setName("");
+      setSlug("");
+      setSlugTouched(false);
       setWebsiteUrl("");
+      setContactEmail("");
       setError(null);
       onOpenChange(false);
       router.refresh();
@@ -46,7 +55,9 @@ export function AddOrganizationDialog({
     setError(null);
     createOrg.mutate({
       name: name.trim(),
+      ...(slug.trim() && { slug: slug.trim() }),
       ...(websiteUrl.trim() && { websiteUrl: websiteUrl.trim() }),
+      contactEmail: contactEmail.trim(),
     });
   };
 
@@ -57,7 +68,10 @@ export function AddOrganizationDialog({
         if (!v) {
           setError(null);
           setName("");
+          setSlug("");
+          setSlugTouched(false);
           setWebsiteUrl("");
+          setContactEmail("");
         }
         onOpenChange(v);
       }}
@@ -66,8 +80,7 @@ export function AddOrganizationDialog({
         <DialogHeader>
           <DialogTitle>Add Organization</DialogTitle>
           <DialogDescription>
-            Create a new client organization. A URL slug will be generated
-            automatically from the name.
+            Create a new client organization.
           </DialogDescription>
         </DialogHeader>
 
@@ -84,10 +97,39 @@ export function AddOrganizationDialog({
               type="text"
               required
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (!slugTouched) {
+                  setSlug(normalizeSlug(e.target.value));
+                }
+              }}
               placeholder="Compassion International"
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor="org-slug"
+              className="block text-sm font-medium text-foreground mb-1.5"
+            >
+              Slug
+            </label>
+            <input
+              id="org-slug"
+              type="text"
+              required
+              value={slug}
+              onChange={(e) => {
+                setSlugTouched(true);
+                setSlug(e.target.value);
+              }}
+              placeholder="compassion-international"
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              URL-friendly identifier (lowercase, hyphens only)
+            </p>
           </div>
 
           <div>
@@ -107,6 +149,27 @@ export function AddOrganizationDialog({
             />
             <p className="text-xs text-muted-foreground mt-1">
               Fallback redirect URL when no events exist for this organization
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="org-contact-email"
+              className="block text-sm font-medium text-foreground mb-1.5"
+            >
+              Contact Email
+            </label>
+            <input
+              id="org-contact-email"
+              type="email"
+              required
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="contact@compassion.com"
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Primary email for contacting this organization
             </p>
           </div>
 
