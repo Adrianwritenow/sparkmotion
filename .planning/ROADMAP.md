@@ -192,7 +192,7 @@ Plans:
 **Goal:** Track and visualize ALL tap redirect destinations in analytics, not just event window taps. Fix hub route logging gaps for band-bearing redirect paths, add tRPC procedures to derive redirect category (FALLBACK/ORG/DEFAULT) from TapLog.redirectUrl at query time, rename charts to "Taps by Redirect Type" / "Tap Distribution", extend filter dropdown to "All Redirects", and add muted gray tones for non-window categories — across event and campaign analytics in both admin and customer apps.
 **Requirements**: [HUB-LOGGING-GAPS, ANALYTICS-REDIRECT-TYPE-PROCEDURES, CHARTS-REDIRECT-TYPE-RENAME, FILTER-DROPDOWN-EXTENSION, MUTED-COLORS-NON-WINDOW, COMPONENT-DUPLICATION-ADMIN-CUSTOMER]
 **Depends on:** Phase 29
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 30-01-PLAN.md — Fix hub route logging gaps + tapsByRedirectType and campaignTapsByRedirectType tRPC procedures + tests

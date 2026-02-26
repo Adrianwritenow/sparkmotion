@@ -1,3 +1,16 @@
+---
+gsd_state_version: 1.0
+milestone: v1.4
+milestone_name: milestone
+status: unknown
+last_updated: "2026-02-26T18:44:35.552Z"
+progress:
+  total_phases: 30
+  completed_phases: 25
+  total_plans: 66
+  completed_plans: 63
+---
+
 # Project State
 
 ## Project Reference
@@ -10,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 30 — Add analytics tracking for fallback and org URL taps
-Plan: 01 (COMPLETE) — hub route logging gaps fixed, tapsByRedirectType and campaignTapsByRedirectType procedures added
-Status: Phase 30 IN PROGRESS — plan 01 executed; 2 new logTapAsync calls in hub route, 2 new tRPC procedures, 98 tests pass
-Last activity: 2026-02-26 — Phase 30-01 executed: fixed hub route logging gaps (band-no-event + band-no-redirectUrl paths), added tapsByRedirectType and campaignTapsByRedirectType analytics procedures with full test coverage
+Plan: 02 (COMPLETE) — all 4 analytics components updated with redirect type charts, filter dropdown, and muted colors
+Status: Phase 30 COMPLETE — both plans executed; hub route logs all valid-band redirects, new tRPC procedures, all 4 analytics components show FALLBACK/ORG/DEFAULT categories
+Last activity: 2026-02-26 — Phase 30-02 executed: updated admin/customer event and campaign analytics components with redirect type bar chart, extended filter dropdown, and muted gray tones for non-window categories
 
-Progress: (1 plan complete — Phase 30 Plan 01 COMPLETE)
+Progress: (2 plans complete — Phase 30 COMPLETE)
 
 ## Performance Metrics
 
@@ -38,6 +51,12 @@ Progress: (1 plan complete — Phase 30 Plan 01 COMPLETE)
 ### Decisions
 
 All decisions logged in PROJECT.md Key Decisions table (43 entries).
+
+**Phase 30-02:**
+- REDIRECT_COLORS record keyed by category string for per-bar Cell fill — cleaner than index-based PIE_COLORS for named categories
+- campaignTapsByRedirectType always used for bar chart removing selectedEventId conditional — procedure accepts eventId param handling both cases
+- tapsByWindow retained for pie chart and export — window-level breakdown still valid, only bar chart switches to redirect-type granularity
+- Pseudo-IDs (__FALLBACK__, __ORG__, __DEFAULT__) filter pie chart naturally (no real window matches) — no handler change needed
 
 **Phase 30-01:**
 - IS NOT NULL guard required before NULL equality in SQL CASE expressions — NULL=NULL is NULL not TRUE, causing incorrect DEFAULT classification when fallbackUrl/websiteUrl is NULL
@@ -281,6 +300,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 26]: lib/engagement.ts mocked per-test-file in events/campaigns tests because it calls db. directly
 - [Phase 27]: Deleted ActivityFeed and CityAutocomplete components with no dangling imports (confirmed via grep before deletion)
 - [Phase 27]: Phase 25 VERIFICATION.md status/score preserved - truths were accurate at verification time; post-phase commits documented separately in Post-Phase Corrections section
+- [Phase 30]: REDIRECT_COLORS record keyed by category string for per-bar Cell fill — cleaner than index-based PIE_COLORS for named categories
+- [Phase 30]: campaignTapsByRedirectType always used for bar chart removing selectedEventId conditional — procedure accepts eventId param handling both cases
 
 ### Pending Todos
 
@@ -354,6 +375,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed 30-01-PLAN.md — analytics tracking for fallback and org URL taps (hub route logging gaps + tapsByRedirectType/campaignTapsByRedirectType procedures)
+Stopped at: Completed 30-02-PLAN.md — analytics UI updated with redirect type charts, extended filter dropdown, and muted colors in all 4 analytics components (admin/customer event + campaign)
 Resume file: None
-Next step: Phase 30 Plan 02 (if exists) or next planned phase
+Next step: Phase 30 COMPLETE — next planned phase
