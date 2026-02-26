@@ -41,6 +41,17 @@ const PIE_COLORS = [
   "hsl(var(--chart-5))",
 ];
 
+const REDIRECT_COLORS: Record<string, string> = {
+  // Vibrant — window types
+  PRE: "hsl(var(--chart-1))",
+  LIVE: "hsl(var(--chart-2))",
+  POST: "hsl(var(--chart-3))",
+  // Muted — non-window redirect types
+  FALLBACK: "hsl(215 20% 65%)",
+  ORG: "hsl(215 15% 55%)",
+  DEFAULT: "hsl(215 10% 45%)",
+};
+
 const windowTypeTapsConfig = {
   count: {
     label: "Taps",
@@ -79,6 +90,8 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
     trpc.analytics.engagementByHour.useQuery(filterParams);
   const { data: summary, isLoading: summaryLoading } =
     trpc.analytics.eventSummary.useQuery(filterParams);
+  const { data: redirectTypeData, isLoading: redirectTypeLoading } =
+    trpc.analytics.tapsByRedirectType.useQuery({ eventId, from: filterParams.from, to: filterParams.to });
   const { data: windowTaps, isLoading: windowTapsLoading } =
     trpc.analytics.tapsByWindow.useQuery({ eventId, from: filterParams.from, to: filterParams.to });
 
@@ -108,15 +121,11 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
     ? (windowTaps ?? []).filter((w) => w.windowId === selectedWindowId)
     : (windowTaps ?? []);
 
-  // Bar chart data: aggregate by window type (PRE / LIVE / POST)
-  const barData = (() => {
-    if (!filteredWindowTaps.length) return [];
-    const grouped = new Map<string, number>();
-    for (const w of filteredWindowTaps) {
-      grouped.set(w.windowType, (grouped.get(w.windowType) ?? 0) + w.count);
-    }
-    return Array.from(grouped, ([type, count]) => ({ type, count }));
-  })();
+  // Bar chart data: from tapsByRedirectType (includes FALLBACK/ORG/DEFAULT)
+  const barData = (redirectTypeData ?? []).map((item) => ({
+    type: item.category,
+    count: item.count,
+  }));
 
   // Pie chart data: one slice per window, label = "TYPE - Title"
   const pieSlices = filteredWindowTaps.map((w) => ({
@@ -128,6 +137,8 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
     acc[item.name] = { label: item.name, color: PIE_COLORS[i % PIE_COLORS.length] };
     return acc;
   }, {});
+
+  const isRedirectFilter = selectedWindowId?.startsWith("__");
 
   return (
     <div className="space-y-6" ref={captureRef}>
@@ -175,10 +186,13 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
           onValueChange={handleWindowChange}
         >
           <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="All Windows" />
+            <SelectValue placeholder="All Redirects" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Windows</SelectItem>
+            <SelectItem value="all">All Redirects</SelectItem>
+            <SelectItem value="__FALLBACK__">FALLBACK</SelectItem>
+            <SelectItem value="__ORG__">ORG</SelectItem>
+            <SelectItem value="__DEFAULT__">DEFAULT</SelectItem>
             {windows?.map((w) => (
               <SelectItem key={w.id} value={w.id}>
                 {w.title || `${w.windowType} — ${w.url.slice(0, 30)}`}
@@ -270,15 +284,15 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
         />
       </div>
 
-      {/* Section 3: Bar Chart by Window Type + Pie Chart by Window */}
+      {/* Section 3: Bar Chart by Redirect Type + Pie Chart by Window */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Left: Bar chart — Taps by Window Type */}
+        {/* Left: Bar chart — Taps by Redirect Type */}
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-foreground">Taps by Window Type</h3>
-            <p className="text-sm text-muted-foreground mt-1">Aggregated by redirect type (PRE / LIVE / POST)</p>
+            <h3 className="text-lg font-semibold text-foreground">Taps by Redirect Type</h3>
+            <p className="text-sm text-muted-foreground mt-1">Aggregated by redirect type</p>
           </div>
-          {windowTapsLoading ? (
+          {redirectTypeLoading ? (
             <Skeleton className="h-72 w-full" />
           ) : barData.length > 0 ? (
             <ChartContainer config={windowTypeTapsConfig} className="h-72 w-full">
@@ -304,7 +318,11 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                     />
                   }
                 />
-                <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {barData.map((item, i) => (
+                    <Cell key={i} fill={REDIRECT_COLORS[item.type] ?? "hsl(var(--muted-foreground))"} />
+                  ))}
+                </Bar>
               </BarChart>
             </ChartContainer>
           ) : (
@@ -314,11 +332,11 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
           )}
         </div>
 
-        {/* Right: Pie chart — Taps by Window */}
+        {/* Right: Pie chart — Tap Distribution */}
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-foreground">Taps by Window</h3>
-            <p className="text-sm text-muted-foreground mt-1">Tap distribution across redirect windows</p>
+            <h3 className="text-lg font-semibold text-foreground">Tap Distribution</h3>
+            <p className="text-sm text-muted-foreground mt-1">Tap distribution across redirect destinations</p>
           </div>
           {windowTapsLoading ? (
             <Skeleton className="h-72 w-full" />
@@ -352,7 +370,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
             </ChartContainer>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No window data available
+              {isRedirectFilter ? "Non-window redirect types have no individual breakdown" : "No window data available"}
             </p>
           )}
         </div>
