@@ -6,8 +6,7 @@ import {
   getSortedRowModel,
   getFilteredRowModel,
   flexRender,
-  SortingState,
-  ColumnFiltersState,
+  type SortingState,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -18,24 +17,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { columns, type UserWithOrg } from "./columns";
+import { getColumns } from "./columns";
 import { useMemo, useState } from "react";
+import type { UserRow } from "@/app/(dashboard)/users/page";
 
 interface UsersTableProps {
-  data: UserWithOrg[];
-  orgFilter?: string;
+  data: UserRow[];
+  role: "ADMIN" | "CUSTOMER";
 }
 
-export function UsersTable({ data, orgFilter }: UsersTableProps) {
+export function UsersTable({ data, role }: UsersTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [nameFilter, setNameFilter] = useState("");
+  const [globalFilter, setGlobalFilter] = useState("");
 
-  const columnFilters = useMemo<ColumnFiltersState>(() => {
-    const filters: ColumnFiltersState = [];
-    if (nameFilter) filters.push({ id: "name", value: nameFilter });
-    if (orgFilter) filters.push({ id: "organization", value: orgFilter });
-    return filters;
-  }, [nameFilter, orgFilter]);
+  const columns = useMemo(() => getColumns(role), [role]);
 
   const table = useReactTable({
     data,
@@ -44,9 +39,16 @@ export function UsersTable({ data, orgFilter }: UsersTableProps) {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const search = filterValue.toLowerCase();
+      const name = (row.original.name ?? "").toLowerCase();
+      const email = row.original.email.toLowerCase();
+      return name.includes(search) || email.includes(search);
+    },
     state: {
       sorting,
-      columnFilters,
+      globalFilter,
     },
   });
 
@@ -54,9 +56,9 @@ export function UsersTable({ data, orgFilter }: UsersTableProps) {
     <div className="space-y-4">
       <div className="flex items-center">
         <Input
-          placeholder="Filter users..."
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
+          placeholder="Search by name or email..."
+          value={globalFilter}
+          onChange={(e) => setGlobalFilter(e.target.value)}
           className="max-w-sm"
         />
       </div>

@@ -1,74 +1,91 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import { User, Organization } from "@sparkmotion/database";
+import { type ColumnDef } from "@tanstack/react-table";
+import { Badge } from "@/components/ui/badge";
 import { UserActions } from "./user-actions";
+import type { UserRow, UserStatus } from "@/app/(dashboard)/users/page";
 
-export type UserWithOrg = Pick<User, "id" | "name" | "email" | "role" | "createdAt" | "updatedAt"> & {
-  org: Organization | null;
+const statusConfig: Record<UserStatus, { label: string; className: string }> = {
+  active: {
+    label: "Active",
+    className: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800",
+  },
+  pending: {
+    label: "Pending",
+    className: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800",
+  },
+  not_invited: {
+    label: "Not Invited",
+    className: "border-border text-muted-foreground",
+  },
 };
 
-export const columns: ColumnDef<UserWithOrg>[] = [
-  {
-    accessorKey: "name",
-    header: "Name",
-    cell: ({ row }) => {
-      return <div className="font-medium">{row.getValue("name") || "\u2014"}</div>;
+export function getColumns(role: "ADMIN" | "CUSTOMER"): ColumnDef<UserRow>[] {
+  const base: ColumnDef<UserRow>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <div className="font-medium">{row.getValue("name") || "\u2014"}</div>
+      ),
     },
-  },
-  {
-    id: "organization",
-    accessorFn: (row) => row.org?.name ?? "",
-    header: "Organization",
-    cell: ({ row }) => {
-      const orgName = row.original.org?.name;
-      return <div className="text-muted-foreground">{orgName || "\u2014"}</div>;
+    {
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ row }) => (
+        <div className="text-muted-foreground">{row.getValue("email")}</div>
+      ),
     },
-    filterFn: (row, _columnId, filterValue) => {
-      if (!filterValue) return true;
-      return row.original.org?.name === filterValue;
-    },
-  },
-  {
-    accessorKey: "email",
-    header: "Email",
-    cell: ({ row }) => {
-      return <div className="text-muted-foreground">{row.getValue("email")}</div>;
-    },
-  },
-  {
-    accessorKey: "role",
-    header: "Role",
-    cell: ({ row }) => {
-      return <div>{row.getValue("role")}</div>;
-    },
-  },
-  {
-    accessorKey: "createdAt",
-    header: "Created",
-    cell: ({ row }) => {
-      const date = row.getValue("createdAt") as Date;
-      return (
+  ];
+
+  if (role === "CUSTOMER") {
+    base.push({
+      accessorKey: "orgName",
+      header: "Organization",
+      cell: ({ row }) => (
         <div className="text-muted-foreground">
-          {new Date(date).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          })}
+          {row.original.orgName || "\u2014"}
         </div>
-      );
+      ),
+    });
+  }
+
+  base.push(
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.original.status;
+        const config = statusConfig[status];
+        return (
+          <Badge variant="outline" className={config.className}>
+            {config.label}
+          </Badge>
+        );
+      },
     },
-  },
-  {
-    id: "actions",
-    header: "",
-    cell: ({ row }) => {
-      return (
-        <UserActions
-          userId={row.original.id}
-          userName={row.original.name}
-        />
-      );
+    {
+      accessorKey: "createdAt",
+      header: "Created",
+      cell: ({ row }) => {
+        const date = row.getValue("createdAt") as Date;
+        return (
+          <div className="text-muted-foreground">
+            {new Date(date).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </div>
+        );
+      },
     },
-  },
-];
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => <UserActions user={row.original} />,
+    }
+  );
+
+  return base;
+}
