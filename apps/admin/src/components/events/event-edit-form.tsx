@@ -111,7 +111,7 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
       timezone: data.timezone,
       status: data.status,
       estimatedAttendees: data.estimatedAttendees,
-      campaignId: data.campaignId,
+      campaignId: data.campaignId && data.campaignId !== "none" ? data.campaignId : null,
     });
   };
 
