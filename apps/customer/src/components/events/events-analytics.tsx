@@ -123,14 +123,22 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
     count: item.count,
   }));
 
-  // Pie chart data: one slice per window, label = "TYPE - Title"
-  const pieSlices = filteredWindowTaps.map((w) => ({
+  // Pie chart data: one slice per window + non-window categories
+  const NON_WINDOW_CATEGORIES = ["FALLBACK", "ORG", "DEFAULT"];
+  const windowSlices = filteredWindowTaps.map((w) => ({
     name: `${w.windowType} - ${w.title || "Untitled"}`,
     value: w.count,
   }));
+  const nonWindowSlices = !selectedWindowId
+    ? (redirectTypeData ?? [])
+        .filter((item) => NON_WINDOW_CATEGORIES.includes(item.category) && item.count > 0)
+        .map((item) => ({ name: item.category, value: item.count }))
+    : [];
+  const pieSlices = [...windowSlices, ...nonWindowSlices];
   const pieTotal = pieSlices.reduce((s, d) => s + d.value, 0);
   const pieConfig = pieSlices.reduce<ChartConfig>((acc, item, i) => {
-    acc[item.name] = { label: item.name, color: PIE_COLORS[i % PIE_COLORS.length] };
+    const color = REDIRECT_COLORS[item.name] ?? PIE_COLORS[i % PIE_COLORS.length];
+    acc[item.name] = { label: item.name, color };
     return acc;
   }, {});
 
@@ -357,8 +365,8 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                     `${name ?? ""} (${((percent ?? 0) * 100).toFixed(0)}%)`
                   }
                 >
-                  {pieSlices.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  {pieSlices.map((item, i) => (
+                    <Cell key={i} fill={REDIRECT_COLORS[item.name] ?? PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
                 </Pie>
                 <ChartLegend content={<ChartLegendContent nameKey="name" />} />
