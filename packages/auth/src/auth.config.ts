@@ -30,6 +30,7 @@ export const authConfig = {
         token.name = user.name ?? null;
         token.role = user.role;
         token.orgId = user.orgId;
+        token.forcePasswordReset = user.forcePasswordReset;
       }
       return token;
     },
@@ -40,6 +41,7 @@ export const authConfig = {
         session.user.name = token.name ?? null;
         session.user.role = token.role;
         session.user.orgId = token.orgId;
+        session.user.forcePasswordReset = token.forcePasswordReset;
       }
       return session;
     },

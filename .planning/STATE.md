@@ -282,6 +282,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 28 added: Seed prod admin account and password reset flow for admins and customers
 - Phase 26 added: Update load tests and add core functionality testing suite
 - **Phase 25 COMPLETE** — Band Activity Tab — All 3 plans complete
 - Phase 25-03 completed: NFC scan-to-register dialog (admin+customer), admin tag management with color palette, press-and-hold reassign with tap history deletion warning

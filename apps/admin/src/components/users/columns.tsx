@@ -2,6 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { User, Organization } from "@sparkmotion/database";
+import { UserActions } from "./user-actions";
 
 export type UserWithOrg = Pick<User, "id" | "name" | "email" | "role" | "createdAt" | "updatedAt"> & {
   org: Organization | null;
@@ -12,7 +13,7 @@ export const columns: ColumnDef<UserWithOrg>[] = [
     accessorKey: "name",
     header: "Name",
     cell: ({ row }) => {
-      return <div className="font-medium">{row.getValue("name") || "—"}</div>;
+      return <div className="font-medium">{row.getValue("name") || "\u2014"}</div>;
     },
   },
   {
@@ -21,7 +22,7 @@ export const columns: ColumnDef<UserWithOrg>[] = [
     header: "Organization",
     cell: ({ row }) => {
       const orgName = row.original.org?.name;
-      return <div className="text-muted-foreground">{orgName || "—"}</div>;
+      return <div className="text-muted-foreground">{orgName || "\u2014"}</div>;
     },
     filterFn: (row, _columnId, filterValue) => {
       if (!filterValue) return true;
@@ -55,6 +56,18 @@ export const columns: ColumnDef<UserWithOrg>[] = [
             year: "numeric",
           })}
         </div>
+      );
+    },
+  },
+  {
+    id: "actions",
+    header: "",
+    cell: ({ row }) => {
+      return (
+        <UserActions
+          userId={row.original.id}
+          userName={row.original.name}
+        />
       );
     },
   },

@@ -55,21 +55,37 @@ model Organization {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String?
-  role      UserRole @default(CUSTOMER)
-  orgId     String?
-  orgRole   OrgRole  @default(VIEWER)
-  timezone  String?  // User's preferred timezone for display, null = use browser default
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  name               String?
+  password           String?
+  role               UserRole @default(CUSTOMER)
+  orgId              String?
+  orgRole            OrgRole  @default(VIEWER)
+  timezone           String?  // User's preferred timezone for display, null = use browser default
+  forcePasswordReset Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  org Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  org                 Organization?        @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  passwordResetTokens PasswordResetToken[]
 
   @@index([email])
   @@index([orgId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique // SHA-256 hash of raw token
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
 }
 
 model Event {

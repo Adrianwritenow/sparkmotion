@@ -12,12 +12,15 @@ export async function middleware(request: NextRequest) {
     request.cookies.get(`__Secure-${COOKIE_PREFIX}.session-token`);
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/auth");
+  const isResetPage = request.nextUrl.pathname === "/auth/reset-password";
 
   if (!tokenCookie && !isAuthPage) {
     return NextResponse.redirect(new URL("/auth/signin", request.url));
   }
 
   if (tokenCookie && isAuthPage) {
+    // Allow authenticated users to access the reset-password page
+    if (isResetPage) return NextResponse.next();
     return NextResponse.redirect(new URL("/", request.url));
   }
 
@@ -36,6 +39,11 @@ export async function middleware(request: NextRequest) {
         response.cookies.delete(`__Secure-${COOKIE_PREFIX}.session-token`);
         return response;
       }
+
+      // Force password reset redirect (skip for API routes so tRPC calls work)
+      if (token?.forcePasswordReset === true && !request.nextUrl.pathname.startsWith("/api/")) {
+        return NextResponse.redirect(new URL("/auth/reset-password", request.url));
+      }
     } catch {
       // Decode failure — let NextAuth handle invalid tokens
     }
@@ -45,5 +53,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.svg$|.*\\.png$|.*\\.ico$).*)"],
+  matcher: ["/((?!api/auth|api/trpc|_next/static|_next/image|favicon.ico|.*\\.svg$|.*\\.png$|.*\\.ico$).*)"],
 };

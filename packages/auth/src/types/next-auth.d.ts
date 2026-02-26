@@ -8,6 +8,7 @@ declare module "next-auth" {
       name?: string | null;
       role: UserRole;
       orgId: string | null;
+      forcePasswordReset: boolean;
     };
   }
 
@@ -17,6 +18,7 @@ declare module "next-auth" {
     name?: string | null;
     role: UserRole;
     orgId: string | null;
+    forcePasswordReset: boolean;
   }
 }
 
@@ -27,5 +29,6 @@ declare module "next-auth/jwt" {
     name?: string | null;
     role: UserRole;
     orgId: string | null;
+    forcePasswordReset: boolean;
   }
 }

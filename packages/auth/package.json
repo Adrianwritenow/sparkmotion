@@ -7,13 +7,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./auth.config": "./src/auth.config.ts",
-    "./types/next-auth": "./src/types/next-auth.d.ts"
+    "./types/next-auth": "./src/types/next-auth.d.ts",
+    "./password-schema": "./src/password-schema.ts"
   },
   "dependencies": {
     "next-auth": "5.0.0-beta.25",
     "bcryptjs": "^2.4.3",
     "zod": "^3.24.0",
-    "@sparkmotion/database": "workspace:*"
+    "@sparkmotion/database": "workspace:*",
+    "@sparkmotion/redis": "workspace:*"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
