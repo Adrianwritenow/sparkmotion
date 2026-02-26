@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db } from "@sparkmotion/database";
+import { generateAndSendResetToken } from "../lib/password-reset";
 
 export const usersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -51,5 +52,27 @@ export const usersRouter = router({
         data: { timezone: input.timezone },
         select: { id: true, timezone: true },
       });
+    }),
+
+  adminResetUserPassword: adminProcedure
+    .input(z.object({ userId: z.string() }))
+    .mutation(async ({ input }) => {
+      const user = await db.user.findUnique({
+        where: { id: input.userId },
+        select: { id: true, email: true, name: true, role: true },
+      });
+
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      await generateAndSendResetToken(user.id, user.email, user.name, user.role);
+
+      await db.user.update({
+        where: { id: user.id },
+        data: { forcePasswordReset: true },
+      });
+
+      return { success: true };
     }),
 });

@@ -9,8 +9,10 @@
   },
   "dependencies": {
     "@date-fns/tz": "^1.4.1",
+    "bcryptjs": "^2.4.3",
     "@sparkmotion/auth": "workspace:*",
     "@sparkmotion/database": "workspace:*",
+    "@sparkmotion/email": "workspace:*",
     "@sparkmotion/redis": "workspace:*",
     "@trpc/server": "^10.45.0",
     "date-fns": "^4.1.0",
@@ -19,6 +21,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18",
     "vitest-mock-extended": "^3.1.0"

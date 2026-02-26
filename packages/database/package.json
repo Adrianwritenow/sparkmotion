@@ -9,7 +9,8 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "push": "prisma db push",
-    "studio": "prisma studio"
+    "studio": "prisma studio",
+    "seed-prod": "tsx prisma/seed-prod.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -167,6 +167,16 @@ Plans:
 Plans:
 - [ ] 27-01-PLAN.md — Delete dead components/procedures, update Phase 25 verification docs
 
+### Phase 28: Seed prod admin account and password reset flow for admins and customers
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 27
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 28 to break down)
+
 ---
 
 _For project context, see .planning/PROJECT.md_
