@@ -24,7 +24,7 @@ name = "sparkmotion-redirect-staging"
 # Then replace the id below with the actual namespace ID
 [[env.staging.kv_namespaces]]
 binding = "REDIRECT_MAP"
-id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
+id = "3cddf6ee74324904a34cb1b08a87a0a6"
 
 # Set staging secrets with:
 #   wrangler secret put HUB_URL --env staging
