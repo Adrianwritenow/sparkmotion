@@ -159,6 +159,8 @@ export const eventsRouter = router({
           data[key] = value;
         }
       }
+      // Treat empty string as null for optional FK fields
+      if (data.campaignId === "") data.campaignId = null;
       const event = await db.event.update({ where: { id }, data });
       invalidateEventCache(id).catch(console.error);
 
