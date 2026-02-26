@@ -52,7 +52,7 @@ describe('campaigns.list', () => {
       expect.objectContaining({ where: {} })
     );
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('campaign-1');
+    expect(result[0]!.id).toBe('campaign-1');
   });
 
   it('ADMIN can filter by orgId', async () => {

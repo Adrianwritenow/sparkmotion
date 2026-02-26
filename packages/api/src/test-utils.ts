@@ -38,6 +38,7 @@ export function buildUser(overrides: Partial<TRPCContext['user']> = {}) {
     email: 'test@example.com',
     role: 'ADMIN' as const,
     orgId: null,
+    forcePasswordReset: false,
     ...overrides,
   };
 }

@@ -64,6 +64,7 @@ model User {
   orgRole            OrgRole  @default(VIEWER)
   timezone           String?  // User's preferred timezone for display, null = use browser default
   forcePasswordReset Boolean  @default(false)
+  invitedAt          DateTime? // When the user was last sent an invite email
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
