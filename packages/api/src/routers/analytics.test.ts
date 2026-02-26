@@ -144,3 +144,82 @@ describe('analytics.velocityHistory', () => {
     expect(Array.isArray(result)).toBe(true);
   });
 });
+
+// ─── analytics.tapsByRedirectType ────────────────────────────────────────────
+
+describe('analytics.tapsByRedirectType', () => {
+  it('rejects unauthenticated caller with UNAUTHORIZED', async () => {
+    const caller = createTestCaller(undefined);
+    await expect(
+      caller.analytics.tapsByRedirectType({ eventId: 'event-1' })
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('returns category counts for ADMIN caller', async () => {
+    prismaMock.$queryRaw.mockResolvedValue([
+      { category: 'LIVE', count: 50 },
+      { category: 'FALLBACK', count: 10 },
+    ] as any);
+
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const result = await caller.analytics.tapsByRedirectType({ eventId: 'event-1' });
+
+    expect(result).toEqual([
+      { category: 'LIVE', count: 50 },
+      { category: 'FALLBACK', count: 10 },
+    ]);
+  });
+
+  it('throws FORBIDDEN when CUSTOMER accesses event from different org', async () => {
+    prismaMock.event.findUnique.mockResolvedValue(
+      createMockEvent({ orgId: 'other-org' }) as any
+    );
+
+    const caller = createTestCaller({ role: 'CUSTOMER', orgId: 'org-1' });
+    await expect(
+      caller.analytics.tapsByRedirectType({ eventId: 'event-1' })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+// ─── analytics.campaignTapsByRedirectType ────────────────────────────────────
+
+describe('analytics.campaignTapsByRedirectType', () => {
+  it('rejects unauthenticated caller with UNAUTHORIZED', async () => {
+    const caller = createTestCaller(undefined);
+    await expect(
+      caller.analytics.campaignTapsByRedirectType({ campaignId: 'campaign-1' })
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('returns empty array when campaign has no events', async () => {
+    prismaMock.campaign.findUniqueOrThrow.mockResolvedValue({
+      orgId: 'org-1',
+      events: [],
+    } as any);
+
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const result = await caller.analytics.campaignTapsByRedirectType({ campaignId: 'campaign-1' });
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns category counts for campaign events', async () => {
+    prismaMock.campaign.findUniqueOrThrow.mockResolvedValue({
+      orgId: 'org-1',
+      events: [{ id: 'event-1' }, { id: 'event-2' }],
+    } as any);
+    prismaMock.$queryRaw.mockResolvedValue([
+      { category: 'PRE', count: 20 },
+      { category: 'ORG', count: 5 },
+    ] as any);
+
+    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    const result = await caller.analytics.campaignTapsByRedirectType({ campaignId: 'campaign-1' });
+
+    expect(result).toEqual([
+      { category: 'PRE', count: 20 },
+      { category: 'ORG', count: 5 },
+    ]);
+  });
+});
