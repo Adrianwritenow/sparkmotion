@@ -1042,7 +1042,7 @@ export const analyticsRouter = router({
       const results = await db.$queryRaw<Array<{ category: string; count: number }>>(Prisma.sql`
         SELECT
           CASE
-            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"
+            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"::text
             WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
             WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
             ELSE 'DEFAULT'
@@ -1112,7 +1112,7 @@ export const analyticsRouter = router({
       const results = await db.$queryRaw<Array<{ category: string; count: number }>>(Prisma.sql`
         SELECT
           CASE
-            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"
+            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"::text
             WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
             WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
             ELSE 'DEFAULT'
