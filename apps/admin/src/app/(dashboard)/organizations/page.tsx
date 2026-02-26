@@ -1,8 +1,9 @@
 import { db } from "@sparkmotion/database";
 import Link from "next/link";
-import { Building2, Users, ArrowUpRight, MoreHorizontal, Calendar } from "lucide-react";
+import { Building2, Users, ArrowUpRight, Calendar } from "lucide-react";
 import { AddOrgButton } from "@/components/organizations/add-org-button";
 import { ListFilterBar } from "@/components/list-filter-bar";
+import { OrgActions } from "@/components/organizations/org-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,11 @@ export default async function OrganizationsPage({
   const [organizations, totalCount, orgs30DaysAgo, members30DaysAgo] = await Promise.all([
     db.organization.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        contactEmail: true,
         _count: {
           select: {
             events: true,
@@ -203,9 +208,11 @@ export default async function OrganizationsPage({
                         >
                           View Details
                         </Link>
-                        <button className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
+                        <OrgActions
+                          orgId={org.id}
+                          orgName={org.name}
+                          contactEmail={org.contactEmail}
+                        />
                       </div>
                     </td>
                   </tr>

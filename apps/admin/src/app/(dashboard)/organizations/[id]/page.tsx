@@ -2,11 +2,12 @@ import { db, Prisma } from "@sparkmotion/database";
 import { getEventEngagement } from "@sparkmotion/api";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Globe, MapPin, Calendar, Mail, Building2, MoreHorizontal, Link2 } from "lucide-react";
+import { ArrowLeft, Globe, Calendar, Mail, Link2 } from "lucide-react";
 import { MembersTable } from "@/components/organizations/members-table";
-import { OrgAnalytics } from "@/components/organizations/org-analytics";
 import { EventCardList } from "@/components/events/event-card-list";
 import { OrgSettingsForm } from "@/components/organizations/org-settings-form";
+import { OrgHeaderActions } from "@/components/organizations/org-header-actions";
+import { OrgOverviewAnalytics } from "@/components/organizations/org-overview-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -108,14 +109,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
             </div>
           </div>
         </div>
-        <div className="flex gap-3">
-          <button className="px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted transition-colors">
-            Edit Profile
-          </button>
-          <button className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
-            Contact Org
-          </button>
-        </div>
+        <OrgHeaderActions orgId={org.id} orgName={org.name} contactEmail={org.contactEmail} />
       </div>
 
       {/* Tabs Navigation */}
@@ -140,100 +134,86 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
       {/* Tab Content */}
       <div className="min-h-[400px]">
         {activeTab === "overview" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-6">
-              <div className="bg-card border border-border rounded-lg p-6">
-                <h3 className="font-semibold text-foreground mb-4">
-                  About Organization
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  {org.name} has been active since{" "}
-                  {new Date(org.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}{" "}
-                  and currently has {org._count.events} active events.
-                  Slug: {org.slug || "Not configured"}.
-                </p>
-              </div>
-
-              <div className="bg-card border border-border rounded-lg p-6">
-                <h3 className="font-semibold text-foreground mb-4">
-                  Quick Stats
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-1">
-                      Total Events
-                    </div>
-                    <div className="text-2xl font-bold">{org._count.events}</div>
-                  </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-1">
-                      Members
-                    </div>
-                    <div className="text-2xl font-bold">{org._count.users}</div>
-                  </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-1">
-                      Avg. Session
-                    </div>
-                    <div className="text-2xl font-bold">4m 12s</div>
-                  </div>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2">
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h3 className="font-semibold text-foreground mb-4">
+                    About Organization
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    {org.name} has been active since{" "}
+                    {new Date(org.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}{" "}
+                    and currently has {org._count.events} active events.
+                    Slug: {org.slug || "Not configured"}.
+                  </p>
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-6">
-              <div className="bg-card border border-border rounded-lg p-6">
-                <h3 className="font-semibold text-foreground mb-4">
-                  Contact Info
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                      <Mail className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">Email</div>
-                      <div className="text-sm text-muted-foreground">
-                        Not configured
+              <div className="space-y-6">
+                <div className="bg-card border border-border rounded-lg p-6">
+                  <h3 className="font-semibold text-foreground mb-4">
+                    Contact Info
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Email</div>
+                        <div className="text-sm text-muted-foreground">
+                          {org.contactEmail ? (
+                            <a
+                              href={`mailto:${org.contactEmail}`}
+                              className="text-primary hover:underline"
+                            >
+                              {org.contactEmail}
+                            </a>
+                          ) : (
+                            "Not configured"
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                      <Globe className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">Slug</div>
-                      <div className="text-sm text-muted-foreground">
-                        {org.slug || "Not configured"}
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <Globe className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Slug</div>
+                        <div className="text-sm text-muted-foreground">
+                          {org.slug || "Not configured"}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                      <Link2 className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">Website</div>
-                      <div className="text-sm text-muted-foreground">
-                        {org.websiteUrl ? (
-                          <a
-                            href={org.websiteUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline"
-                          >
-                            {org.websiteUrl}
-                          </a>
-                        ) : (
-                          "Not configured"
-                        )}
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <Link2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Website</div>
+                        <div className="text-sm text-muted-foreground">
+                          {org.websiteUrl ? (
+                            <a
+                              href={org.websiteUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              {org.websiteUrl}
+                            </a>
+                          ) : (
+                            "Not configured"
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+
           </div>
         )}
 
@@ -252,8 +232,9 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
         )}
 
         {activeTab === "analytics" && (
-          <OrgAnalytics
+          <OrgOverviewAnalytics
             orgId={org.id}
+            orgName={org.name}
             events={org.events.map((e) => ({ id: e.id, name: e.name }))}
           />
         )}
@@ -261,7 +242,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
         {activeTab === "members" && <MembersTable orgId={org.id} />}
 
         {activeTab === "settings" && (
-          <OrgSettingsForm orgId={org.id} websiteUrl={org.websiteUrl} />
+          <OrgSettingsForm orgId={org.id} name={org.name} slug={org.slug} websiteUrl={org.websiteUrl} contactEmail={org.contactEmail} />
         )}
       </div>
     </div>

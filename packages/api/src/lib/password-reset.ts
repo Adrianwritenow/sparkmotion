@@ -6,10 +6,13 @@ import { sendPasswordResetEmail, sendInviteEmail } from "@sparkmotion/email";
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const INVITE_TOKEN_EXPIRY_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-const ADMIN_URL =
-  process.env.NEXT_PUBLIC_ADMIN_URL || "http://localhost:3000";
-const CUSTOMER_URL =
-  process.env.NEXT_PUBLIC_CUSTOMER_URL || "http://localhost:3001";
+function getAdminUrl() {
+  return process.env.ADMIN_URL || process.env.NEXT_PUBLIC_ADMIN_URL || "http://localhost:3000";
+}
+
+function getCustomerUrl() {
+  return process.env.CUSTOMER_URL || process.env.NEXT_PUBLIC_CUSTOMER_URL || "http://localhost:3001";
+}
 
 interface InviteOptions {
   tokenExpiryMs?: number;
@@ -49,7 +52,7 @@ export async function generateAndSendResetToken(
   });
 
   // Build role-based URL
-  const baseUrl = role === "ADMIN" ? ADMIN_URL : CUSTOMER_URL;
+  const baseUrl = role === "ADMIN" ? getAdminUrl() : getCustomerUrl();
   const resetUrl = `${baseUrl}/auth/reset-password?token=${rawToken}`;
 
   if (isInvite) {

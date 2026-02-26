@@ -3,32 +3,14 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
+import { PieChart, Pie, Cell } from "recharts";
 
-const modeChartConfig = {
-  count: {
-    label: "Taps",
-  },
-  PRE: {
-    label: "PRE",
-    color: "hsl(var(--chart-1))",
-  },
-  LIVE: {
-    label: "LIVE",
-    color: "hsl(var(--chart-2))",
-  },
-  POST: {
-    label: "POST",
-    color: "hsl(var(--chart-3))",
-  },
-} satisfies ChartConfig;
-
-const MODE_COLORS: Record<string, string> = {
-  PRE: "var(--color-PRE)",
-  LIVE: "var(--color-LIVE)",
-  POST: "var(--color-POST)",
-};
+const MODE_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+];
 
 interface ModeSplitChartProps {
   from: string;
@@ -56,11 +38,19 @@ export function ModeSplitChart({ from, to, eventId, orgId }: ModeSplitChartProps
   }
 
   const dist = kpiData?.modeDistribution ?? { PRE: 0, LIVE: 0, POST: 0 };
+  const total = (dist.PRE ?? 0) + (dist.LIVE ?? 0) + (dist.POST ?? 0);
+
   const chartData = [
-    { mode: "PRE", count: dist.PRE ?? 0, fill: MODE_COLORS.PRE },
-    { mode: "LIVE", count: dist.LIVE ?? 0, fill: MODE_COLORS.LIVE },
-    { mode: "POST", count: dist.POST ?? 0, fill: MODE_COLORS.POST },
+    { name: "PRE", value: dist.PRE ?? 0 },
+    { name: "LIVE", value: dist.LIVE ?? 0 },
+    { name: "POST", value: dist.POST ?? 0 },
   ];
+
+  const chartConfig: ChartConfig = {
+    PRE: { label: "PRE", color: MODE_COLORS[0] },
+    LIVE: { label: "LIVE", color: MODE_COLORS[1] },
+    POST: { label: "POST", color: MODE_COLORS[2] },
+  };
 
   return (
     <Card>
@@ -68,28 +58,39 @@ export function ModeSplitChart({ from, to, eventId, orgId }: ModeSplitChartProps
         <CardTitle>Mode Split</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={modeChartConfig} className="h-64 w-full">
-          <BarChart data={chartData}>
-            <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
-            <XAxis
-              dataKey="mode"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-            />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar
-              dataKey="count"
-              radius={[4, 4, 0, 0]}
-              barSize={48}
-            />
-          </BarChart>
-        </ChartContainer>
+        {total === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No tap data available
+          </p>
+        ) : (
+          <ChartContainer config={chartConfig} className="h-64 w-full">
+            <PieChart>
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value) => `${Number(value).toLocaleString()} taps`}
+                  />
+                }
+              />
+              <Pie
+                data={chartData}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={2}
+                label={({ name, percent }) =>
+                  `${name ?? ""} (${((percent ?? 0) * 100).toFixed(0)}%)`
+                }
+              >
+                {chartData.map((_, i) => (
+                  <Cell key={i} fill={MODE_COLORS[i % MODE_COLORS.length]} />
+                ))}
+              </Pie>
+              <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+            </PieChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   );
