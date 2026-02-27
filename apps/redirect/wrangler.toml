@@ -14,7 +14,6 @@ id = "3cddf6ee74324904a34cb1b08a87a0a6"
 #   UPSTASH_REDIS_REST_URL     — Upstash Redis REST endpoint
 #   UPSTASH_REDIS_REST_TOKEN   — Upstash Redis REST token
 #   FALLBACK_URL               — Generic fallback URL (e.g. https://sparkmotion.io)
-#   WEBFLOW_ORIGIN             — Webflow microsite origin (e.g. https://compassion-sparkmotion.webflow.io)
 
 # Staging environment — deploy with: npx wrangler deploy --env staging
 [env.staging]
@@ -29,4 +28,3 @@ id = "231dfa0714df43b7a9b7a672f0ce75d4"
 #   wrangler secret put UPSTASH_REDIS_REST_URL --env staging
 #   wrangler secret put UPSTASH_REDIS_REST_TOKEN --env staging
 #   wrangler secret put FALLBACK_URL --env staging
-#   wrangler secret put WEBFLOW_ORIGIN --env staging
