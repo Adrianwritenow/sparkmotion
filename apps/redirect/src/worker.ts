@@ -65,9 +65,16 @@ export default {
     }
 
     if (url.pathname !== "/e") {
-      // Origin passthrough — Cloudflare resolves the CNAME to the real origin
-      // (e.g. compassion → proxy-ssl.webflow.com) and forwards with the original Host header
-      return fetch(request);
+      // Proxy non-redirect traffic to Webflow via custom domain Host header
+      // (Webflow recognizes compassion.sparkmotion.net as a custom domain, no badge)
+      const webflowUrl = new URL(url.pathname + url.search, "https://proxy-ssl.webflow.com");
+      const response = await fetch(webflowUrl.toString(), {
+        headers: { "Host": url.hostname },
+      });
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
     }
 
     const bandId = url.searchParams.get("bandId");
