@@ -5,21 +5,23 @@ interface SendInviteEmailParams {
   to: string;
   resetUrl: string;
   userName?: string | null;
-  invitedByName?: string | null;
+  orgName?: string | null;
+  isAdmin?: boolean;
 }
 
 export async function sendInviteEmail({
   to,
   resetUrl,
   userName,
-  invitedByName,
+  orgName,
+  isAdmin,
 }: SendInviteEmailParams) {
   const resend = getResend();
   const { error } = await resend.emails.send({
     from: "SparkMotion <noreply@sparkmotion.net>",
     to,
     subject: "You're invited to SparkMotion",
-    react: UserInviteEmail({ resetUrl, userName, invitedByName }),
+    react: UserInviteEmail({ resetUrl, userName, orgName, isAdmin }),
   });
 
   if (error) {

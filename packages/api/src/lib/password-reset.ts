@@ -17,7 +17,7 @@ function getCustomerUrl() {
 interface InviteOptions {
   tokenExpiryMs?: number;
   isInvite?: boolean;
-  invitedByName?: string | null;
+  orgName?: string | null;
 }
 
 export async function generateAndSendResetToken(
@@ -27,7 +27,7 @@ export async function generateAndSendResetToken(
   role: UserRole,
   options?: InviteOptions
 ) {
-  const { tokenExpiryMs, isInvite, invitedByName } = options ?? {};
+  const { tokenExpiryMs, isInvite, orgName } = options ?? {};
   const expiry = tokenExpiryMs ?? (isInvite ? INVITE_TOKEN_EXPIRY_MS : TOKEN_EXPIRY_MS);
 
   // Invalidate any existing unused tokens for this user
@@ -56,7 +56,7 @@ export async function generateAndSendResetToken(
   const resetUrl = `${baseUrl}/auth/reset-password?token=${rawToken}`;
 
   if (isInvite) {
-    await sendInviteEmail({ to: email, resetUrl, userName: name, invitedByName: invitedByName ?? null });
+    await sendInviteEmail({ to: email, resetUrl, userName: name, orgName: orgName ?? null, isAdmin: role === "ADMIN" });
   } else {
     await sendPasswordResetEmail({ to: email, resetUrl, userName: name });
   }

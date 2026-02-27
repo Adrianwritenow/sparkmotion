@@ -129,22 +129,16 @@ export const usersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const user = await db.user.findUnique({
         where: { id: input.userId },
-        select: { id: true, email: true, name: true, role: true },
+        select: { id: true, email: true, name: true, role: true, org: { select: { name: true } } },
       });
 
       if (!user) {
         throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
       }
 
-      // Look up inviter name for the email
-      const inviter = await db.user.findUnique({
-        where: { id: ctx.user.id },
-        select: { name: true },
-      });
-
       await generateAndSendResetToken(user.id, user.email, user.name, user.role, {
         isInvite: true,
-        invitedByName: inviter?.name ?? null,
+        orgName: user.org?.name ?? null,
       });
 
       // Mark user as invited
