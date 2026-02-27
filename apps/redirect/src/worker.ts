@@ -6,6 +6,7 @@ interface Env {
   UPSTASH_REDIS_REST_TOKEN: string;
   FALLBACK_URL: string;
   HUB_URL: string;
+  WEBFLOW_ORIGIN: string;
 }
 
 interface KVEntry {
@@ -65,11 +66,14 @@ export default {
     }
 
     if (url.pathname !== "/e") {
-      // Proxy non-redirect traffic to Webflow via custom domain Host header
-      // (Webflow recognizes compassion.sparkmotion.net as a custom domain, no badge)
-      const webflowUrl = new URL(url.pathname + url.search, "https://proxy-ssl.webflow.com");
+      // Proxy non-redirect traffic to Webflow microsite
+      const origin = new URL(env.WEBFLOW_ORIGIN);
+      const webflowUrl = new URL(url.pathname + url.search, origin);
       const response = await fetch(webflowUrl.toString(), {
-        headers: { "Host": url.hostname },
+        headers: {
+          "Host": origin.hostname,
+          "X-Forwarded-Host": url.hostname,
+        },
       });
       return new Response(response.body, {
         status: response.status,
