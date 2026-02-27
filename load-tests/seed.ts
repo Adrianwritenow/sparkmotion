@@ -1,18 +1,20 @@
 /**
  * Load Test Data Seeder
  *
- * Usage: pnpm --filter @sparkmotion/load-tests exec tsx seed.ts [kv|redis|postgres|bench-queries|cleanup|all]
+ * Usage: pnpm --filter @sparkmotion/load-tests exec tsx seed.ts [kv|redis|postgres|seed-geo|seed-user|bench-queries|bench-csv|cleanup|all]
  *
  * Requires: .env with DATABASE_URL, REDIS_URL, CF_* vars
  */
 import { PrismaClient } from "@sparkmotion/database";
 import Redis from "ioredis";
+import bcrypt from "bcryptjs";
 import "dotenv/config";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BAND_COUNT = 200_000;
 const TAP_LOG_COUNT = 600_000;
 const BAND_PREFIX = "LOADTEST-";
+const GEO_BAND_PREFIX = "LOADTEST-GEO-";
 const ORG_NAME = "Load Test Org";
 const EVENT_NAME = "Load Test Event";
 const LIVE_URL = "https://compassion.com/live";
@@ -20,6 +22,16 @@ const LIVE_URL = "https://compassion.com/live";
 const KV_BATCH_SIZE = 10_000;
 const DB_BATCH_SIZE = 5_000;
 const REDIS_BATCH_SIZE = 5_000;
+
+const GEO_BANDS_PER_CITY = 100;
+
+const GEO_CITIES = [
+  { name: "Nashville", state: "TN", lat: 36.1627, lng: -86.7816 },
+  { name: "Dallas", state: "TX", lat: 32.7767, lng: -96.7970 },
+  { name: "Denver", state: "CO", lat: 39.7392, lng: -104.9903 },
+  { name: "Chicago", state: "IL", lat: 41.8781, lng: -87.6298 },
+  { name: "Atlanta", state: "GA", lat: 33.7490, lng: -84.3880 },
+];
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 const db = new PrismaClient();
@@ -248,6 +260,121 @@ async function seedPostgres() {
   console.log(`PostgreSQL seeding complete in ${elapsed(start)}`);
 }
 
+// ─── Geo Seeder ──────────────────────────────────────────────────────────────
+async function seedGeo() {
+  console.log("Seeding geo routing test data (5 cities)...");
+  const start = Date.now();
+
+  // Ensure org exists (reuse the loadtest org)
+  let org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    org = await db.organization.create({
+      data: { name: ORG_NAME, slug: "loadtest-org" },
+    });
+  }
+
+  for (const city of GEO_CITIES) {
+    const eventName = `LT Geo ${city.name}`;
+    let event = await db.event.findFirst({ where: { name: eventName, orgId: org.id } });
+
+    if (!event) {
+      event = await db.event.create({
+        data: {
+          orgId: org.id,
+          name: eventName,
+          city: city.name,
+          state: city.state,
+          location: `${city.name}, ${city.state}`,
+          latitude: city.lat,
+          longitude: city.lng,
+          status: "ACTIVE",
+          estimatedAttendees: 5_000,
+        },
+      });
+    } else {
+      // Ensure lat/lng are set even if event already exists
+      await db.event.update({
+        where: { id: event.id },
+        data: { latitude: city.lat, longitude: city.lng, status: "ACTIVE" },
+      });
+    }
+
+    // Create LIVE window
+    await db.eventWindow.upsert({
+      where: { id: `${event.id}-live` },
+      update: { isActive: true },
+      create: {
+        id: `${event.id}-live`,
+        eventId: event.id,
+        windowType: "LIVE",
+        url: LIVE_URL,
+        isActive: true,
+      },
+    });
+
+    // Create bands: LOADTEST-GEO-Nashville-001 through LOADTEST-GEO-Nashville-100
+    const prefix = `${GEO_BAND_PREFIX}${city.name}-`;
+    const existingBands = await db.band.count({ where: { eventId: event.id, bandId: { startsWith: prefix } } });
+
+    if (existingBands >= GEO_BANDS_PER_CITY) {
+      console.log(`  ${city.name}: ${existingBands} bands already exist, skipping`);
+    } else {
+      if (existingBands > 0) {
+        await db.band.deleteMany({ where: { eventId: event.id, bandId: { startsWith: prefix } } });
+      }
+
+      const batch = [];
+      for (let i = 1; i <= GEO_BANDS_PER_CITY; i++) {
+        batch.push({
+          bandId: `${prefix}${String(i).padStart(3, "0")}`,
+          eventId: event.id,
+        });
+      }
+      await db.band.createMany({ data: batch });
+      console.log(`  ${city.name}: event ${event.id}, ${GEO_BANDS_PER_CITY} bands created`);
+    }
+  }
+
+  console.log(`Geo seeding complete in ${elapsed(start)}`);
+}
+
+// ─── User Seeder ─────────────────────────────────────────────────────────────
+async function seedUser() {
+  console.log("Seeding loadtest admin user...");
+  const start = Date.now();
+
+  const email = process.env.TEST_EMAIL ?? "loadtest@sparkmotion.net";
+  const password = process.env.TEST_PASSWORD;
+  if (!password) throw new Error("TEST_PASSWORD env var is required for seed-user");
+
+  // Ensure org exists
+  let org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    org = await db.organization.create({
+      data: { name: ORG_NAME, slug: "loadtest-org" },
+    });
+  }
+
+  const existing = await db.user.findUnique({ where: { email } });
+  if (existing) {
+    console.log(`  User already exists: ${existing.id} (${email})`);
+  } else {
+    const hashed = await bcrypt.hash(password, 12);
+    const user = await db.user.create({
+      data: {
+        email,
+        name: "Load Test Admin",
+        password: hashed,
+        role: "ADMIN",
+        orgId: org.id,
+      },
+    });
+    console.log(`  User created: ${user.id} (${email})`);
+  }
+
+  console.log(`User seeding complete in ${elapsed(start)}`);
+}
+
 // ─── Redis Seeder ─────────────────────────────────────────────────────────────
 async function seedRedis() {
   const r = getRedis();
@@ -430,51 +557,115 @@ async function benchCsvExport() {
 
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
 async function cleanup() {
-  console.log("Cleaning up all LOADTEST-* data...");
+  console.log("=== LOADTEST Cleanup ===\n");
   const start = Date.now();
 
-  // Look up IDs before deleting anything
-  const org = await db.organization.findFirst({ where: { name: ORG_NAME } });
-  const event = await db.event.findFirst({ where: { slug: EVENT_SLUG } });
-
-  // 1. Redis — clean analytics keys + pending queue (before DB cascade)
   const r = getRedis();
-  if (event) {
+
+  // ── Pre-cleanup audit ──────────────────────────────────────────────────────
+  console.log("Pre-cleanup audit:");
+
+  const org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    console.log("  No loadtest org found — nothing to clean up.");
+    return;
+  }
+
+  // Fetch all events under the org
+  const events = await db.event.findMany({
+    where: { orgId: org.id },
+    select: { id: true, name: true },
+  });
+  const eventIds = events.map((e) => e.id);
+
+  // Count records
+  const bandCount = await db.band.count({ where: { eventId: { in: eventIds } } });
+  const tapLogCount = await db.tapLog.count({ where: { eventId: { in: eventIds } } });
+  const windowCount = await db.eventWindow.count({ where: { eventId: { in: eventIds } } });
+  const userCount = await db.user.count({ where: { orgId: org.id } });
+
+  console.log(`  Org: ${org.id} (${org.name})`);
+  console.log(`  Events: ${events.length}`);
+  events.forEach((e) => console.log(`    - ${e.name} (${e.id})`));
+  console.log(`  Bands: ${bandCount.toLocaleString()}`);
+  console.log(`  TapLogs: ${tapLogCount.toLocaleString()}`);
+  console.log(`  Windows: ${windowCount}`);
+  console.log(`  Users: ${userCount}`);
+
+  // ── Safety gate ────────────────────────────────────────────────────────────
+  const unsafeEvents = events.filter((e) =>
+    !e.name.startsWith("LT ") && e.name !== EVENT_NAME
+  );
+
+  if (unsafeEvents.length > 0) {
+    console.error("\n  SAFETY GATE FAILED: Found non-loadtest events under this org:");
+    unsafeEvents.forEach((e) => console.error(`    - ${e.name} (${e.id})`));
+    console.error("  Refusing to delete. Remove these events manually or verify the org is correct.");
+    process.exit(1);
+  }
+  console.log("  Safety gate: PASSED (all events are loadtest events)\n");
+
+  // ── 1. Redis cleanup ──────────────────────────────────────────────────────
+  let totalRedisDeleted = 0;
+
+  // Clean analytics keys for ALL loadtest events
+  for (const eventId of eventIds) {
     let cursor = "0";
-    let deleted = 0;
     do {
-      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `analytics:${event.id}:*`, "COUNT", 1000);
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `analytics:${eventId}:*`, "COUNT", 1000);
       cursor = nextCursor;
       if (keys.length > 0) {
         await r.del(...keys);
-        deleted += keys.length;
+        totalRedisDeleted += keys.length;
       }
     } while (cursor !== "0");
-    console.log(`  Redis: ${deleted} analytics keys deleted (${elapsed(start)})`);
+  }
+  console.log(`  Redis: ${totalRedisDeleted} analytics keys deleted (${elapsed(start)})`);
+
+  // Clean band cache keys (band:LOADTEST-*)
+  {
+    let cursor = "0";
+    let bandKeysDeleted = 0;
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `band:${BAND_PREFIX}*`, "COUNT", 1000);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await r.del(...keys);
+        bandKeysDeleted += keys.length;
+      }
+    } while (cursor !== "0");
+    if (bandKeysDeleted > 0) {
+      console.log(`  Redis: ${bandKeysDeleted} band cache keys deleted (${elapsed(start)})`);
+    }
   }
 
-  // Clean pending queue (may have loadtest entries)
+  // Clean pending queue
   const queueLen = await r.llen("tap-log:pending");
   if (queueLen > 0) {
     await r.del("tap-log:pending");
     console.log(`  Redis: tap-log:pending cleared (${queueLen.toLocaleString()} items) (${elapsed(start)})`);
   }
 
-  // 2. PostgreSQL — cascade delete from org
-  if (org) {
-    await db.organization.delete({ where: { id: org.id } });
-    console.log(`  PostgreSQL: org + cascaded data deleted (${elapsed(start)})`);
-  } else {
-    console.log("  PostgreSQL: no loadtest org found");
+  // ── 2. PostgreSQL cleanup ─────────────────────────────────────────────────
+  // Delete loadtest user(s) before org cascade
+  const deletedUsers = await db.user.deleteMany({ where: { orgId: org.id } });
+  if (deletedUsers.count > 0) {
+    console.log(`  PostgreSQL: ${deletedUsers.count} user(s) deleted (${elapsed(start)})`);
   }
 
-  // 3. Cloudflare KV — bulk delete LOADTEST-* keys
+  await db.organization.delete({ where: { id: org.id } });
+  console.log(`  PostgreSQL: org + cascaded data deleted (${elapsed(start)})`);
+
+  // ── 3. Cloudflare KV cleanup ──────────────────────────────────────────────
   const accountId = process.env.CF_ACCOUNT_ID;
   const apiToken = process.env.CF_API_TOKEN;
   const namespaceId = process.env.CF_KV_NAMESPACE_ID;
 
   if (accountId && apiToken && namespaceId) {
-    console.log(`  KV: deleting ${BAND_COUNT.toLocaleString()} keys...`);
+    // Delete main loadtest bands
+    const totalKvKeys = BAND_COUNT + (GEO_CITIES.length * GEO_BANDS_PER_CITY);
+    console.log(`  KV: deleting ~${totalKvKeys.toLocaleString()} keys...`);
+
     for (let i = 0; i < BAND_COUNT; i += KV_BATCH_SIZE) {
       const keys = [];
       const end = Math.min(i + KV_BATCH_SIZE, BAND_COUNT);
@@ -498,12 +689,70 @@ async function cleanup() {
         console.error(`  KV delete batch failed: ${res.status}`);
       }
     }
+
+    // Delete geo band KV keys
+    const geoKeys: string[] = [];
+    for (const city of GEO_CITIES) {
+      for (let i = 1; i <= GEO_BANDS_PER_CITY; i++) {
+        geoKeys.push(`${GEO_BAND_PREFIX}${city.name}-${String(i).padStart(3, "0")}`);
+      }
+    }
+    if (geoKeys.length > 0) {
+      const res = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/bulk`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(geoKeys),
+        }
+      );
+      if (!res.ok) {
+        console.error(`  KV geo delete failed: ${res.status}`);
+      }
+    }
+
     console.log(`  KV: all LOADTEST keys deleted (${elapsed(start)})`);
   } else {
     console.log("  KV: skipped (no CF env vars)");
   }
 
-  console.log(`Cleanup complete in ${elapsed(start)}`);
+  // ── Post-cleanup verification ─────────────────────────────────────────────
+  console.log("\nPost-cleanup verification:");
+
+  const orgCheck = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  console.log(`  PostgreSQL org: ${orgCheck ? "STILL EXISTS (unexpected)" : "gone"}`);
+
+  // Check Redis for leftover analytics keys
+  let leftoverRedis = 0;
+  for (const eventId of eventIds) {
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `analytics:${eventId}:*`, "COUNT", 1000);
+      cursor = nextCursor;
+      leftoverRedis += keys.length;
+    } while (cursor !== "0");
+  }
+  console.log(`  Redis analytics keys: ${leftoverRedis === 0 ? "0 (clean)" : `${leftoverRedis} remaining (unexpected)`}`);
+
+  // Check Redis for leftover band keys
+  {
+    let cursor = "0";
+    let leftoverBandKeys = 0;
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `band:${BAND_PREFIX}*`, "COUNT", 1000);
+      cursor = nextCursor;
+      leftoverBandKeys += keys.length;
+    } while (cursor !== "0");
+    console.log(`  Redis band keys: ${leftoverBandKeys === 0 ? "0 (clean)" : `${leftoverBandKeys} remaining (unexpected)`}`);
+  }
+
+  const pendingLen = await r.llen("tap-log:pending");
+  console.log(`  Redis pending queue: ${pendingLen === 0 ? "0 (clean)" : `${pendingLen} remaining (unexpected)`}`);
+
+  console.log(`\nCleanup complete in ${elapsed(start)}`);
 }
 
 // ─── CLI Entrypoint ───────────────────────────────────────────────────────────
@@ -511,11 +760,15 @@ const COMMANDS: Record<string, () => Promise<void>> = {
   kv: seedKV,
   postgres: seedPostgres,
   redis: seedRedis,
+  "seed-geo": seedGeo,
+  "seed-user": seedUser,
   "bench-queries": benchQueries,
   "bench-csv": benchCsvExport,
   cleanup,
   all: async () => {
     await seedPostgres();
+    await seedGeo();
+    await seedUser();
     await seedKV();
     await seedRedis();
     await benchQueries();

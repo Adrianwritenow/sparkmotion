@@ -3,63 +3,57 @@ import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
 import { textSummary } from "https://jslib.k6.io/k6-summary/0.1.0/index.js";
 
-// Tell k6 that 302 is the expected success status (not an error)
+// Tell k6 that 302 is the expected success status
 http.setResponseCallback(http.expectedStatuses(302));
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const WORKER_URL = __ENV.WORKER_URL;
-if (!WORKER_URL) throw new Error("WORKER_URL env var is required");
+const HUB_URL = __ENV.HUB_URL;
+if (!HUB_URL) throw new Error("HUB_URL env var is required");
 
-// local = max throughput (5K RPS), cloud = latency check (100 RPS)
 const SCENARIO = __ENV.SCENARIO ?? "local";
-
 const BAND_COUNT = 200_000;
 const BAND_PREFIX = "LOADTEST-";
 
 // ─── Custom Metrics ───────────────────────────────────────────────────────────
-const redirectLatency = new Trend("redirect_latency", true);
-const errorRate = new Rate("error_rate");
+const redirectLatency = new Trend("hub_redirect_latency", true);
+const errorRate = new Rate("hub_error_rate");
 
 // ─── Scenario Definitions ─────────────────────────────────────────────────────
 //
-//  local: ramping-arrival-rate — guarantees 5K RPS throughput target
-//    VU pool math: at p95<50ms each VU handles ~20 iter/s → 5000/20 = 250 VUs needed
-//    preAllocatedVUs: 300, maxVUs: 400 to absorb burst without dropped_iterations
-//    Stages: ramp 100→1K RPS (30s), ramp 1K→5K RPS (30s), sustain 5K (60s), ramp down (15s)
+//  Tests Hub /e endpoint on Vercel staging (DB/Redis path, not CF Worker KV).
+//  Expect higher latency than Worker KV — target is p95 < 500ms.
 //
-//  cloud: ramping-arrival-rate — validates 5K RPS target via Grafana k6 Cloud (paid tier)
-//    Ramp: 100 → 500 → 2K → 5K RPS, sustain 5K for 60s, ramp down
-//    VU pool: preAllocated 200, max 500
+//  local: ramp 10 → 100 → 500 RPS, sustain 60s
+//  cloud: ramp 50 → 200 → 1000 RPS, sustain 60s
 //
 const scenarios = {
   local: {
     load: {
       executor: "ramping-arrival-rate",
-      startRate: 100,
+      startRate: 10,
       timeUnit: "1s",
-      preAllocatedVUs: 300,
-      maxVUs: 400,
+      preAllocatedVUs: 50,
+      maxVUs: 200,
       stages: [
-        { duration: "30s", target: 1000 },  // ramp to 1K RPS
-        { duration: "30s", target: 5000 },  // ramp to 5K RPS
-        { duration: "60s", target: 5000 },  // sustain 5K RPS
-        { duration: "15s", target: 0 },     // ramp down
+        { duration: "15s", target: 100 },   // ramp to 100 RPS
+        { duration: "15s", target: 500 },   // ramp to 500 RPS
+        { duration: "60s", target: 500 },   // sustain 500 RPS
+        { duration: "10s", target: 0 },     // ramp down
       ],
     },
   },
   cloud: {
     load: {
       executor: "ramping-arrival-rate",
-      startRate: 100,
+      startRate: 50,
       timeUnit: "1s",
-      preAllocatedVUs: 200,
-      maxVUs: 500,
+      preAllocatedVUs: 100,
+      maxVUs: 300,
       stages: [
-        { duration: "30s", target: 500 },   // warmup → 500 RPS
-        { duration: "30s", target: 2000 },   // ramp to 2K RPS
-        { duration: "30s", target: 5000 },   // ramp to 5K RPS
-        { duration: "60s", target: 5000 },   // sustain 5K RPS
-        { duration: "15s", target: 0 },      // ramp down
+        { duration: "15s", target: 200 },   // ramp to 200 RPS
+        { duration: "15s", target: 1000 },  // ramp to 1K RPS
+        { duration: "60s", target: 1000 },  // sustain 1K RPS
+        { duration: "10s", target: 0 },     // ramp down
       ],
     },
   },
@@ -69,27 +63,25 @@ const scenarios = {
 export const options = {
   scenarios: scenarios[SCENARIO],
   thresholds: {
-    redirect_latency: [
-      "p(50)<20",   // p50 < 20ms
-      "p(95)<50",   // p95 < 50ms  ← critical SLA
-      "p(99)<100",  // p99 < 100ms
+    hub_redirect_latency: [
+      "p(50)<100",   // p50 < 100ms
+      "p(95)<500",   // p95 < 500ms  ← target SLA
+      "p(99)<1000",  // p99 < 1s
     ],
-    error_rate: ["rate<0.001"], // < 0.1%
+    hub_error_rate: ["rate<0.01"], // < 1%
   },
 };
 
 // ─── Test Logic ───────────────────────────────────────────────────────────────
 export default function () {
-  // Random band ID from seeded range
   const bandNum = Math.floor(Math.random() * BAND_COUNT) + 1;
   const bandId = `${BAND_PREFIX}${String(bandNum).padStart(6, "0")}`;
 
-  const res = http.get(`${WORKER_URL}/e?bandId=${bandId}`, {
-    redirects: 0, // Don't follow — measure Worker response only
-    tags: { name: "redirect" },
+  const res = http.get(`${HUB_URL}/e?bandId=${bandId}`, {
+    redirects: 0, // Don't follow — measure Hub response only
+    tags: { name: "hub_redirect" },
   });
 
-  // Worker returns 302 for known bands, or 302 to fallback for unknown
   const ok = res.status === 302;
 
   redirectLatency.add(res.timings.duration);
@@ -104,12 +96,12 @@ export default function () {
 // ─── Summary ──────────────────────────────────────────────────────────────────
 //
 //  Usage:
-//    Local:  k6 run -e WORKER_URL=http://localhost:8787 load-tests/redirect-load.js
-//    Cloud:  k6 run -e WORKER_URL=https://redirect.sparkmotion.workers.dev -e SCENARIO=cloud load-tests/redirect-load.js
+//    Local:  k6 run -e HUB_URL=https://geo.sparkmotion.net load-tests/hub-redirect-load.js
+//    Cloud:  k6 run --out cloud -e HUB_URL=https://geo.sparkmotion.net -e SCENARIO=cloud load-tests/hub-redirect-load.js
 //
 export function handleSummary(data) {
   return {
     stdout: textSummary(data, { indent: " ", enableColors: true }),
-    "results/redirect-load-summary.json": JSON.stringify(data, null, 2),
+    "results/hub-redirect-load-summary.json": JSON.stringify(data, null, 2),
   };
 }
