@@ -95,6 +95,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
             <h1 className="text-3xl font-bold text-foreground mb-2">
               {org.name}
             </h1>
+            <span className="text-xs font-mono text-muted-foreground/60">ID: {org.id}</span>
             <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <Globe className="w-4 h-4" />

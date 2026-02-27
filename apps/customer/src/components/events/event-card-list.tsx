@@ -115,7 +115,8 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
                 </span>
               )}
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-muted-foreground/60">{event.id}</span>
               <StatusBadge status={event.status} />
             </div>
           </div>

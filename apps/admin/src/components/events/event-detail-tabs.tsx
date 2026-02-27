@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { EventEditForm } from "./event-edit-form";
@@ -8,7 +9,7 @@ import { WindowsList } from "./windows-list";
 import { EventsAnalytics } from "./events-analytics";
 import { BandsTable } from "../bands/bands-table";
 import { BandCsvUpload } from "../bands/band-csv-upload";
-import { Megaphone } from "lucide-react";
+import { Megaphone, Copy, Check } from "lucide-react";
 import type { Event } from "@sparkmotion/database";
 
 interface EventDetailTabsProps {
@@ -34,6 +35,15 @@ const tabs = [
 
 export function EventDetailTabs({ event, activeTab, campaigns }: EventDetailTabsProps) {
   const router = useRouter();
+  const [copied, setCopied] = useState(false);
+
+  const sampleRedirectUrl = `https://${process.env.NEXT_PUBLIC_SPARK_MOTION_URL || "sparkmotion.net"}/e?bandId=****&eventId=${event.id}&orgId=${event.orgId}`;
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(sampleRedirectUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleTabChange = (tabId: string) => {
     router.push(`/events/${event.id}?tab=${tabId}`, { scroll: false });
@@ -76,6 +86,24 @@ export function EventDetailTabs({ event, activeTab, campaigns }: EventDetailTabs
                 </Link>
               </div>
             )}
+            <div className="mb-4 space-y-1">
+              <label className="text-sm font-medium text-muted-foreground">Sample Redirect URL</label>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={sampleRedirectUrl}
+                  className="flex-1 px-3 py-2 text-sm font-mono bg-muted border border-border rounded-md text-muted-foreground cursor-default"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="p-2 border border-border rounded-md hover:bg-muted transition-colors"
+                  title="Copy to clipboard"
+                >
+                  {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              </div>
+            </div>
             <h3 className="font-semibold text-foreground mb-6">
               Event Information
             </h3>

@@ -155,13 +155,14 @@ export default async function OrganizationsPage({
                 <th className="px-6 py-3 font-medium">Members</th>
                 <th className="px-6 py-3 font-medium">Events</th>
                 <th className="px-6 py-3 font-medium">Status</th>
+                <th className="px-6 py-3 font-medium">ID</th>
                 <th className="px-6 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {organizations.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                     No organizations found
                   </td>
                 </tr>
@@ -199,6 +200,9 @@ export default async function OrganizationsPage({
                           Inactive
                         </span>
                       )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[11px] font-mono text-muted-foreground/60">{org.id}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
