@@ -13,13 +13,15 @@ import * as React from "react";
 interface UserInviteEmailProps {
   resetUrl: string;
   userName?: string | null;
-  invitedByName?: string | null;
+  orgName?: string | null;
+  isAdmin?: boolean;
 }
 
 export function UserInviteEmail({
   resetUrl,
   userName,
-  invitedByName,
+  orgName,
+  isAdmin,
 }: UserInviteEmailProps) {
   return (
     <Html>
@@ -32,9 +34,11 @@ export function UserInviteEmail({
               Hi {userName || "there"},
             </Text>
             <Text style={text}>
-              {invitedByName
-                ? `${invitedByName} has invited you to join SparkMotion.`
-                : "You've been invited to join SparkMotion."}{" "}
+              {isAdmin
+                ? "SparkMotion has invited you to be an admin."
+                : orgName
+                  ? `SparkMotion has invited you to the ${orgName} platform.`
+                  : "You've been invited to join SparkMotion."}{" "}
               Click the button below to set your password and get started.
             </Text>
             <Button style={button} href={resetUrl}>
