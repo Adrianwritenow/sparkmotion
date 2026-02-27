@@ -85,6 +85,7 @@ export default async function EventDetailPage({
               {statusStyle.label}
             </span>
           </div>
+          <span className="text-xs font-mono text-muted-foreground/60">ID: {event.id}</span>
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <Building2 className="w-4 h-4" />
