@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T07:44:49.780Z"
+last_updated: "2026-02-28T17:25:08.843Z"
 progress:
   total_phases: 32
-  completed_phases: 26
+  completed_phases: 27
   total_plans: 73
   completed_plans: 70
 ---
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 Phase: 32 — SOC 2 backend compliance hardening
 Plan: 04 COMPLETE — pnpm audit CI gate, Dependabot weekly PRs, CodeQL TypeScript analysis, GitHub secret scanning + push protection enabled
 Status: Phase 32 COMPLETE — All 4 plans complete
-Last activity: 2026-02-28 — Phase 32-04 complete: pnpm audit --audit-level=high job added to CI gating build, dependabot.yml for weekly npm + github-actions PRs, codeql.yml for javascript-typescript analysis on push/PR/weekly; user confirmed GitHub secret scanning + push protection enabled
+Last activity: 2026-02-28 — Phase 32-02 complete: AnalyticsSummary Prisma model added, daily data-retention cron aggregates 90-day-old TapLogs into AnalyticsSummary and cleans expired/used PasswordResetTokens, registered in vercel.json at 0 3 * * *
 
 Progress: (4 of 4 plans complete — Phase 32 COMPLETE)
 
@@ -316,6 +316,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 32-03]: Security headers production-only in Next.js to avoid HSTS issues with localhost; Response.redirect() replaced in Worker since opaque responses block header mutation; Redis TLS guard uses console.warn not throw to surface misconfiguration without crashing
 - [Phase 32-01]: AuditLog writes are fire-and-forget — mutations and auth flows never block on audit I/O
 - [Phase 32-01]: rawInput not stored in audit logs — only result.data captured as newValue (avoids logging passwords)
+- [Phase 32-02]: AnalyticsSummary windowId/redirectUrl as non-nullable String @default('') — NULL != NULL in PostgreSQL unique constraints would allow duplicate rows
+- [Phase 32-02]: AnalyticsSummary has no FK relations — denormalized summary table survives event/window deletion
 
 ### Pending Todos
 
@@ -391,6 +393,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: 32-04-PLAN.md — COMPLETE. Phase 32 fully complete.
+Stopped at: 32-02-PLAN.md — COMPLETE. AnalyticsSummary model + data-retention cron.
 Resume file: None
 Next step: All Phase 32 SOC 2 backend compliance hardening plans complete. Ready for next phase.
