@@ -12,11 +12,17 @@
  */
 import { PrismaClient } from "@sparkmotion/database";
 import Redis from "ioredis";
-import "dotenv/config";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+const envArg = process.argv.find((_, i, arr) => arr[i - 1] === "--env") ?? "staging";
+const envFile = resolve(__dirname, `.env.${envArg}`);
+config({ path: envFile });
+console.log(`Loaded env: ${envFile}`);
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const SEED_COUNT = 100_000;
-const BATCH_SIZE = 5_000;
+const BATCH_SIZE = 50_000;
 const BAND_COUNT = 200_000;
 const BAND_PREFIX = "LOADTEST-";
 const POLL_INTERVAL_MS = 2_000;
