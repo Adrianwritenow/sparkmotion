@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T18:45:21.560Z"
+last_updated: "2026-02-28T21:59:42.361Z"
 progress:
-  total_phases: 33
+  total_phases: 34
   completed_phases: 28
-  total_plans: 75
-  completed_plans: 72
+  total_plans: 77
+  completed_plans: 73
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 33 — Build audit logging UI page for SOC2 compliance
-Plan: 02 COMPLETE — Complete audit log UI page (page shell, content orchestrator, stat cards, filter bar, TanStack table, detail sheet, CSV export)
-Status: Phase 33 COMPLETE — 2 of 2 plans complete
-Last activity: 2026-02-28 — Phase 33-02 complete: 7-file audit logs UI page with TanStack server-paginated table, Calendar+Popover date range filter, auth-vs-mutation detail Sheet, 4 stat cards, and CSV export
+Phase: 34 — Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
+Plan: 02 COMPLETE — Admin trash UI: 4 TrashButton Sheet components (events/campaigns/orgs/bands) + restoreAll for campaigns/orgs
+Status: Phase 34 IN PROGRESS — 2 of 3 plans complete; awaiting human-verify checkpoint before 34-03
+Last activity: 2026-02-28 — Phase 34-02 complete: admin trash UI built for all 4 entity types with badge counts, restore, undo, and restoreAll
 
-Progress: (2 of 2 plans complete — Phase 33 COMPLETE)
+Progress: (2 of 3 plans complete)
 
 ## Performance Metrics
 
@@ -325,6 +325,9 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 33]: keepPreviousData: true (not placeholderData arrow) — tRPC v10 overload requires PlaceholderDataFunction<T> with args, not zero-arg function
 - [Phase 33]: getActionBadge exported from audit-table.tsx and imported by audit-detail-sheet.tsx to avoid duplicating badge color logic
 - [Phase 33]: isRecord() type guard required before diff rendering — oldValue/newValue are Json? (unknown), must narrow to Record<string,unknown> before Object.keys()
+- [Phase 34]: OrgTrashButton omits Undo action — org restores cascade-restore children; re-deleting via undo would cascade-delete them again
+- [Phase 34]: bands.restoreAll skipped is a count (number), not array — toast shows count only, not ID list
+- [Phase 34]: TrashButton pattern: trashCount always fetches for badge, listDeleted uses enabled:open guard
 
 ### Pending Todos
 
@@ -332,6 +335,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 34 added: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
 - Phase 33 added: Build audit logging UI page for SOC2 compliance
 - Phase 32 added: SOC 2 backend compliance hardening
 - Phase 31 added: Comprehensive end-to-end load testing and max capacity assessment
@@ -401,6 +405,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: 33-02-PLAN.md — COMPLETE. Audit logs UI page with table, filter bar, detail sheet, stat cards, and CSV export. Phase 33 COMPLETE.
-Resume file: None
-Next step: Phase 33 complete — SOC 2 audit logging UI fully delivered.
+Stopped at: Phase 34 plans created (34-02 and 34-03)
+Resume file: .planning/phases/34-add-soft-delete-capabilities-for-campaigns-events-organizations-bands-with-restore-soc2-compliant-cron-cleanup-and-trash-ui/34-02-PLAN.md
+Next step: /gsd:execute-phase 34 (run plans 34-02, then 34-03)
