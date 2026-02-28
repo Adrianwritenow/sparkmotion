@@ -8,7 +8,14 @@
 import { PrismaClient } from "@sparkmotion/database";
 import Redis from "ioredis";
 import bcrypt from "bcryptjs";
-import "dotenv/config";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load environment-specific .env file: --env staging (default) or --env production
+const envArg = process.argv.find((_, i, arr) => arr[i - 1] === "--env") ?? "staging";
+const envFile = resolve(__dirname, `.env.${envArg}`);
+config({ path: envFile });
+console.log(`Loaded env: ${envFile}`);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BAND_COUNT = 200_000;
@@ -31,6 +38,12 @@ const GEO_CITIES = [
   { name: "Denver", state: "CO", lat: 39.7392, lng: -104.9903 },
   { name: "Chicago", state: "IL", lat: 41.8781, lng: -87.6298 },
   { name: "Atlanta", state: "GA", lat: 33.7490, lng: -84.3880 },
+];
+
+const MULTI_EVENTS = [
+  { name: "LT Event Nashville", prefix: "LOADTEST-E1-", city: "Nashville", state: "TN", lat: 36.1627, lng: -86.7816 },
+  { name: "LT Event Dallas",    prefix: "LOADTEST-E2-", city: "Dallas",    state: "TX", lat: 32.7767, lng: -96.7970 },
+  { name: "LT Event Denver",    prefix: "LOADTEST-E3-", city: "Denver",    state: "CO", lat: 39.7392, lng: -104.9903 },
 ];
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
@@ -336,6 +349,208 @@ async function seedGeo() {
   }
 
   console.log(`Geo seeding complete in ${elapsed(start)}`);
+}
+
+// ─── KV Batch Writer (shared helper) ─────────────────────────────────────────
+async function writeKVBatch(
+  prefix: string,
+  eventId: string,
+  accountId: string,
+  apiToken: string,
+  namespaceId: string,
+  start: number
+) {
+  const kvValue = JSON.stringify({ url: LIVE_URL, eventId, mode: "live" });
+
+  for (let i = 0; i < BAND_COUNT; i += KV_BATCH_SIZE) {
+    const batch = [];
+    const end = Math.min(i + KV_BATCH_SIZE, BAND_COUNT);
+    for (let j = i + 1; j <= end; j++) {
+      batch.push({ key: `${prefix}${String(j).padStart(6, "0")}`, value: kvValue });
+    }
+
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/bulk`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(batch),
+      }
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`KV bulk write failed for prefix ${prefix} (batch ${Math.floor(i / KV_BATCH_SIZE) + 1}): ${res.status} ${body}`);
+    }
+
+    console.log(`  KV [${prefix}] batch ${Math.floor(i / KV_BATCH_SIZE) + 1}/${Math.ceil(BAND_COUNT / KV_BATCH_SIZE)} written (${elapsed(start)})`);
+  }
+}
+
+// ─── Multi-Event Seeder ───────────────────────────────────────────────────────
+async function seedMultiEvent() {
+  console.log("Seeding multi-event load test data (3 events × 200K bands)...");
+  const start = Date.now();
+
+  const accountId = process.env.CF_ACCOUNT_ID;
+  const apiToken = process.env.CF_API_TOKEN;
+  const namespaceId = process.env.CF_KV_NAMESPACE_ID;
+
+  if (!accountId || !apiToken || !namespaceId) {
+    throw new Error("CF_ACCOUNT_ID, CF_API_TOKEN, CF_KV_NAMESPACE_ID are required");
+  }
+
+  // 1. Ensure loadtest org exists
+  let org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    org = await db.organization.create({
+      data: { name: ORG_NAME, slug: "loadtest-org" },
+    });
+  }
+  console.log(`  Org: ${org.id} (${elapsed(start)})`);
+
+  let firstEventId: string | null = null;
+
+  for (const ev of MULTI_EVENTS) {
+    console.log(`\n  Processing event: ${ev.name}`);
+
+    // 2a. Find or create event
+    let event = await db.event.findFirst({ where: { name: ev.name, orgId: org.id } });
+    if (!event) {
+      event = await db.event.create({
+        data: {
+          orgId: org.id,
+          name: ev.name,
+          city: ev.city,
+          state: ev.state,
+          location: `${ev.city}, ${ev.state}`,
+          latitude: ev.lat,
+          longitude: ev.lng,
+          status: "ACTIVE",
+          estimatedAttendees: 200_000,
+        },
+      });
+      console.log(`    Created event: ${event.id}`);
+    } else {
+      console.log(`    Event exists: ${event.id}`);
+    }
+
+    if (!firstEventId) firstEventId = event.id;
+
+    // 2b. Upsert LIVE window
+    await db.eventWindow.upsert({
+      where: { id: `${event.id}-live` },
+      update: { isActive: true },
+      create: {
+        id: `${event.id}-live`,
+        eventId: event.id,
+        windowType: "LIVE",
+        url: LIVE_URL,
+        isActive: true,
+      },
+    });
+    console.log(`    Window upserted (${elapsed(start)})`);
+
+    // 2c. Create 200K bands in DB
+    const existingCount = await db.band.count({
+      where: { eventId: event.id, bandId: { startsWith: ev.prefix } },
+    });
+
+    if (existingCount >= BAND_COUNT) {
+      console.log(`    Bands already exist (${existingCount.toLocaleString()}), skipping`);
+    } else {
+      if (existingCount > 0) {
+        await db.band.deleteMany({ where: { eventId: event.id, bandId: { startsWith: ev.prefix } } });
+      }
+
+      for (let i = 0; i < BAND_COUNT; i += DB_BATCH_SIZE) {
+        const batch = [];
+        const end = Math.min(i + DB_BATCH_SIZE, BAND_COUNT);
+        for (let j = i + 1; j <= end; j++) {
+          batch.push({
+            bandId: `${ev.prefix}${String(j).padStart(6, "0")}`,
+            eventId: event.id,
+          });
+        }
+        await db.band.createMany({ data: batch });
+
+        if ((i / DB_BATCH_SIZE + 1) % 10 === 0) {
+          console.log(`    Bands: ${end.toLocaleString()}/${BAND_COUNT.toLocaleString()} (${elapsed(start)})`);
+        }
+      }
+      console.log(`    All ${BAND_COUNT.toLocaleString()} bands created (${elapsed(start)})`);
+    }
+
+    // 2d. Write 200K KV entries
+    console.log(`    Writing ${BAND_COUNT.toLocaleString()} KV entries...`);
+    await writeKVBatch(ev.prefix, event.id, accountId, apiToken, namespaceId, start);
+    console.log(`    KV entries written (${elapsed(start)})`);
+  }
+
+  // 3. Create 600K tap logs for the FIRST event only (used by analytics queries)
+  if (firstEventId) {
+    console.log(`\n  Creating ${TAP_LOG_COUNT.toLocaleString()} tap logs for first event (${firstEventId})...`);
+    const existingTapCount = await db.tapLog.count({ where: { eventId: firstEventId } });
+
+    if (existingTapCount >= TAP_LOG_COUNT) {
+      console.log(`  TapLogs already exist (${existingTapCount.toLocaleString()}), skipping`);
+    } else {
+      if (existingTapCount > 0) {
+        await db.tapLog.deleteMany({ where: { eventId: firstEventId } });
+      }
+
+      // Get band internal IDs for FK references
+      const bands = await db.band.findMany({
+        where: { eventId: firstEventId, bandId: { startsWith: MULTI_EVENTS[0].prefix } },
+        select: { id: true },
+      });
+      const bandIds = bands.map((b) => b.id);
+
+      // 6-hour event window, Gaussian peak at center
+      const eventStart = new Date();
+      eventStart.setHours(eventStart.getHours() - 6);
+      const durationMs = 6 * 60 * 60 * 1000;
+
+      const modes = ["PRE", "LIVE", "LIVE", "LIVE", "LIVE", "LIVE", "LIVE", "POST", "POST"];
+      const modeUrls: Record<string, string> = {
+        PRE: "https://compassion.com/pre",
+        LIVE: LIVE_URL,
+        POST: "https://compassion.com/post",
+      };
+
+      for (let i = 0; i < TAP_LOG_COUNT; i += DB_BATCH_SIZE) {
+        const batch = [];
+        const end = Math.min(i + DB_BATCH_SIZE, TAP_LOG_COUNT);
+        for (let j = i; j < end; j++) {
+          const bandId = bandIds[Math.floor(Math.random() * bandIds.length)];
+          const mode = modes[Math.floor(Math.random() * modes.length)];
+          const timeOffset = gaussianRandom() * durationMs;
+          const tappedAt = new Date(eventStart.getTime() + timeOffset);
+
+          batch.push({
+            bandId,
+            eventId: firstEventId,
+            modeServed: mode,
+            redirectUrl: modeUrls[mode],
+            tappedAt,
+            userAgent: "k6-loadtest/1.0",
+            ipAddress: `10.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`,
+          });
+        }
+        await db.tapLog.createMany({ data: batch });
+
+        if ((i / DB_BATCH_SIZE + 1) % 20 === 0) {
+          console.log(`  TapLogs: ${end.toLocaleString()}/${TAP_LOG_COUNT.toLocaleString()} (${elapsed(start)})`);
+        }
+      }
+      console.log(`  All ${TAP_LOG_COUNT.toLocaleString()} tap logs created (${elapsed(start)})`);
+    }
+  }
+
+  console.log(`\nMulti-event seeding complete in ${elapsed(start)}`);
 }
 
 // ─── User Seeder ─────────────────────────────────────────────────────────────
@@ -761,6 +976,7 @@ const COMMANDS: Record<string, () => Promise<void>> = {
   postgres: seedPostgres,
   redis: seedRedis,
   "seed-geo": seedGeo,
+  "seed-multi-event": seedMultiEvent,
   "seed-user": seedUser,
   "bench-queries": benchQueries,
   "bench-csv": benchCsvExport,
@@ -776,7 +992,9 @@ const COMMANDS: Record<string, () => Promise<void>> = {
 };
 
 async function main() {
-  const command = process.argv[2];
+  // Filter out --env <value> to find the actual command
+  const args = process.argv.slice(2).filter((arg, i, arr) => arg !== "--env" && arr[i - 1] !== "--env");
+  const command = args[0];
 
   if (!command || !COMMANDS[command]) {
     console.error(`Usage: pnpm --filter @sparkmotion/load-tests exec tsx seed.ts [${Object.keys(COMMANDS).join("|")}]`);
