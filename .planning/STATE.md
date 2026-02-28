@@ -8,7 +8,7 @@ progress:
   total_phases: 32
   completed_phases: 26
   total_plans: 73
-  completed_plans: 69
+  completed_plans: 70
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 32 — SOC 2 backend compliance hardening
-Plan: 03 COMPLETE — security headers on all Next.js apps + Cloudflare Worker, Redis TLS production guard
-Status: Phase 32 IN PROGRESS — Plans 01, 02, and 03 complete
-Last activity: 2026-02-28 — Phase 32-03 complete: added 5 security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection) to admin/customer/hub next.config.mjs; Worker SECURITY_HEADERS constant + withSecurityHeaders() applied to all response paths; Redis TLS console.warn guard added
+Plan: 04 COMPLETE — pnpm audit CI gate, Dependabot weekly PRs, CodeQL TypeScript analysis, GitHub secret scanning + push protection enabled
+Status: Phase 32 COMPLETE — All 4 plans complete
+Last activity: 2026-02-28 — Phase 32-04 complete: pnpm audit --audit-level=high job added to CI gating build, dependabot.yml for weekly npm + github-actions PRs, codeql.yml for javascript-typescript analysis on push/PR/weekly; user confirmed GitHub secret scanning + push protection enabled
 
-Progress: (3 of 4 plans complete — Phase 32 In Progress)
+Progress: (4 of 4 plans complete — Phase 32 COMPLETE)
 
 ## Performance Metrics
 
@@ -312,6 +312,7 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 31-03]: README rewritten around unified 5-scenario e2e architecture; 6 old isolated scripts deleted
 - [Phase 32-04]: pnpm audit --audit-level=high in CI: only high/critical fail build, avoiding moderate/low false positive noise in monorepos
 - [Phase 32-04]: Dependabot ignores major version bumps for Next.js/tRPC/Prisma — minor/patch security PRs auto-opened, major upgrades require manual review
+- [Phase 32-04]: GitHub secret scanning + push protection enabled via repo settings — blocks credential leaks before they reach remote (SOC 2 requirement complete)
 - [Phase 32-03]: Security headers production-only in Next.js to avoid HSTS issues with localhost; Response.redirect() replaced in Worker since opaque responses block header mutation; Redis TLS guard uses console.warn not throw to surface misconfiguration without crashing
 - [Phase 32-01]: AuditLog writes are fire-and-forget — mutations and auth flows never block on audit I/O
 - [Phase 32-01]: rawInput not stored in audit logs — only result.data captured as newValue (avoids logging passwords)
@@ -390,6 +391,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: 31-03-PLAN.md Task 3 checkpoint:human-verify — user must run Grafana Cloud test and review results
+Stopped at: 32-04-PLAN.md — COMPLETE. Phase 32 fully complete.
 Resume file: None
-Next step: User runs ./load-tests/run-k6.sh staging e2e-load.js --cloud-exec, reviews results, then continue plan
+Next step: All Phase 32 SOC 2 backend compliance hardening plans complete. Ready for next phase.
