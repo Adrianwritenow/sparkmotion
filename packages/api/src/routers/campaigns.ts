@@ -283,4 +283,28 @@ export const campaignsRouter = router({
       ]);
       return { success: true };
     }),
+
+  restoreAll: protectedProcedure.mutation(async ({ ctx }) => {
+    const where = ctx.user.role === "ADMIN"
+      ? { deletedAt: { not: null } as const }
+      : { orgId: ctx.user.orgId!, deletedAt: { not: null } as const };
+    const deletedCampaigns = await db.campaign.findMany({ where, select: { id: true } });
+    if (deletedCampaigns.length === 0) return { restored: 0 };
+
+    const campaignIds = deletedCampaigns.map((c) => c.id);
+    await db.$transaction(async (tx) => {
+      await tx.campaign.updateMany({
+        where: { id: { in: campaignIds } },
+        data: { deletedAt: null, deletedBy: null },
+      });
+      // Re-associate events for each campaign
+      for (const id of campaignIds) {
+        await tx.event.updateMany({
+          where: { deletedCampaignId: id, deletedAt: null },
+          data: { campaignId: id, deletedCampaignId: null },
+        });
+      }
+    });
+    return { restored: deletedCampaigns.length };
+  }),
 });

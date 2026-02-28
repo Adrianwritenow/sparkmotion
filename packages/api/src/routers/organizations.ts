@@ -212,6 +212,37 @@ export const organizationsRouter = router({
       return { success: true };
     }),
 
+  restoreAll: adminProcedure.mutation(async () => {
+    const deletedOrgs = await db.organization.findMany({
+      where: { deletedAt: { not: null } },
+      select: { id: true, deletedAt: true },
+    });
+    if (deletedOrgs.length === 0) return { restored: 0 };
+
+    await db.$transaction(async (tx) => {
+      for (const org of deletedOrgs) {
+        await tx.organization.update({
+          where: { id: org.id },
+          data: { deletedAt: null, deletedBy: null },
+        });
+        // Restore cascade-deleted children (deleted at same time or after org)
+        await tx.event.updateMany({
+          where: { orgId: org.id, deletedAt: { gte: org.deletedAt! } },
+          data: { deletedAt: null, deletedBy: null },
+        });
+        await tx.campaign.updateMany({
+          where: { orgId: org.id, deletedAt: { gte: org.deletedAt! } },
+          data: { deletedAt: null, deletedBy: null },
+        });
+        await tx.band.updateMany({
+          where: { event: { orgId: org.id }, deletedAt: { gte: org.deletedAt! } },
+          data: { deletedAt: null, deletedBy: null },
+        });
+      }
+    });
+    return { restored: deletedOrgs.length };
+  }),
+
   updateName: protectedProcedure
     .input(z.object({
       orgId: z.string(),
