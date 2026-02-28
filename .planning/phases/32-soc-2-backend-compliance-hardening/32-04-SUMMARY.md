@@ -53,7 +53,7 @@ completed: 2026-02-28
 - **Duration:** ~8 min
 - **Started:** 2026-02-28T07:38:37Z
 - **Completed:** 2026-02-28T07:46:00Z
-- **Tasks:** 1 of 2 (Task 2 is human-action checkpoint: enable GitHub secret scanning)
+- **Tasks:** 2 of 2
 - **Files modified:** 3
 
 ## Accomplishments
@@ -67,8 +67,7 @@ completed: 2026-02-28
 Each task was committed atomically:
 
 1. **Task 1: Add pnpm audit to CI + create Dependabot and CodeQL configs** - `f597228` (feat)
-
-**Plan metadata:** (pending — awaiting Task 2 human action checkpoint)
+2. **Task 2: Enable GitHub secret scanning** - confirmed by user (human-action, no commit — repo setting)
 
 ## Files Created/Modified
 - `.github/workflows/ci.yml` - Added audit job and updated build needs to [lint, test, audit]
@@ -85,21 +84,15 @@ Each task was committed atomically:
 
 None - plan executed exactly as written.
 
-## User Setup Required
+## User Setup Completed
 
-**GitHub secret scanning must be enabled manually** (it is a repository setting, not configurable via CI files):
-
-1. Go to your GitHub repository
-2. Navigate to Settings > Code security and analysis (left sidebar under Security)
-3. Find the "Secret scanning" section
-4. Click "Enable" if not already enabled
-5. Optionally enable "Push protection" to block commits containing secrets
+**GitHub secret scanning enabled** — user confirmed both secret scanning and push protection are active on the repository. This completes the SOC 2 requirement for credential leak detection at the source control layer.
 
 ## Next Phase Readiness
 - CI security gates active on next PR/push to main or staging
 - Dependabot will open first PRs on the following Monday
 - CodeQL will run on next push to main/staging
-- Secret scanning requires the manual step above to complete SOC 2 requirement
+- Secret scanning + push protection active — blocks commits containing secrets before they reach the remote
 
 ---
 *Phase: 32-soc-2-backend-compliance-hardening*
