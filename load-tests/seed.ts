@@ -878,7 +878,7 @@ async function cleanup() {
 
   if (accountId && apiToken && namespaceId) {
     // Delete main loadtest bands
-    const totalKvKeys = BAND_COUNT + (GEO_CITIES.length * GEO_BANDS_PER_CITY);
+    const totalKvKeys = BAND_COUNT + (GEO_CITIES.length * GEO_BANDS_PER_CITY) + (MULTI_EVENTS.length * BAND_COUNT);
     console.log(`  KV: deleting ~${totalKvKeys.toLocaleString()} keys...`);
 
     for (let i = 0; i < BAND_COUNT; i += KV_BATCH_SIZE) {
@@ -927,6 +927,32 @@ async function cleanup() {
       if (!res.ok) {
         console.error(`  KV geo delete failed: ${res.status}`);
       }
+    }
+
+    // Delete multi-event KV keys
+    for (const ev of MULTI_EVENTS) {
+      for (let i = 0; i < BAND_COUNT; i += KV_BATCH_SIZE) {
+        const keys = [];
+        const end = Math.min(i + KV_BATCH_SIZE, BAND_COUNT);
+        for (let j = i + 1; j <= end; j++) {
+          keys.push(`${ev.prefix}${String(j).padStart(6, "0")}`);
+        }
+        const res = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/bulk`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${apiToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(keys),
+          }
+        );
+        if (!res.ok) {
+          console.error(`  KV delete batch failed for ${ev.prefix}: ${res.status}`);
+        }
+      }
+      console.log(`  KV: deleted ${BAND_COUNT.toLocaleString()} keys for ${ev.prefix} (${elapsed(start)})`);
     }
 
     console.log(`  KV: all LOADTEST keys deleted (${elapsed(start)})`);
