@@ -17,7 +17,7 @@ export default async function EventWindowsPage({
   }
 
   const event = await db.event.findUnique({
-    where: { id: params.id },
+    where: { id: params.id, deletedAt: null },
     select: { id: true, name: true, orgId: true },
   });
 

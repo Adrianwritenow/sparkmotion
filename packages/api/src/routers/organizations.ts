@@ -11,13 +11,14 @@ export const organizationsRouter = router({
     }
 
     return db.organization.findMany({
+      where: { deletedAt: null },
       select: {
         id: true,
         name: true,
         slug: true,
         websiteUrl: true,
         contactEmail: true,
-        _count: { select: { events: true } },
+        _count: { select: { events: { where: { deletedAt: null } } } },
       },
       orderBy: { name: "asc" },
     });
@@ -27,8 +28,8 @@ export const organizationsRouter = router({
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       return db.organization.findUniqueOrThrow({
-        where: { id: input.id },
-        include: { _count: { select: { events: true, users: true } } },
+        where: { id: input.id, deletedAt: null },
+        include: { _count: { select: { events: { where: { deletedAt: null } }, users: true } } },
       });
     }),
 
@@ -130,8 +131,84 @@ export const organizationsRouter = router({
 
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      await db.$transaction([
+        db.organization.update({
+          where: { id: input.id },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        }),
+        db.event.updateMany({
+          where: { orgId: input.id, deletedAt: null },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        }),
+        db.campaign.updateMany({
+          where: { orgId: input.id, deletedAt: null },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        }),
+        db.band.updateMany({
+          where: { event: { orgId: input.id }, deletedAt: null },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        }),
+      ]);
+      return { success: true };
+    }),
+
+  trashCount: adminProcedure.query(async () => {
+    return db.organization.count({ where: { deletedAt: { not: null } } });
+  }),
+
+  listDeleted: adminProcedure.query(async () => {
+    const orgs = await db.organization.findMany({
+      where: { deletedAt: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        deletedAt: true,
+        deletedBy: true,
+      },
+      orderBy: { deletedAt: "desc" },
+    });
+    // Resolve deletedBy to user name/email
+    const userIds = orgs.map((o) => o.deletedBy).filter((id): id is string => !!id);
+    const users = userIds.length > 0
+      ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u.name || u.email]));
+    return orgs.map((o) => ({
+      ...o,
+      deletedByName: o.deletedBy ? userMap.get(o.deletedBy) ?? null : null,
+    }));
+  }),
+
+  restore: adminProcedure
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
-      await db.organization.delete({ where: { id: input.id } });
+      const org = await db.organization.findUniqueOrThrow({
+        where: { id: input.id },
+      });
+      if (!org.deletedAt) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Organization is not deleted" });
+      }
+      await db.$transaction([
+        db.organization.update({
+          where: { id: input.id },
+          data: { deletedAt: null, deletedBy: null },
+        }),
+        // Restore cascade-deleted children (deleted at same time or after org)
+        db.event.updateMany({
+          where: { orgId: input.id, deletedAt: { gte: org.deletedAt } },
+          data: { deletedAt: null, deletedBy: null },
+        }),
+        db.campaign.updateMany({
+          where: { orgId: input.id, deletedAt: { gte: org.deletedAt } },
+          data: { deletedAt: null, deletedBy: null },
+        }),
+        db.band.updateMany({
+          where: { event: { orgId: input.id }, deletedAt: { gte: org.deletedAt } },
+          data: { deletedAt: null, deletedBy: null },
+        }),
+      ]);
       return { success: true };
     }),
 
@@ -208,7 +285,7 @@ export const organizationsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const org = await db.organization.findUnique({
-        where: { id: input.orgId },
+        where: { id: input.orgId, deletedAt: null },
         select: { name: true },
       });
       if (!org) {

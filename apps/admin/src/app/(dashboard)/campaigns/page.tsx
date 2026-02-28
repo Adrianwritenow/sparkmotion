@@ -24,6 +24,7 @@ export default async function CampaignsPage({
   const status = searchParams.status;
 
   const where: Prisma.CampaignWhereInput = {
+    deletedAt: null,
     ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
     ...(status && status in CampaignStatus ? { status: status as CampaignStatus } : {}),
   };
@@ -37,12 +38,12 @@ export default async function CampaignsPage({
       include: {
         org: { select: { name: true } },
         events: {
-          where: { status: { in: ["ACTIVE", "COMPLETED"] } },
-          select: { id: true, location: true, _count: { select: { bands: true } } },
+          where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+          select: { id: true, location: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
         },
         _count: {
           select: {
-            events: { where: { status: { in: ["ACTIVE", "COMPLETED"] } } },
+            events: { where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null } },
           },
         },
       },
@@ -69,11 +70,13 @@ export default async function CampaignsPage({
   });
 
   const orgs = await db.organization.findMany({
+    where: { deletedAt: null },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 
   const events = await db.event.findMany({
+    where: { deletedAt: null },
     select: { id: true, name: true, campaign: { select: { name: true } } },
     orderBy: { name: "asc" },
   });

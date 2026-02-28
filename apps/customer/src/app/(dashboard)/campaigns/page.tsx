@@ -33,6 +33,7 @@ export default async function CampaignsPage({
 
   const where: Prisma.CampaignWhereInput = {
     orgId: session.user.orgId,
+    deletedAt: null,
     ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
     ...(status && status in CampaignStatus ? { status: status as CampaignStatus } : {}),
   };
@@ -45,12 +46,12 @@ export default async function CampaignsPage({
       take: PAGE_SIZE,
       include: {
         events: {
-          where: { status: { in: ["ACTIVE", "COMPLETED"] } },
-          select: { id: true, location: true, _count: { select: { bands: true } } },
+          where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+          select: { id: true, location: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
         },
         _count: {
           select: {
-            events: { where: { status: { in: ["ACTIVE", "COMPLETED"] } } },
+            events: { where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null } },
           },
         },
       },
@@ -77,7 +78,7 @@ export default async function CampaignsPage({
   });
 
   const events = await db.event.findMany({
-    where: { orgId: session.user.orgId },
+    where: { orgId: session.user.orgId, deletedAt: null },
     select: { id: true, name: true, campaign: { select: { name: true } } },
     orderBy: { name: "asc" },
   });

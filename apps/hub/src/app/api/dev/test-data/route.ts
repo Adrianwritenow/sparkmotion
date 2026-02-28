@@ -16,18 +16,20 @@ export async function GET() {
   }
 
   const orgs = await db.organization.findMany({
+    where: { deletedAt: null },
     select: {
       id: true,
       name: true,
       slug: true,
       events: {
-        where: { status: { in: ["ACTIVE", "DRAFT"] } },
+        where: { status: { in: ["ACTIVE", "DRAFT"] }, deletedAt: null },
         select: {
           id: true,
           name: true,
           status: true,
-          _count: { select: { bands: true } },
+          _count: { select: { bands: { where: { deletedAt: null } } } },
           bands: {
+            where: { deletedAt: null },
             select: {
               id: true,
               bandId: true,

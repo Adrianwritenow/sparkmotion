@@ -21,6 +21,10 @@ export async function GET(request: NextRequest) {
   let aggregatedCount = 0;
   let deletedTapLogs = 0;
   let deletedTokens = 0;
+  let purgedBands = 0;
+  let purgedEvents = 0;
+  let purgedCampaigns = 0;
+  let purgedOrgs = 0;
 
   try {
     // Step 1: Aggregate expired TapLogs into AnalyticsSummary
@@ -92,10 +96,39 @@ export async function GET(request: NextRequest) {
     });
     deletedTokens = tokenDeleteResult.count;
 
+    // Step 4: Hard-delete soft-deleted records older than 30 days (SOC2 compliant purge)
+    const softDeleteCutoff = new Date();
+    softDeleteCutoff.setDate(softDeleteCutoff.getDate() - 30);
+
+    // FK-safe order: TapLogs for deleted bands, then Bands -> Events -> Campaigns -> Orgs
+    const deletedBandIds = await db.band.findMany({
+      where: { deletedAt: { lt: softDeleteCutoff } },
+      select: { id: true },
+    });
+    if (deletedBandIds.length > 0) {
+      await db.tapLog.deleteMany({
+        where: { bandId: { in: deletedBandIds.map((b) => b.id) } },
+      });
+    }
+
+    const r1 = await db.band.deleteMany({ where: { deletedAt: { lt: softDeleteCutoff } } });
+    purgedBands = r1.count;
+
+    const r2 = await db.event.deleteMany({ where: { deletedAt: { lt: softDeleteCutoff } } });
+    purgedEvents = r2.count;
+
+    const r3 = await db.campaign.deleteMany({ where: { deletedAt: { lt: softDeleteCutoff } } });
+    purgedCampaigns = r3.count;
+
+    const r4 = await db.organization.deleteMany({ where: { deletedAt: { lt: softDeleteCutoff } } });
+    purgedOrgs = r4.count;
+
     console.log(
       `data-retention: aggregated=${aggregatedCount} summaries, ` +
         `deleted=${deletedTapLogs} tap logs, ` +
-        `cleaned=${deletedTokens} tokens (${Date.now() - startTime}ms)`
+        `cleaned=${deletedTokens} tokens, ` +
+        `purged=${purgedBands} bands/${purgedEvents} events/${purgedCampaigns} campaigns/${purgedOrgs} orgs ` +
+        `(${Date.now() - startTime}ms)`
     );
 
     return NextResponse.json({
@@ -103,6 +136,10 @@ export async function GET(request: NextRequest) {
       aggregatedSummaries: aggregatedCount,
       deletedTapLogs,
       deletedTokens,
+      purgedBands,
+      purgedEvents,
+      purgedCampaigns,
+      purgedOrgs,
       durationMs: Date.now() - startTime,
     });
   } catch (error) {

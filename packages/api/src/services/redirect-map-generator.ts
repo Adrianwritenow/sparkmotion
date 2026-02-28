@@ -35,6 +35,7 @@ export async function generateRedirectMap(options?: { eventIds?: string[] }): Pr
   const events = await db.event.findMany({
     where: {
       status: "ACTIVE",
+      deletedAt: null,
       ...(options?.eventIds && { id: { in: options.eventIds } }),
     },
     select: {
@@ -117,7 +118,7 @@ export async function purgeEventFromKV(eventId: string): Promise<{ purged: numbe
   }
 
   const bands = await db.band.findMany({
-    where: { eventId },
+    where: { eventId, deletedAt: null },
     select: { bandId: true },
   });
 

@@ -84,7 +84,7 @@ const changeLog = middleware(async ({ ctx, next, type, path, rawInput }) => {
 
   // Capture oldValue before mutation for updates/deletes
   let oldValue: Prisma.InputJsonValue | undefined = undefined;
-  const isUpdateOrDelete = action.includes("update") || action.includes("delete") || action.includes("toggle") || action.includes("change") || action.includes("remove");
+  const isUpdateOrDelete = action.includes("update") || action.includes("delete") || action.includes("toggle") || action.includes("change") || action.includes("remove") || action.includes("restore");
   if (isUpdateOrDelete && resourceId) {
     const finder = prismaModelMap[resourceType];
     if (finder) {

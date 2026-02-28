@@ -17,7 +17,7 @@ export async function updateEventWindows() {
 
   // Fetch all events with schedule mode enabled
   const scheduledEvents = await db.event.findMany({
-    where: { scheduleMode: true },
+    where: { scheduleMode: true, deletedAt: null },
     select: { id: true, timezone: true },
   });
 

@@ -45,6 +45,8 @@ model Organization {
   slug         String    @unique
   websiteUrl   String?
   contactEmail String?
+  deletedAt    DateTime?
+  deletedBy    String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -53,6 +55,7 @@ model Organization {
   users     User[]
 
   @@index([slug])
+  @@index([deletedAt])
 }
 
 model User {
@@ -94,6 +97,7 @@ model Event {
   id                 String      @id @default(cuid())
   orgId              String
   campaignId         String?
+  deletedCampaignId  String?     // Stores campaignId before soft-delete for restore
   name               String
   city               String?
   state              String?
@@ -109,6 +113,8 @@ model Event {
   fallbackUrl        String?     // Default redirect URL when no routing window is active
   status             EventStatus @default(DRAFT)
   estimatedAttendees Int?
+  deletedAt          DateTime?
+  deletedBy          String?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
@@ -122,6 +128,7 @@ model Event {
   @@index([campaignId])
   @@index([status])
   @@index([latitude, longitude])
+  @@index([deletedAt])
 }
 
 model EventWindow {
@@ -168,6 +175,8 @@ model Band {
   firstTapAt   DateTime?
   lastTapAt    DateTime?
   tapCount     Int       @default(0)
+  deletedAt    DateTime?
+  deletedBy    String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -180,6 +189,7 @@ model Band {
   @@index([eventId])
   @@index([tagId])
   @@index([flagged])
+  @@index([deletedAt])
 }
 
 model TapLog {
@@ -211,6 +221,8 @@ model Campaign {
   status    CampaignStatus @default(DRAFT)
   startDate DateTime?
   endDate   DateTime?
+  deletedAt DateTime?
+  deletedBy String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
@@ -219,6 +231,7 @@ model Campaign {
 
   @@index([orgId])
   @@index([status])
+  @@index([deletedAt])
 }
 
 model ChangeLog {

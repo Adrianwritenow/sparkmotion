@@ -18,20 +18,21 @@ type Props = {
 
 export default async function OrganizationDetailPage({ params, searchParams }: Props) {
   const org = await db.organization.findUnique({
-    where: { id: params.id },
+    where: { id: params.id, deletedAt: null },
     include: {
       _count: {
         select: {
-          events: true,
+          events: { where: { deletedAt: null } },
           users: true,
         },
       },
       events: {
+        where: { deletedAt: null },
         take: 10,
         orderBy: { createdAt: "desc" },
         include: {
           campaign: { select: { id: true, name: true } },
-          _count: { select: { bands: true } },
+          _count: { select: { bands: { where: { deletedAt: null } } } },
         },
       },
     },
