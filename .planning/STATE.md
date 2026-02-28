@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 32 — SOC 2 backend compliance hardening
-Plan: 04 COMPLETE — pnpm audit CI gate, Dependabot weekly PRs, CodeQL TypeScript analysis, GitHub secret scanning + push protection enabled
-Status: Phase 32 COMPLETE — All 4 plans complete
-Last activity: 2026-02-28 — Phase 32-02 complete: AnalyticsSummary Prisma model added, daily data-retention cron aggregates 90-day-old TapLogs into AnalyticsSummary and cleans expired/used PasswordResetTokens, registered in vercel.json at 0 3 * * *
+Phase: 33 — Build audit logging UI page for SOC2 compliance
+Plan: 01 COMPLETE — auditLogs tRPC router (list/stats/export), registered in root.ts, Audit Log sidebar nav item
+Status: Phase 33 In Progress — 1 of N plans complete
+Last activity: 2026-02-28 — Phase 33-01 complete: auditLogsRouter with paginated list, 4-metric stats, and 10K-capped export created; auditLogs registered in appRouter; Audit Log nav item added to admin sidebar
 
-Progress: (4 of 4 plans complete — Phase 32 COMPLETE)
+Progress: (1 of ? plans complete — Phase 33 In Progress)
 
 ## Performance Metrics
 
@@ -318,6 +318,10 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 32-01]: rawInput not stored in audit logs — only result.data captured as newValue (avoids logging passwords)
 - [Phase 32-02]: AnalyticsSummary windowId/redirectUrl as non-nullable String @default('') — NULL != NULL in PostgreSQL unique constraints would allow duplicate rows
 - [Phase 32-02]: AnalyticsSummary has no FK relations — denormalized summary table survives event/window deletion
+- [Phase 33-01]: AuditLog has no FK relation to User — userId is plain String?; resolve users via separate db.user.findMany with id: { in: [...] } filter, build Map for O(1) lookup
+- [Phase 33-01]: buildWhere helper extracted and shared between list and export procedures to avoid duplicating filter logic
+- [Phase 33-01]: action filter uses contains (partial match), failedLogins7d uses in (exact match for auth.login_failure, auth.lockout)
+- [Phase 33-01]: stats db.$transaction wraps 3 count queries; groupBy runs separately (Prisma restriction — groupBy not allowed in transactions)
 
 ### Pending Todos
 
@@ -325,6 +329,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 33 added: Build audit logging UI page for SOC2 compliance
 - Phase 32 added: SOC 2 backend compliance hardening
 - Phase 31 added: Comprehensive end-to-end load testing and max capacity assessment
 - Phase 30 added: Add analytics tracking for fallback and org URL taps
@@ -393,6 +398,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: 32-02-PLAN.md — COMPLETE. AnalyticsSummary model + data-retention cron.
+Stopped at: 33-01-PLAN.md — COMPLETE. auditLogs tRPC router + sidebar nav item.
 Resume file: None
-Next step: All Phase 32 SOC 2 backend compliance hardening plans complete. Ready for next phase.
+Next step: Phase 33 Plan 02 — Audit Log UI page in admin app.

@@ -218,6 +218,16 @@ Plans:
 Plans:
 - [x] TBD (run /gsd:plan-phase 32 to break down) (completed 2026-02-28)
 
+### Phase 33: Build audit logging UI page for SOC2 compliance
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 32
+**Plans:** 1/2 plans executed
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 33 to break down)
+
 ---
 
 _For project context, see .planning/PROJECT.md_
