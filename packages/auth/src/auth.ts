@@ -36,6 +36,17 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         const lockoutKey = KEYS.loginLockout(email);
         const attempts = await redis.get(lockoutKey);
         if (attempts && parseInt(attempts, 10) >= MAX_LOGIN_ATTEMPTS) {
+          db.auditLog
+            .create({
+              data: {
+                userId: null,
+                action: "auth.lockout",
+                resource: "Auth",
+                resourceId: null,
+                newValue: { email } as never,
+              },
+            })
+            .catch((err: unknown) => console.error("Audit log failed:", err));
           return null;
         }
 
@@ -54,11 +65,34 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
           if (newCount === 1) {
             await redis.expire(lockoutKey, LOCKOUT_TTL);
           }
+          db.auditLog
+            .create({
+              data: {
+                userId: user.id,
+                action: "auth.login_failure",
+                resource: "Auth",
+                resourceId: user.id,
+                newValue: { email, attemptNumber: newCount } as never,
+              },
+            })
+            .catch((err: unknown) => console.error("Audit log failed:", err));
           return null;
         }
 
         // Successful login — clear lockout
         await redis.del(lockoutKey);
+
+        db.auditLog
+          .create({
+            data: {
+              userId: user.id,
+              action: "auth.login_success",
+              resource: "Auth",
+              resourceId: user.id,
+              newValue: { email } as never,
+            },
+          })
+          .catch((err: unknown) => console.error("Audit log failed:", err));
 
         return {
           id: user.id,
