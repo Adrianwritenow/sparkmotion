@@ -138,7 +138,7 @@ Organization
         +-- EventWindow[]  (PRE / LIVE / POST redirect URLs, one active at a time)
         +-- Band[]         (physical NFC chip -> event assignment)
         |     +-- TapLog[]
-        +-- TapLog[]       (immutable audit log, ~600K per event)
+        +-- TapLog[]       (immutable change log, ~600K per event)
 ```
 
 ## Deployment

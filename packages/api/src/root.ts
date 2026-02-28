@@ -1,15 +1,15 @@
-import { router } from "./trpc";
-import { authRouter } from "./routers/auth";
-import { eventsRouter } from "./routers/events";
-import { windowsRouter } from "./routers/windows";
-import { bandsRouter } from "./routers/bands";
 import { analyticsRouter } from "./routers/analytics";
-import { organizationsRouter } from "./routers/organizations";
-import { usersRouter } from "./routers/users";
-import { infrastructureRouter } from "./routers/infrastructure";
+import { authRouter } from "./routers/auth";
+import { bandsRouter } from "./routers/bands";
 import { campaignsRouter } from "./routers/campaigns";
+import { changeLogsRouter } from "./routers/change-logs";
+import { eventsRouter } from "./routers/events";
+import { infrastructureRouter } from "./routers/infrastructure";
+import { organizationsRouter } from "./routers/organizations";
+import { router } from "./trpc";
 import { tagsRouter } from "./routers/tags";
-import { auditLogsRouter } from "./routers/audit-logs";
+import { usersRouter } from "./routers/users";
+import { windowsRouter } from "./routers/windows";
 
 export const appRouter = router({
   auth: authRouter,
@@ -22,7 +22,7 @@ export const appRouter = router({
   infrastructure: infrastructureRouter,
   campaigns: campaignsRouter,
   tags: tagsRouter,
-  auditLogs: auditLogsRouter,
+  changeLogs: changeLogsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,8 +1,9 @@
 "use client";
 
 import { Activity, ShieldAlert, Trash2, UserCheck } from "lucide-react";
-import { StatCard } from "@/components/dashboard/stat-card";
+
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatCard } from "@/components/dashboard/stat-card";
 
 interface StatsData {
   totalEvents24h: number;
@@ -11,12 +12,12 @@ interface StatsData {
   mostActiveUser: { name: string | null; email: string; count: number } | null;
 }
 
-interface AuditStatsProps {
+interface ChangeStatsProps {
   stats: StatsData | undefined;
   isLoading: boolean;
 }
 
-export function AuditStats({ stats, isLoading }: AuditStatsProps) {
+export function ChangeStats({ stats, isLoading }: ChangeStatsProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

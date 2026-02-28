@@ -221,7 +221,7 @@ model Campaign {
   @@index([status])
 }
 
-model AuditLog {
+model ChangeLog {
   id         String   @id @default(cuid())
   userId     String?
   action     String
@@ -237,6 +237,7 @@ model AuditLog {
   @@index([action])
   @@index([resource, resourceId])
   @@index([createdAt])
+  @@map("AuditLog")
 }
 
 model AnalyticsSummary {

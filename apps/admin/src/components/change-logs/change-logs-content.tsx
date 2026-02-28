@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { ChangeDetailSheet } from "./change-detail-sheet";
+import { ChangeFilterBar } from "./change-filter-bar";
+import { ChangeStats } from "./change-stats";
+import { ChangeTable } from "./change-table";
 import type { DateRange } from "react-day-picker";
 import { trpc } from "@/lib/trpc";
-import { AuditStats } from "./audit-stats";
-import { AuditFilterBar } from "./audit-filter-bar";
-import { AuditTable } from "./audit-table";
-import { AuditDetailSheet } from "./audit-detail-sheet";
+import { useState } from "react";
 
-export type AuditRow = {
+export type ChangeRow = {
   id: string;
   userId: string | null;
   action: string;
@@ -22,14 +22,14 @@ export type AuditRow = {
   user: { name: string | null; email: string } | null;
 };
 
-export function AuditLogsContent() {
+export function ChangeLogsContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [action, setAction] = useState<string | undefined>(undefined);
   const [resource, setResource] = useState<string | undefined>(undefined);
-  const [selectedRow, setSelectedRow] = useState<AuditRow | null>(null);
+  const [selectedRow, setSelectedRow] = useState<ChangeRow | null>(null);
 
   const from = dateRange?.from?.toISOString();
   const to = dateRange?.to?.toISOString();
@@ -41,13 +41,13 @@ export function AuditLogsContent() {
     };
   }
 
-  const { data: listData, isLoading: listLoading } = trpc.auditLogs.list.useQuery(
+  const { data: listData, isLoading: listLoading } = trpc.changeLogs.list.useQuery(
     { page, pageSize, from, to, userId, action, resource },
     { keepPreviousData: true }
   );
 
   const { data: statsData, isLoading: statsLoading } =
-    trpc.auditLogs.stats.useQuery();
+    trpc.changeLogs.stats.useQuery();
 
   const { data: usersData } = trpc.users.list.useQuery();
 
@@ -57,13 +57,13 @@ export function AuditLogsContent() {
     email: u.email,
   }));
 
-  const rows = (listData?.rows ?? []) as AuditRow[];
+  const rows = (listData?.rows ?? []) as ChangeRow[];
 
   return (
     <div className="space-y-6">
-      <AuditStats stats={statsData} isLoading={statsLoading} />
+      <ChangeStats stats={statsData} isLoading={statsLoading} />
 
-      <AuditFilterBar
+      <ChangeFilterBar
         dateRange={dateRange}
         onDateRangeChange={handleFilterChange(setDateRange)}
         userId={userId}
@@ -77,7 +77,7 @@ export function AuditLogsContent() {
         to={to}
       />
 
-      <AuditTable
+      <ChangeTable
         rows={rows}
         total={listData?.total ?? 0}
         page={page}
@@ -91,7 +91,7 @@ export function AuditLogsContent() {
         onRowClick={setSelectedRow}
       />
 
-      <AuditDetailSheet
+      <ChangeDetailSheet
         row={selectedRow}
         open={!!selectedRow}
         onOpenChange={(open) => {

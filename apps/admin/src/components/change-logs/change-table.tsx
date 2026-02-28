@@ -28,17 +28,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { AuditRow } from "./audit-logs-content";
+import type { ChangeRow } from "./change-logs-content";
 
-interface AuditTableProps {
-  rows: AuditRow[];
+interface ChangeTableProps {
+  rows: ChangeRow[];
   total: number;
   page: number;
   pageSize: number;
   isLoading: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
-  onRowClick: (row: AuditRow) => void;
+  onRowClick: (row: ChangeRow) => void;
 }
 
 function formatAction(action: string): string {
@@ -94,7 +94,7 @@ function resourcePath(resource: string): string {
   return map[resource] ?? resource.toLowerCase();
 }
 
-export function AuditTable({
+export function ChangeTable({
   rows,
   total,
   page,
@@ -103,12 +103,12 @@ export function AuditTable({
   onPageChange,
   onPageSizeChange,
   onRowClick,
-}: AuditTableProps) {
+}: ChangeTableProps) {
   const pageCount = Math.ceil(total / pageSize);
   const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, total);
 
-  const columns = useMemo<ColumnDef<AuditRow>[]>(
+  const columns = useMemo<ColumnDef<ChangeRow>[]>(
     () => [
       {
         accessorKey: "createdAt",
@@ -240,7 +240,7 @@ export function AuditTable({
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
                   <div className="text-sm text-foreground">
-                    No audit log entries found
+                    No change log entries found
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     Try adjusting your filters
@@ -281,7 +281,7 @@ export function AuditTable({
           ))
         ) : rows.length === 0 ? (
           <div className="rounded-md border p-8 text-center">
-            <div className="text-sm text-foreground">No audit log entries found</div>
+            <div className="text-sm text-foreground">No Change log entries found</div>
             <div className="text-xs text-muted-foreground mt-1">
               Try adjusting your filters
             </div>

@@ -1,9 +1,10 @@
-import { z } from "zod";
-import { Prisma } from "@sparkmotion/database";
-import { router, adminProcedure } from "../trpc";
-import { db } from "@sparkmotion/database";
+import { adminProcedure, router } from "../trpc";
 
-const auditListInput = z.object({
+import { Prisma } from "@sparkmotion/database";
+import { db } from "@sparkmotion/database";
+import { z } from "zod";
+
+const changeListInput = z.object({
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(10).max(100).default(25),
   from: z.string().datetime({ offset: true }).optional(),
@@ -13,11 +14,11 @@ const auditListInput = z.object({
   resource: z.string().optional(),
 });
 
-type AuditListInput = z.infer<typeof auditListInput>;
+type ChangeListInput = z.infer<typeof changeListInput>;
 
 function buildWhere(
-  input: Omit<AuditListInput, "page" | "pageSize">
-): Prisma.AuditLogWhereInput {
+  input: Omit<ChangeListInput, "page" | "pageSize">
+): Prisma.ChangeLogWhereInput {
   return {
     ...(input.from || input.to
       ? {
@@ -47,20 +48,20 @@ async function resolveUsers(
   return new Map(users.map((u) => [u.id, { name: u.name, email: u.email }]));
 }
 
-export const auditLogsRouter = router({
-  list: adminProcedure.input(auditListInput).query(async ({ input }) => {
+export const changeLogsRouter = router({
+  list: adminProcedure.input(changeListInput).query(async ({ input }) => {
     const { page, pageSize, ...filters } = input;
     const where = buildWhere(filters);
     const skip = (page - 1) * pageSize;
 
     const [rows, total] = await db.$transaction([
-      db.auditLog.findMany({
+      db.changeLog.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip,
         take: pageSize,
       }),
-      db.auditLog.count({ where }),
+      db.changeLog.count({ where }),
     ]);
 
     const userMap = await resolveUsers(rows.map((r) => r.userId));
@@ -79,16 +80,16 @@ export const auditLogsRouter = router({
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
 
     const [totalEvents24h, failedLogins7d, deletions7d] = await db.$transaction([
-      db.auditLog.count({
+      db.changeLog.count({
         where: { createdAt: { gte: yesterday } },
       }),
-      db.auditLog.count({
+      db.changeLog.count({
         where: {
           createdAt: { gte: sevenDaysAgo },
           action: { in: ["auth.login_failure", "auth.lockout"] },
         },
       }),
-      db.auditLog.count({
+      db.changeLog.count({
         where: {
           createdAt: { gte: sevenDaysAgo },
           action: { contains: "delete" },
@@ -96,7 +97,7 @@ export const auditLogsRouter = router({
       }),
     ]);
 
-    const topUserGroups = await db.auditLog.groupBy({
+    const topUserGroups = await db.changeLog.groupBy({
       by: ["userId"],
       where: { createdAt: { gte: sevenDaysAgo }, userId: { not: null } },
       _count: { id: true },
@@ -123,11 +124,11 @@ export const auditLogsRouter = router({
   }),
 
   export: adminProcedure
-    .input(auditListInput.omit({ page: true, pageSize: true }))
+    .input(changeListInput.omit({ page: true, pageSize: true }))
     .query(async ({ input }) => {
       const where = buildWhere(input);
 
-      const rows = await db.auditLog.findMany({
+      const rows = await db.changeLog.findMany({
         where,
         orderBy: { createdAt: "desc" },
         take: 10000,

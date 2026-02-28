@@ -1,6 +1,6 @@
+import { ChangeLogsContent } from "@/components/change-logs/change-logs-content";
 import { auth } from "@sparkmotion/auth";
 import { redirect } from "next/navigation";
-import { AuditLogsContent } from "@/components/audit-logs/audit-logs-content";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +13,12 @@ export default async function AuditLogsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Audit Log</h1>
+        <h1 className="text-2xl font-bold text-foreground">Change Log</h1>
         <p className="text-sm text-muted-foreground">
-          SOC 2 compliance audit trail — all system activity
+          System activity
         </p>
       </div>
-      <AuditLogsContent />
+      <ChangeLogsContent />
     </div>
   );
 }

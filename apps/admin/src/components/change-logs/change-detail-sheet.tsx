@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { format } from "date-fns";
-import { Info, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
 } from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
-import { getActionBadge } from "./audit-table";
-import type { AuditRow } from "./audit-logs-content";
 
-interface AuditDetailSheetProps {
-  row: AuditRow | null;
+import { Badge } from "@/components/ui/badge";
+import type { ChangeRow } from "./change-logs-content";
+import { format } from "date-fns";
+import { getActionBadge } from "./change-table";
+import { useState } from "react";
+
+interface ChangeDetailSheetProps {
+  row: ChangeRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -47,11 +48,11 @@ function isRecord(val: unknown): val is Record<string, unknown> {
   return val !== null && typeof val === "object" && !Array.isArray(val);
 }
 
-export function AuditDetailSheet({
+export function ChangeDetailSheet({
   row,
   open,
   onOpenChange,
-}: AuditDetailSheetProps) {
+}: ChangeDetailSheetProps) {
   const [techDetailsOpen, setTechDetailsOpen] = useState(false);
 
   if (!row) return null;

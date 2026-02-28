@@ -1,11 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import type { DateRange } from "react-day-picker";
-import { format, subDays, subHours } from "date-fns";
 import { CalendarDays, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -14,9 +9,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AuditExportButton } from "./audit-export-button";
+import { format, subDays, subHours } from "date-fns";
 
-interface AuditFilterBarProps {
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { ChangeExportButton } from "./change-export-button";
+import type { DateRange } from "react-day-picker";
+import { useState } from "react";
+
+interface ChangeFilterBarProps {
   dateRange: DateRange | undefined;
   onDateRangeChange: (range: DateRange | undefined) => void;
   userId: string | undefined;
@@ -51,7 +52,7 @@ const RESOURCE_OPTIONS = [
   "Infrastructure",
 ];
 
-export function AuditFilterBar({
+export function ChangeFilterBar({
   dateRange,
   onDateRangeChange,
   userId,
@@ -63,7 +64,7 @@ export function AuditFilterBar({
   users,
   from,
   to,
-}: AuditFilterBarProps) {
+}: ChangeFilterBarProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const hasFilters = !!(dateRange || userId || action || resource);
@@ -204,7 +205,7 @@ export function AuditFilterBar({
 
         {/* Export button — pushed to right */}
         <div className="ml-auto">
-          <AuditExportButton from={from} to={to} userId={userId} action={action} resource={resource} />
+          <ChangeExportButton from={from} to={to} userId={userId} action={action} resource={resource} />
         </div>
       </div>
 

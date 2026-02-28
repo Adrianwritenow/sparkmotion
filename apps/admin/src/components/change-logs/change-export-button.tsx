@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
-interface AuditExportButtonProps {
+interface ChangeExportButtonProps {
   from: string | undefined;
   to: string | undefined;
   userId: string | undefined;
@@ -34,20 +34,20 @@ function toCsv(rows: Record<string, unknown>[]): string {
   return lines.join("\n");
 }
 
-export function AuditExportButton({
+export function ChangeExportButton({
   from,
   to,
   userId,
   action,
   resource,
-}: AuditExportButtonProps) {
+}: ChangeExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
   const utils = trpc.useUtils();
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const data = await utils.auditLogs.export.fetch({
+      const data = await utils.changeLogs.export.fetch({
         from,
         to,
         userId,
@@ -56,7 +56,7 @@ export function AuditExportButton({
       });
 
       if (!data || data.length === 0) {
-        toast.info("No audit log entries to export");
+        toast.info("No change log entries to export");
         return;
       }
 
@@ -78,13 +78,13 @@ export function AuditExportButton({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `change-log-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
 
-      toast.success(`Exported ${data.length} audit log entries`);
+      toast.success(`Exported ${data.length} change log entries`);
     } catch {
-      toast.error("Failed to export audit logs");
+      toast.error("Failed to export change logs");
     } finally {
       setIsExporting(false);
     }

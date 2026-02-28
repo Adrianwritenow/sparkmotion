@@ -1,9 +1,10 @@
-import NextAuth from "next-auth";
+import { KEYS, redis } from "@sparkmotion/redis";
+
 import Credentials from "next-auth/providers/credentials";
+import NextAuth from "next-auth";
 import { authConfig } from "./auth.config";
-import { db } from "@sparkmotion/database";
-import { redis, KEYS } from "@sparkmotion/redis";
 import bcrypt from "bcryptjs";
+import { db } from "@sparkmotion/database";
 import { z } from "zod";
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -36,7 +37,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         const lockoutKey = KEYS.loginLockout(email);
         const attempts = await redis.get(lockoutKey);
         if (attempts && parseInt(attempts, 10) >= MAX_LOGIN_ATTEMPTS) {
-          db.auditLog
+          db.changeLog
             .create({
               data: {
                 userId: null,
@@ -46,7 +47,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
                 newValue: { email } as never,
               },
             })
-            .catch((err: unknown) => console.error("Audit log failed:", err));
+            .catch((err: unknown) => console.error("Change log failed:", err));
           return null;
         }
 
@@ -65,7 +66,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
           if (newCount === 1) {
             await redis.expire(lockoutKey, LOCKOUT_TTL);
           }
-          db.auditLog
+          db.changeLog
             .create({
               data: {
                 userId: user.id,
@@ -75,14 +76,14 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
                 newValue: { email, attemptNumber: newCount } as never,
               },
             })
-            .catch((err: unknown) => console.error("Audit log failed:", err));
+            .catch((err: unknown) => console.error("Change log failed:", err));
           return null;
         }
 
         // Successful login — clear lockout
         await redis.del(lockoutKey);
 
-        db.auditLog
+        db.changeLog
           .create({
             data: {
               userId: user.id,
@@ -92,7 +93,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
               newValue: { email } as never,
             },
           })
-          .catch((err: unknown) => console.error("Audit log failed:", err));
+          .catch((err: unknown) => console.error("Change log failed:", err));
 
         return {
           id: user.id,
