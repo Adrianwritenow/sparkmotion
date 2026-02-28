@@ -2,6 +2,12 @@ name = "sparkmotion-redirect"
 main = "src/worker.ts"
 compatibility_date = "2024-12-18"
 account_id = "efeaec566e12863d8012fe1708d204fb"
+# Custom domain route — matches dashboard config
+# Production traffic reaches Worker via *.sparkmotion.net/* (wildcard route)
+# workers.dev URL also remains active as a direct fallback
+routes = [
+  { pattern = "*.sparkmotion.net/*", zone_name = "sparkmotion.net" }
+]
 
 # KV namespace — replace with actual ID after: wrangler kv namespace create REDIRECT_MAP
 [[kv_namespaces]]
@@ -18,6 +24,11 @@ id = "3cddf6ee74324904a34cb1b08a87a0a6"
 # Staging environment — deploy with: npx wrangler deploy --env staging
 [env.staging]
 name = "sparkmotion-redirect-staging"
+workers_dev = false  # Staging traffic uses custom domain route only
+
+routes = [
+  { pattern = "staging-redirect.sparkmotion.net/*", zone_name = "sparkmotion.net" }
+]
 
 [[env.staging.kv_namespaces]]
 binding = "REDIRECT_MAP"

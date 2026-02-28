@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T18:44:35.552Z"
+last_updated: "2026-02-28T03:20:00Z"
 progress:
-  total_phases: 30
+  total_phases: 31
   completed_phases: 25
-  total_plans: 66
-  completed_plans: 63
+  total_plans: 69
+  completed_plans: 65
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 30 — Add analytics tracking for fallback and org URL taps
-Plan: 02 (COMPLETE) — all 4 analytics components updated with redirect type charts, filter dropdown, and muted colors
-Status: Phase 30 COMPLETE — both plans executed; hub route logs all valid-band redirects, new tRPC procedures, all 4 analytics components show FALLBACK/ORG/DEFAULT categories
-Last activity: 2026-02-26 — Phase 30-02 executed: updated admin/customer event and campaign analytics components with redirect type bar chart, extended filter dropdown, and muted gray tones for non-window categories
+Phase: 31 — Comprehensive end-to-end load testing and max capacity assessment
+Plan: 03 (IN PROGRESS — paused at checkpoint:human-verify Task 3) — validated e2e-load.js, deleted 6 old scripts, awaiting Grafana Cloud run
+Status: Phase 31 IN PROGRESS — Plans 01 and 02 complete, Plan 03 Tasks 1+2 complete (paused at Task 3 checkpoint)
+Last activity: 2026-02-28 — Phase 31-03 Tasks 1+2 executed: k6 inspect validated all 5 scenarios, deleted 6 superseded scripts, updated README
 
-Progress: (2 plans complete — Phase 30 COMPLETE)
+Progress: (2 of 3 plans complete + Plan 03 Tasks 1+2 done, paused at Task 3 checkpoint — Phase 31 In Progress)
 
 ## Performance Metrics
 
@@ -302,6 +302,14 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 27]: Phase 25 VERIFICATION.md status/score preserved - truths were accurate at verification time; post-phase commits documented separately in Post-Phase Corrections section
 - [Phase 30]: REDIRECT_COLORS record keyed by category string for per-bar Cell fill — cleaner than index-based PIE_COLORS for named categories
 - [Phase 30]: campaignTapsByRedirectType always used for bar chart removing selectedEventId conditional — procedure accepts eventId param handling both cases
+- [Phase 31]: writeKVBatch() helper extracted to avoid duplicating CF bulk API block across 3 event writes in seedMultiEvent()
+- [Phase 31]: Tap logs seeded for first event only in seedMultiEvent() — avoids Neon storage overrun (3x 600K rows = 1.8M additional rows), first event used by LOADTEST_EVENT_ID for analytics queries
+- [Phase 31-02]: queue_depth Gauge has no threshold in e2e-load.js — observability-only metric evaluated from final Gauge value in summary
+- [Phase 31-02]: sampleQueue guards on UPSTASH_URL/UPSTASH_TOKEN presence — optional credentials skip gracefully
+- [Phase 31-02]: Default export is empty stub — k6 requires default export even when all scenarios use exec property
+- [Phase 31-03]: k6 inspect with env vars is the correct validation tool for scenario-based scripts — `--duration` overrides scenarios entirely in k6 v1.5
+- [Phase 31-03]: Auth warning in staging dry-run is expected graceful behavior — script returns `{ cookie: "" }` and continues without crash
+- [Phase 31-03]: README rewritten around unified 5-scenario e2e architecture; 6 old isolated scripts deleted
 
 ### Pending Todos
 
@@ -309,6 +317,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 31 added: Comprehensive end-to-end load testing and max capacity assessment
 - Phase 30 added: Add analytics tracking for fallback and org URL taps
 - Phase 29 added: Add user management page for creating/deleting Admins and Customers with email invitations
 - Phase 28 added: Seed prod admin account and password reset flow for admins and customers
@@ -374,7 +383,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-26
-Stopped at: Completed 30-02-PLAN.md — analytics UI updated with redirect type charts, extended filter dropdown, and muted colors in all 4 analytics components (admin/customer event + campaign)
+Last session: 2026-02-28
+Stopped at: 31-03-PLAN.md Task 3 checkpoint:human-verify — user must run Grafana Cloud test and review results
 Resume file: None
-Next step: Phase 30 COMPLETE — next planned phase
+Next step: User runs ./load-tests/run-k6.sh staging e2e-load.js --cloud-exec, reviews results, then continue plan
