@@ -9,6 +9,7 @@ import { usersRouter } from "./routers/users";
 import { infrastructureRouter } from "./routers/infrastructure";
 import { campaignsRouter } from "./routers/campaigns";
 import { tagsRouter } from "./routers/tags";
+import { auditLogsRouter } from "./routers/audit-logs";
 
 export const appRouter = router({
   auth: authRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   infrastructure: infrastructureRouter,
   campaigns: campaignsRouter,
   tags: tagsRouter,
+  auditLogs: auditLogsRouter,
 });
 
 export type AppRouter = typeof appRouter;

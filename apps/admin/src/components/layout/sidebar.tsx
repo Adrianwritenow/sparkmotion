@@ -14,7 +14,7 @@ import {
   Megaphone,
   Disc3,
   Users,
-
+  ClipboardList,
   Sun,
   Moon,
   Monitor,
@@ -53,6 +53,7 @@ export function Sidebar({ isMobile = false }: SidebarProps) {
     { href: "/campaigns", label: "Campaigns", icon: Megaphone },
     { href: "/bands", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
     { href: "/users", label: "Users", icon: Users },
+    { href: "/audit-logs", label: "Audit Log", icon: ClipboardList },
   ];
 
   return (
