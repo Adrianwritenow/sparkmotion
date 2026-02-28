@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-26T18:44:35.552Z"
+last_updated: "2026-02-28T03:09:48.441Z"
 progress:
-  total_phases: 30
+  total_phases: 31
   completed_phases: 25
-  total_plans: 66
-  completed_plans: 63
+  total_plans: 69
+  completed_plans: 64
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 30 — Add analytics tracking for fallback and org URL taps
-Plan: 02 (COMPLETE) — all 4 analytics components updated with redirect type charts, filter dropdown, and muted colors
-Status: Phase 30 COMPLETE — both plans executed; hub route logs all valid-band redirects, new tRPC procedures, all 4 analytics components show FALLBACK/ORG/DEFAULT categories
-Last activity: 2026-02-26 — Phase 30-02 executed: updated admin/customer event and campaign analytics components with redirect type bar chart, extended filter dropdown, and muted gray tones for non-window categories
+Phase: 31 — Comprehensive end-to-end load testing and max capacity assessment
+Plan: 01 (COMPLETE) — seed-multi-event command added with 3-event 600K band seeding, cleanup updated for multi-event KV
+Status: Phase 31 IN PROGRESS — Plan 01 complete (seed), Plans 02 and 03 pending
+Last activity: 2026-02-28 — Phase 31-01 executed: added MULTI_EVENTS constant, writeKVBatch helper, seedMultiEvent() function, updated cleanup KV deletion and totalKvKeys count
 
-Progress: (2 plans complete — Phase 30 COMPLETE)
+Progress: (1 of 3 plans complete — Phase 31 In Progress)
 
 ## Performance Metrics
 
@@ -302,6 +302,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 27]: Phase 25 VERIFICATION.md status/score preserved - truths were accurate at verification time; post-phase commits documented separately in Post-Phase Corrections section
 - [Phase 30]: REDIRECT_COLORS record keyed by category string for per-bar Cell fill — cleaner than index-based PIE_COLORS for named categories
 - [Phase 30]: campaignTapsByRedirectType always used for bar chart removing selectedEventId conditional — procedure accepts eventId param handling both cases
+- [Phase 31]: writeKVBatch() helper extracted to avoid duplicating CF bulk API block across 3 event writes in seedMultiEvent()
+- [Phase 31]: Tap logs seeded for first event only in seedMultiEvent() — avoids Neon storage overrun (3x 600K rows = 1.8M additional rows), first event used by LOADTEST_EVENT_ID for analytics queries
 
 ### Pending Todos
 
@@ -309,6 +311,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 31 added: Comprehensive end-to-end load testing and max capacity assessment
 - Phase 30 added: Add analytics tracking for fallback and org URL taps
 - Phase 29 added: Add user management page for creating/deleting Admins and Customers with email invitations
 - Phase 28 added: Seed prod admin account and password reset flow for admins and customers
