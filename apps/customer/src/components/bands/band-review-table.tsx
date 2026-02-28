@@ -35,6 +35,7 @@ import {
 import { TagBadge } from "./tag-badge";
 import { ReassignDialog } from "./reassign-dialog";
 import { BandDetailDialog } from "./band-detail-dialog";
+import { BandTrashButton } from "./band-trash-button";
 
 function useDebounce(value: string, delay: number) {
   const [debounced, setDebounced] = useState(value);
@@ -284,6 +285,8 @@ export function BandReviewTable() {
             Flagged
           </label>
         </div>
+
+        <BandTrashButton />
       </div>
 
       {/* Table */}
