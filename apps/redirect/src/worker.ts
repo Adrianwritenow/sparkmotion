@@ -81,8 +81,8 @@ export default {
 
     const utmParams = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
 
-    // KV lookup — single read, globally replicated
-    const entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, "json");
+    // KV lookup — edge-cached for 5 min (band→URL mappings rarely change)
+    const entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 300 });
 
     if (!entry) {
       // KV miss — proxy to Hub for auto-assignment, GeoIP, DB access
@@ -130,16 +130,25 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+// Cache Redis client per isolate (avoids re-creating on every request)
+let _redis: Redis | null = null;
+function getRedis(env: Env): Redis {
+  if (!_redis) {
+    _redis = new Redis({
+      url: env.UPSTASH_REDIS_REST_URL,
+      token: env.UPSTASH_REDIS_REST_TOKEN,
+    });
+  }
+  return _redis;
+}
+
 async function logTap(env: Env, bandId: string, entry: KVEntry, request: Request): Promise<void> {
   const { eventId, mode } = entry;
   const hour = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
   const bucket = Math.floor(Date.now() / 10000); // 10-second velocity buckets
 
   try {
-    const upstash = new Redis({
-      url: env.UPSTASH_REDIS_REST_URL,
-      token: env.UPSTASH_REDIS_REST_TOKEN,
-    });
+    const upstash = getRedis(env);
 
     // Pipeline: 7 commands in 1 HTTP request (analytics + tap log queue)
     const pipeline = upstash.pipeline();
