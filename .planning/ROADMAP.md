@@ -233,7 +233,7 @@ Plans:
 **Goal:** Add soft delete with restore UI across all 4 entity types. Backend complete (schema, procedures, cron). Remaining: admin trash UI (4 sheets) and customer trash UI (3 sheets).
 **Requirements**: TBD
 **Depends on:** Phase 33
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 34-01-PLAN.md — Schema + tRPC procedures + cron purge (COMPLETE — commit f609dc2)
