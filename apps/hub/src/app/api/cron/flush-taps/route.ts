@@ -33,10 +33,6 @@ export async function GET(request: NextRequest) {
   const token = authHeader?.replace("Bearer ", "");
 
   if (token !== process.env.CRON_SECRET) {
-    console.error(
-      `flush-taps auth mismatch: received=${token?.length ?? 0} chars (first4=${token?.slice(0, 4)}), ` +
-      `expected=${process.env.CRON_SECRET?.length ?? 0} chars (first4=${process.env.CRON_SECRET?.slice(0, 4)})`
-    );
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
