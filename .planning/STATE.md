@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T03:20:00Z"
+last_updated: "2026-02-28T07:40:10.918Z"
 progress:
-  total_phases: 31
-  completed_phases: 25
-  total_plans: 69
-  completed_plans: 65
+  total_phases: 32
+  completed_phases: 26
+  total_plans: 73
+  completed_plans: 67
 ---
 
 # Project State
@@ -310,6 +310,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 31-03]: k6 inspect with env vars is the correct validation tool for scenario-based scripts — `--duration` overrides scenarios entirely in k6 v1.5
 - [Phase 31-03]: Auth warning in staging dry-run is expected graceful behavior — script returns `{ cookie: "" }` and continues without crash
 - [Phase 31-03]: README rewritten around unified 5-scenario e2e architecture; 6 old isolated scripts deleted
+- [Phase 32-04]: pnpm audit --audit-level=high in CI: only high/critical fail build, avoiding moderate/low false positive noise in monorepos
+- [Phase 32-04]: Dependabot ignores major version bumps for Next.js/tRPC/Prisma — minor/patch security PRs auto-opened, major upgrades require manual review
 
 ### Pending Todos
 
@@ -317,6 +319,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 32 added: SOC 2 backend compliance hardening
 - Phase 31 added: Comprehensive end-to-end load testing and max capacity assessment
 - Phase 30 added: Add analytics tracking for fallback and org URL taps
 - Phase 29 added: Add user management page for creating/deleting Admins and Customers with email invitations

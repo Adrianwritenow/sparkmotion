@@ -208,6 +208,16 @@ Plans:
 Plans:
 - [x] TBD (run /gsd:plan-phase 31 to break down) (completed 2026-02-28)
 
+### Phase 32: SOC 2 backend compliance hardening
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 31
+**Plans:** 1/4 plans executed
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 32 to break down)
+
 ---
 
 _For project context, see .planning/PROJECT.md_
