@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T07:40:56.881Z"
+last_updated: "2026-02-28T07:44:49.780Z"
 progress:
   total_phases: 32
   completed_phases: 26
   total_plans: 73
-  completed_plans: 68
+  completed_plans: 69
 ---
 
 # Project State
@@ -313,6 +313,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 32-04]: pnpm audit --audit-level=high in CI: only high/critical fail build, avoiding moderate/low false positive noise in monorepos
 - [Phase 32-04]: Dependabot ignores major version bumps for Next.js/tRPC/Prisma — minor/patch security PRs auto-opened, major upgrades require manual review
 - [Phase 32-03]: Security headers production-only in Next.js to avoid HSTS issues with localhost; Response.redirect() replaced in Worker since opaque responses block header mutation; Redis TLS guard uses console.warn not throw to surface misconfiguration without crashing
+- [Phase 32-01]: AuditLog writes are fire-and-forget — mutations and auth flows never block on audit I/O
+- [Phase 32-01]: rawInput not stored in audit logs — only result.data captured as newValue (avoids logging passwords)
 
 ### Pending Todos
 
