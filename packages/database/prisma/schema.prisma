@@ -239,3 +239,18 @@ model AuditLog {
   @@index([createdAt])
 }
 
+model AnalyticsSummary {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  eventId     String
+  windowId    String   @default("")
+  redirectUrl String   @default("")
+  tapCount    Int
+  uniqueBands Int
+  createdAt   DateTime @default(now())
+
+  @@unique([date, eventId, windowId, redirectUrl])
+  @@index([eventId])
+  @@index([date])
+}
+
