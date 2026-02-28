@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T03:09:48.441Z"
+last_updated: "2026-02-28T03:13:00Z"
 progress:
   total_phases: 31
   completed_phases: 25
   total_plans: 69
-  completed_plans: 64
+  completed_plans: 65
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 31 — Comprehensive end-to-end load testing and max capacity assessment
-Plan: 01 (COMPLETE) — seed-multi-event command added with 3-event 600K band seeding, cleanup updated for multi-event KV
-Status: Phase 31 IN PROGRESS — Plan 01 complete (seed), Plans 02 and 03 pending
-Last activity: 2026-02-28 — Phase 31-01 executed: added MULTI_EVENTS constant, writeKVBatch helper, seedMultiEvent() function, updated cleanup KV deletion and totalKvKeys count
+Plan: 02 (COMPLETE) — unified e2e-load.js with 5 concurrent scenarios and stepped-plateau tappers (500→10K RPS)
+Status: Phase 31 IN PROGRESS — Plans 01 and 02 complete, Plan 03 pending
+Last activity: 2026-02-28 — Phase 31-02 executed: created load-tests/e2e-load.js with tappers/admins/exporters/cron_trigger/queue_sampler scenarios, tiered thresholds, 8 custom metrics
 
-Progress: (1 of 3 plans complete — Phase 31 In Progress)
+Progress: (2 of 3 plans complete — Phase 31 In Progress)
 
 ## Performance Metrics
 
@@ -304,6 +304,9 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 30]: campaignTapsByRedirectType always used for bar chart removing selectedEventId conditional — procedure accepts eventId param handling both cases
 - [Phase 31]: writeKVBatch() helper extracted to avoid duplicating CF bulk API block across 3 event writes in seedMultiEvent()
 - [Phase 31]: Tap logs seeded for first event only in seedMultiEvent() — avoids Neon storage overrun (3x 600K rows = 1.8M additional rows), first event used by LOADTEST_EVENT_ID for analytics queries
+- [Phase 31-02]: queue_depth Gauge has no threshold in e2e-load.js — observability-only metric evaluated from final Gauge value in summary
+- [Phase 31-02]: sampleQueue guards on UPSTASH_URL/UPSTASH_TOKEN presence — optional credentials skip gracefully
+- [Phase 31-02]: Default export is empty stub — k6 requires default export even when all scenarios use exec property
 
 ### Pending Todos
 
@@ -377,7 +380,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-26
-Stopped at: Completed 30-02-PLAN.md — analytics UI updated with redirect type charts, extended filter dropdown, and muted colors in all 4 analytics components (admin/customer event + campaign)
+Last session: 2026-02-28
+Stopped at: Completed 31-02-PLAN.md — unified e2e-load.js with 5 concurrent scenarios, stepped-plateau tappers 500→10K RPS, tiered thresholds
 Resume file: None
-Next step: Phase 30 COMPLETE — next planned phase
+Next step: Phase 31-03 pending
