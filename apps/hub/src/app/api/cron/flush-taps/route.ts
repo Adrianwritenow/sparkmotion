@@ -5,7 +5,7 @@ import { db, Prisma } from "@sparkmotion/database";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const BATCH_SIZE = 10_000;
+const BATCH_SIZE = 50_000;
 const BACKLOG_WARN_THRESHOLD = 500_000;
 
 interface PendingTap {

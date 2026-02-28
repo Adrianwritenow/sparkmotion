@@ -447,6 +447,9 @@ importers:
       '@sparkmotion/database':
         specifier: workspace:*
         version: link:../packages/database
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1
@@ -454,6 +457,9 @@ importers:
         specifier: ^5.4.0
         version: 5.9.2
     devDependencies:
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
       tsx:
         specifier: ^4.7.0
         version: 4.21.0

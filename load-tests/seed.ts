@@ -1,18 +1,27 @@
 /**
  * Load Test Data Seeder
  *
- * Usage: pnpm --filter @sparkmotion/load-tests exec tsx seed.ts [kv|redis|postgres|bench-queries|cleanup|all]
+ * Usage: pnpm --filter @sparkmotion/load-tests exec tsx seed.ts [kv|redis|postgres|seed-geo|seed-user|bench-queries|bench-csv|cleanup|all]
  *
  * Requires: .env with DATABASE_URL, REDIS_URL, CF_* vars
  */
 import { PrismaClient } from "@sparkmotion/database";
 import Redis from "ioredis";
-import "dotenv/config";
+import bcrypt from "bcryptjs";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load environment-specific .env file: --env staging (default) or --env production
+const envArg = process.argv.find((_, i, arr) => arr[i - 1] === "--env") ?? "staging";
+const envFile = resolve(__dirname, `.env.${envArg}`);
+config({ path: envFile });
+console.log(`Loaded env: ${envFile}`);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BAND_COUNT = 200_000;
 const TAP_LOG_COUNT = 600_000;
 const BAND_PREFIX = "LOADTEST-";
+const GEO_BAND_PREFIX = "LOADTEST-GEO-";
 const ORG_NAME = "Load Test Org";
 const EVENT_NAME = "Load Test Event";
 const LIVE_URL = "https://compassion.com/live";
@@ -20,6 +29,22 @@ const LIVE_URL = "https://compassion.com/live";
 const KV_BATCH_SIZE = 10_000;
 const DB_BATCH_SIZE = 5_000;
 const REDIS_BATCH_SIZE = 5_000;
+
+const GEO_BANDS_PER_CITY = 100;
+
+const GEO_CITIES = [
+  { name: "Nashville", state: "TN", lat: 36.1627, lng: -86.7816 },
+  { name: "Dallas", state: "TX", lat: 32.7767, lng: -96.7970 },
+  { name: "Denver", state: "CO", lat: 39.7392, lng: -104.9903 },
+  { name: "Chicago", state: "IL", lat: 41.8781, lng: -87.6298 },
+  { name: "Atlanta", state: "GA", lat: 33.7490, lng: -84.3880 },
+];
+
+const MULTI_EVENTS = [
+  { name: "LT Event Nashville", prefix: "LOADTEST-E1-", city: "Nashville", state: "TN", lat: 36.1627, lng: -86.7816 },
+  { name: "LT Event Dallas",    prefix: "LOADTEST-E2-", city: "Dallas",    state: "TX", lat: 32.7767, lng: -96.7970 },
+  { name: "LT Event Denver",    prefix: "LOADTEST-E3-", city: "Denver",    state: "CO", lat: 39.7392, lng: -104.9903 },
+];
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 const db = new PrismaClient();
@@ -248,6 +273,323 @@ async function seedPostgres() {
   console.log(`PostgreSQL seeding complete in ${elapsed(start)}`);
 }
 
+// ─── Geo Seeder ──────────────────────────────────────────────────────────────
+async function seedGeo() {
+  console.log("Seeding geo routing test data (5 cities)...");
+  const start = Date.now();
+
+  // Ensure org exists (reuse the loadtest org)
+  let org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    org = await db.organization.create({
+      data: { name: ORG_NAME, slug: "loadtest-org" },
+    });
+  }
+
+  for (const city of GEO_CITIES) {
+    const eventName = `LT Geo ${city.name}`;
+    let event = await db.event.findFirst({ where: { name: eventName, orgId: org.id } });
+
+    if (!event) {
+      event = await db.event.create({
+        data: {
+          orgId: org.id,
+          name: eventName,
+          city: city.name,
+          state: city.state,
+          location: `${city.name}, ${city.state}`,
+          latitude: city.lat,
+          longitude: city.lng,
+          status: "ACTIVE",
+          estimatedAttendees: 5_000,
+        },
+      });
+    } else {
+      // Ensure lat/lng are set even if event already exists
+      await db.event.update({
+        where: { id: event.id },
+        data: { latitude: city.lat, longitude: city.lng, status: "ACTIVE" },
+      });
+    }
+
+    // Create LIVE window
+    await db.eventWindow.upsert({
+      where: { id: `${event.id}-live` },
+      update: { isActive: true },
+      create: {
+        id: `${event.id}-live`,
+        eventId: event.id,
+        windowType: "LIVE",
+        url: LIVE_URL,
+        isActive: true,
+      },
+    });
+
+    // Create bands: LOADTEST-GEO-Nashville-001 through LOADTEST-GEO-Nashville-100
+    const prefix = `${GEO_BAND_PREFIX}${city.name}-`;
+    const existingBands = await db.band.count({ where: { eventId: event.id, bandId: { startsWith: prefix } } });
+
+    if (existingBands >= GEO_BANDS_PER_CITY) {
+      console.log(`  ${city.name}: ${existingBands} bands already exist, skipping`);
+    } else {
+      if (existingBands > 0) {
+        await db.band.deleteMany({ where: { eventId: event.id, bandId: { startsWith: prefix } } });
+      }
+
+      const batch = [];
+      for (let i = 1; i <= GEO_BANDS_PER_CITY; i++) {
+        batch.push({
+          bandId: `${prefix}${String(i).padStart(3, "0")}`,
+          eventId: event.id,
+        });
+      }
+      await db.band.createMany({ data: batch });
+      console.log(`  ${city.name}: event ${event.id}, ${GEO_BANDS_PER_CITY} bands created`);
+    }
+  }
+
+  console.log(`Geo seeding complete in ${elapsed(start)}`);
+}
+
+// ─── KV Batch Writer (shared helper) ─────────────────────────────────────────
+async function writeKVBatch(
+  prefix: string,
+  eventId: string,
+  accountId: string,
+  apiToken: string,
+  namespaceId: string,
+  start: number
+) {
+  const kvValue = JSON.stringify({ url: LIVE_URL, eventId, mode: "live" });
+
+  for (let i = 0; i < BAND_COUNT; i += KV_BATCH_SIZE) {
+    const batch = [];
+    const end = Math.min(i + KV_BATCH_SIZE, BAND_COUNT);
+    for (let j = i + 1; j <= end; j++) {
+      batch.push({ key: `${prefix}${String(j).padStart(6, "0")}`, value: kvValue });
+    }
+
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/bulk`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(batch),
+      }
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`KV bulk write failed for prefix ${prefix} (batch ${Math.floor(i / KV_BATCH_SIZE) + 1}): ${res.status} ${body}`);
+    }
+
+    console.log(`  KV [${prefix}] batch ${Math.floor(i / KV_BATCH_SIZE) + 1}/${Math.ceil(BAND_COUNT / KV_BATCH_SIZE)} written (${elapsed(start)})`);
+  }
+}
+
+// ─── Multi-Event Seeder ───────────────────────────────────────────────────────
+async function seedMultiEvent() {
+  console.log("Seeding multi-event load test data (3 events × 200K bands)...");
+  const start = Date.now();
+
+  const accountId = process.env.CF_ACCOUNT_ID;
+  const apiToken = process.env.CF_API_TOKEN;
+  const namespaceId = process.env.CF_KV_NAMESPACE_ID;
+
+  if (!accountId || !apiToken || !namespaceId) {
+    throw new Error("CF_ACCOUNT_ID, CF_API_TOKEN, CF_KV_NAMESPACE_ID are required");
+  }
+
+  // 1. Ensure loadtest org exists
+  let org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    org = await db.organization.create({
+      data: { name: ORG_NAME, slug: "loadtest-org" },
+    });
+  }
+  console.log(`  Org: ${org.id} (${elapsed(start)})`);
+
+  let firstEventId: string | null = null;
+
+  for (const ev of MULTI_EVENTS) {
+    console.log(`\n  Processing event: ${ev.name}`);
+
+    // 2a. Find or create event
+    let event = await db.event.findFirst({ where: { name: ev.name, orgId: org.id } });
+    if (!event) {
+      event = await db.event.create({
+        data: {
+          orgId: org.id,
+          name: ev.name,
+          city: ev.city,
+          state: ev.state,
+          location: `${ev.city}, ${ev.state}`,
+          latitude: ev.lat,
+          longitude: ev.lng,
+          status: "ACTIVE",
+          estimatedAttendees: 200_000,
+        },
+      });
+      console.log(`    Created event: ${event.id}`);
+    } else {
+      console.log(`    Event exists: ${event.id}`);
+    }
+
+    if (!firstEventId) firstEventId = event.id;
+
+    // 2b. Upsert LIVE window
+    await db.eventWindow.upsert({
+      where: { id: `${event.id}-live` },
+      update: { isActive: true },
+      create: {
+        id: `${event.id}-live`,
+        eventId: event.id,
+        windowType: "LIVE",
+        url: LIVE_URL,
+        isActive: true,
+      },
+    });
+    console.log(`    Window upserted (${elapsed(start)})`);
+
+    // 2c. Create 200K bands in DB
+    const existingCount = await db.band.count({
+      where: { eventId: event.id, bandId: { startsWith: ev.prefix } },
+    });
+
+    if (existingCount >= BAND_COUNT) {
+      console.log(`    Bands already exist (${existingCount.toLocaleString()}), skipping`);
+    } else {
+      if (existingCount > 0) {
+        await db.band.deleteMany({ where: { eventId: event.id, bandId: { startsWith: ev.prefix } } });
+      }
+
+      for (let i = 0; i < BAND_COUNT; i += DB_BATCH_SIZE) {
+        const batch = [];
+        const end = Math.min(i + DB_BATCH_SIZE, BAND_COUNT);
+        for (let j = i + 1; j <= end; j++) {
+          batch.push({
+            bandId: `${ev.prefix}${String(j).padStart(6, "0")}`,
+            eventId: event.id,
+          });
+        }
+        await db.band.createMany({ data: batch });
+
+        if ((i / DB_BATCH_SIZE + 1) % 10 === 0) {
+          console.log(`    Bands: ${end.toLocaleString()}/${BAND_COUNT.toLocaleString()} (${elapsed(start)})`);
+        }
+      }
+      console.log(`    All ${BAND_COUNT.toLocaleString()} bands created (${elapsed(start)})`);
+    }
+
+    // 2d. Write 200K KV entries
+    console.log(`    Writing ${BAND_COUNT.toLocaleString()} KV entries...`);
+    await writeKVBatch(ev.prefix, event.id, accountId, apiToken, namespaceId, start);
+    console.log(`    KV entries written (${elapsed(start)})`);
+  }
+
+  // 3. Create 600K tap logs for the FIRST event only (used by analytics queries)
+  if (firstEventId) {
+    console.log(`\n  Creating ${TAP_LOG_COUNT.toLocaleString()} tap logs for first event (${firstEventId})...`);
+    const existingTapCount = await db.tapLog.count({ where: { eventId: firstEventId } });
+
+    if (existingTapCount >= TAP_LOG_COUNT) {
+      console.log(`  TapLogs already exist (${existingTapCount.toLocaleString()}), skipping`);
+    } else {
+      if (existingTapCount > 0) {
+        await db.tapLog.deleteMany({ where: { eventId: firstEventId } });
+      }
+
+      // Get band internal IDs for FK references
+      const bands = await db.band.findMany({
+        where: { eventId: firstEventId, bandId: { startsWith: MULTI_EVENTS[0].prefix } },
+        select: { id: true },
+      });
+      const bandIds = bands.map((b) => b.id);
+
+      // 6-hour event window, Gaussian peak at center
+      const eventStart = new Date();
+      eventStart.setHours(eventStart.getHours() - 6);
+      const durationMs = 6 * 60 * 60 * 1000;
+
+      const modes = ["PRE", "LIVE", "LIVE", "LIVE", "LIVE", "LIVE", "LIVE", "POST", "POST"];
+      const modeUrls: Record<string, string> = {
+        PRE: "https://compassion.com/pre",
+        LIVE: LIVE_URL,
+        POST: "https://compassion.com/post",
+      };
+
+      for (let i = 0; i < TAP_LOG_COUNT; i += DB_BATCH_SIZE) {
+        const batch = [];
+        const end = Math.min(i + DB_BATCH_SIZE, TAP_LOG_COUNT);
+        for (let j = i; j < end; j++) {
+          const bandId = bandIds[Math.floor(Math.random() * bandIds.length)];
+          const mode = modes[Math.floor(Math.random() * modes.length)];
+          const timeOffset = gaussianRandom() * durationMs;
+          const tappedAt = new Date(eventStart.getTime() + timeOffset);
+
+          batch.push({
+            bandId,
+            eventId: firstEventId,
+            modeServed: mode,
+            redirectUrl: modeUrls[mode],
+            tappedAt,
+            userAgent: "k6-loadtest/1.0",
+            ipAddress: `10.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`,
+          });
+        }
+        await db.tapLog.createMany({ data: batch });
+
+        if ((i / DB_BATCH_SIZE + 1) % 20 === 0) {
+          console.log(`  TapLogs: ${end.toLocaleString()}/${TAP_LOG_COUNT.toLocaleString()} (${elapsed(start)})`);
+        }
+      }
+      console.log(`  All ${TAP_LOG_COUNT.toLocaleString()} tap logs created (${elapsed(start)})`);
+    }
+  }
+
+  console.log(`\nMulti-event seeding complete in ${elapsed(start)}`);
+}
+
+// ─── User Seeder ─────────────────────────────────────────────────────────────
+async function seedUser() {
+  console.log("Seeding loadtest admin user...");
+  const start = Date.now();
+
+  const email = process.env.TEST_EMAIL ?? "loadtest@sparkmotion.net";
+  const password = process.env.TEST_PASSWORD;
+  if (!password) throw new Error("TEST_PASSWORD env var is required for seed-user");
+
+  // Ensure org exists
+  let org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    org = await db.organization.create({
+      data: { name: ORG_NAME, slug: "loadtest-org" },
+    });
+  }
+
+  const existing = await db.user.findUnique({ where: { email } });
+  if (existing) {
+    console.log(`  User already exists: ${existing.id} (${email})`);
+  } else {
+    const hashed = await bcrypt.hash(password, 12);
+    const user = await db.user.create({
+      data: {
+        email,
+        name: "Load Test Admin",
+        password: hashed,
+        role: "ADMIN",
+        orgId: org.id,
+      },
+    });
+    console.log(`  User created: ${user.id} (${email})`);
+  }
+
+  console.log(`User seeding complete in ${elapsed(start)}`);
+}
+
 // ─── Redis Seeder ─────────────────────────────────────────────────────────────
 async function seedRedis() {
   const r = getRedis();
@@ -430,51 +772,115 @@ async function benchCsvExport() {
 
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
 async function cleanup() {
-  console.log("Cleaning up all LOADTEST-* data...");
+  console.log("=== LOADTEST Cleanup ===\n");
   const start = Date.now();
 
-  // Look up IDs before deleting anything
-  const org = await db.organization.findFirst({ where: { name: ORG_NAME } });
-  const event = await db.event.findFirst({ where: { slug: EVENT_SLUG } });
-
-  // 1. Redis — clean analytics keys + pending queue (before DB cascade)
   const r = getRedis();
-  if (event) {
+
+  // ── Pre-cleanup audit ──────────────────────────────────────────────────────
+  console.log("Pre-cleanup audit:");
+
+  const org = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  if (!org) {
+    console.log("  No loadtest org found — nothing to clean up.");
+    return;
+  }
+
+  // Fetch all events under the org
+  const events = await db.event.findMany({
+    where: { orgId: org.id },
+    select: { id: true, name: true },
+  });
+  const eventIds = events.map((e) => e.id);
+
+  // Count records
+  const bandCount = await db.band.count({ where: { eventId: { in: eventIds } } });
+  const tapLogCount = await db.tapLog.count({ where: { eventId: { in: eventIds } } });
+  const windowCount = await db.eventWindow.count({ where: { eventId: { in: eventIds } } });
+  const userCount = await db.user.count({ where: { orgId: org.id } });
+
+  console.log(`  Org: ${org.id} (${org.name})`);
+  console.log(`  Events: ${events.length}`);
+  events.forEach((e) => console.log(`    - ${e.name} (${e.id})`));
+  console.log(`  Bands: ${bandCount.toLocaleString()}`);
+  console.log(`  TapLogs: ${tapLogCount.toLocaleString()}`);
+  console.log(`  Windows: ${windowCount}`);
+  console.log(`  Users: ${userCount}`);
+
+  // ── Safety gate ────────────────────────────────────────────────────────────
+  const unsafeEvents = events.filter((e) =>
+    !e.name.startsWith("LT ") && e.name !== EVENT_NAME
+  );
+
+  if (unsafeEvents.length > 0) {
+    console.error("\n  SAFETY GATE FAILED: Found non-loadtest events under this org:");
+    unsafeEvents.forEach((e) => console.error(`    - ${e.name} (${e.id})`));
+    console.error("  Refusing to delete. Remove these events manually or verify the org is correct.");
+    process.exit(1);
+  }
+  console.log("  Safety gate: PASSED (all events are loadtest events)\n");
+
+  // ── 1. Redis cleanup ──────────────────────────────────────────────────────
+  let totalRedisDeleted = 0;
+
+  // Clean analytics keys for ALL loadtest events
+  for (const eventId of eventIds) {
     let cursor = "0";
-    let deleted = 0;
     do {
-      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `analytics:${event.id}:*`, "COUNT", 1000);
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `analytics:${eventId}:*`, "COUNT", 1000);
       cursor = nextCursor;
       if (keys.length > 0) {
         await r.del(...keys);
-        deleted += keys.length;
+        totalRedisDeleted += keys.length;
       }
     } while (cursor !== "0");
-    console.log(`  Redis: ${deleted} analytics keys deleted (${elapsed(start)})`);
+  }
+  console.log(`  Redis: ${totalRedisDeleted} analytics keys deleted (${elapsed(start)})`);
+
+  // Clean band cache keys (band:LOADTEST-*)
+  {
+    let cursor = "0";
+    let bandKeysDeleted = 0;
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `band:${BAND_PREFIX}*`, "COUNT", 1000);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await r.del(...keys);
+        bandKeysDeleted += keys.length;
+      }
+    } while (cursor !== "0");
+    if (bandKeysDeleted > 0) {
+      console.log(`  Redis: ${bandKeysDeleted} band cache keys deleted (${elapsed(start)})`);
+    }
   }
 
-  // Clean pending queue (may have loadtest entries)
+  // Clean pending queue
   const queueLen = await r.llen("tap-log:pending");
   if (queueLen > 0) {
     await r.del("tap-log:pending");
     console.log(`  Redis: tap-log:pending cleared (${queueLen.toLocaleString()} items) (${elapsed(start)})`);
   }
 
-  // 2. PostgreSQL — cascade delete from org
-  if (org) {
-    await db.organization.delete({ where: { id: org.id } });
-    console.log(`  PostgreSQL: org + cascaded data deleted (${elapsed(start)})`);
-  } else {
-    console.log("  PostgreSQL: no loadtest org found");
+  // ── 2. PostgreSQL cleanup ─────────────────────────────────────────────────
+  // Delete loadtest user(s) before org cascade
+  const deletedUsers = await db.user.deleteMany({ where: { orgId: org.id } });
+  if (deletedUsers.count > 0) {
+    console.log(`  PostgreSQL: ${deletedUsers.count} user(s) deleted (${elapsed(start)})`);
   }
 
-  // 3. Cloudflare KV — bulk delete LOADTEST-* keys
+  await db.organization.delete({ where: { id: org.id } });
+  console.log(`  PostgreSQL: org + cascaded data deleted (${elapsed(start)})`);
+
+  // ── 3. Cloudflare KV cleanup ──────────────────────────────────────────────
   const accountId = process.env.CF_ACCOUNT_ID;
   const apiToken = process.env.CF_API_TOKEN;
   const namespaceId = process.env.CF_KV_NAMESPACE_ID;
 
   if (accountId && apiToken && namespaceId) {
-    console.log(`  KV: deleting ${BAND_COUNT.toLocaleString()} keys...`);
+    // Delete main loadtest bands
+    const totalKvKeys = BAND_COUNT + (GEO_CITIES.length * GEO_BANDS_PER_CITY) + (MULTI_EVENTS.length * BAND_COUNT);
+    console.log(`  KV: deleting ~${totalKvKeys.toLocaleString()} keys...`);
+
     for (let i = 0; i < BAND_COUNT; i += KV_BATCH_SIZE) {
       const keys = [];
       const end = Math.min(i + KV_BATCH_SIZE, BAND_COUNT);
@@ -498,12 +904,96 @@ async function cleanup() {
         console.error(`  KV delete batch failed: ${res.status}`);
       }
     }
+
+    // Delete geo band KV keys
+    const geoKeys: string[] = [];
+    for (const city of GEO_CITIES) {
+      for (let i = 1; i <= GEO_BANDS_PER_CITY; i++) {
+        geoKeys.push(`${GEO_BAND_PREFIX}${city.name}-${String(i).padStart(3, "0")}`);
+      }
+    }
+    if (geoKeys.length > 0) {
+      const res = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/bulk`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(geoKeys),
+        }
+      );
+      if (!res.ok) {
+        console.error(`  KV geo delete failed: ${res.status}`);
+      }
+    }
+
+    // Delete multi-event KV keys
+    for (const ev of MULTI_EVENTS) {
+      for (let i = 0; i < BAND_COUNT; i += KV_BATCH_SIZE) {
+        const keys = [];
+        const end = Math.min(i + KV_BATCH_SIZE, BAND_COUNT);
+        for (let j = i + 1; j <= end; j++) {
+          keys.push(`${ev.prefix}${String(j).padStart(6, "0")}`);
+        }
+        const res = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/bulk`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${apiToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(keys),
+          }
+        );
+        if (!res.ok) {
+          console.error(`  KV delete batch failed for ${ev.prefix}: ${res.status}`);
+        }
+      }
+      console.log(`  KV: deleted ${BAND_COUNT.toLocaleString()} keys for ${ev.prefix} (${elapsed(start)})`);
+    }
+
     console.log(`  KV: all LOADTEST keys deleted (${elapsed(start)})`);
   } else {
     console.log("  KV: skipped (no CF env vars)");
   }
 
-  console.log(`Cleanup complete in ${elapsed(start)}`);
+  // ── Post-cleanup verification ─────────────────────────────────────────────
+  console.log("\nPost-cleanup verification:");
+
+  const orgCheck = await db.organization.findFirst({ where: { name: ORG_NAME } });
+  console.log(`  PostgreSQL org: ${orgCheck ? "STILL EXISTS (unexpected)" : "gone"}`);
+
+  // Check Redis for leftover analytics keys
+  let leftoverRedis = 0;
+  for (const eventId of eventIds) {
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `analytics:${eventId}:*`, "COUNT", 1000);
+      cursor = nextCursor;
+      leftoverRedis += keys.length;
+    } while (cursor !== "0");
+  }
+  console.log(`  Redis analytics keys: ${leftoverRedis === 0 ? "0 (clean)" : `${leftoverRedis} remaining (unexpected)`}`);
+
+  // Check Redis for leftover band keys
+  {
+    let cursor = "0";
+    let leftoverBandKeys = 0;
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, "MATCH", `band:${BAND_PREFIX}*`, "COUNT", 1000);
+      cursor = nextCursor;
+      leftoverBandKeys += keys.length;
+    } while (cursor !== "0");
+    console.log(`  Redis band keys: ${leftoverBandKeys === 0 ? "0 (clean)" : `${leftoverBandKeys} remaining (unexpected)`}`);
+  }
+
+  const pendingLen = await r.llen("tap-log:pending");
+  console.log(`  Redis pending queue: ${pendingLen === 0 ? "0 (clean)" : `${pendingLen} remaining (unexpected)`}`);
+
+  console.log(`\nCleanup complete in ${elapsed(start)}`);
 }
 
 // ─── CLI Entrypoint ───────────────────────────────────────────────────────────
@@ -511,11 +1001,16 @@ const COMMANDS: Record<string, () => Promise<void>> = {
   kv: seedKV,
   postgres: seedPostgres,
   redis: seedRedis,
+  "seed-geo": seedGeo,
+  "seed-multi-event": seedMultiEvent,
+  "seed-user": seedUser,
   "bench-queries": benchQueries,
   "bench-csv": benchCsvExport,
   cleanup,
   all: async () => {
     await seedPostgres();
+    await seedGeo();
+    await seedUser();
     await seedKV();
     await seedRedis();
     await benchQueries();
@@ -523,7 +1018,9 @@ const COMMANDS: Record<string, () => Promise<void>> = {
 };
 
 async function main() {
-  const command = process.argv[2];
+  // Filter out --env <value> to find the actual command
+  const args = process.argv.slice(2).filter((arg, i, arr) => arg !== "--env" && arr[i - 1] !== "--env");
+  const command = args[0];
 
   if (!command || !COMMANDS[command]) {
     console.error(`Usage: pnpm --filter @sparkmotion/load-tests exec tsx seed.ts [${Object.keys(COMMANDS).join("|")}]`);

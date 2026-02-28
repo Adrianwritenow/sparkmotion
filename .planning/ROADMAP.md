@@ -198,6 +198,16 @@ Plans:
 - [ ] 30-01-PLAN.md — Fix hub route logging gaps + tapsByRedirectType and campaignTapsByRedirectType tRPC procedures + tests
 - [ ] 30-02-PLAN.md — Update all 4 analytics components (event+campaign x admin+customer) with renamed charts, extended filters, muted colors
 
+### Phase 31: Comprehensive end-to-end load testing and max capacity assessment
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 30
+**Plans:** 3/3 plans complete
+
+Plans:
+- [x] TBD (run /gsd:plan-phase 31 to break down) (completed 2026-02-28)
+
 ---
 
 _For project context, see .planning/PROJECT.md_
