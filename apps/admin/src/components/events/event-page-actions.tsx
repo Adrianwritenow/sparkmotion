@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { EventFormDialog } from "./event-form-dialog";
+import { EventTrashButton } from "./event-trash-button";
 
 interface EventPageActionsProps {
   orgs: Array<{ id: string; name: string }>;
@@ -15,6 +16,8 @@ export function EventPageActions({ orgs, campaigns }: EventPageActionsProps) {
 
   return (
     <>
+      <EventTrashButton />
+
       {/* Desktop/tablet button (768px+) */}
       <Button
         onClick={() => setDialogOpen(true)}

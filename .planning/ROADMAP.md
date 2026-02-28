@@ -208,6 +208,38 @@ Plans:
 Plans:
 - [x] TBD (run /gsd:plan-phase 31 to break down) (completed 2026-02-28)
 
+### Phase 32: SOC 2 backend compliance hardening
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 31
+**Plans:** 4/4 plans complete
+
+Plans:
+- [x] TBD (run /gsd:plan-phase 32 to break down) (completed 2026-02-28)
+
+### Phase 33: Build audit logging UI page for SOC2 compliance
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 32
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] TBD (run /gsd:plan-phase 33 to break down) (completed 2026-02-28)
+
+### Phase 34: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
+
+**Goal:** Add soft delete with restore UI across all 4 entity types. Backend complete (schema, procedures, cron). Remaining: admin trash UI (4 sheets) and customer trash UI (3 sheets).
+**Requirements**: TBD
+**Depends on:** Phase 33
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 34-01-PLAN.md — Schema + tRPC procedures + cron purge (COMPLETE — commit f609dc2)
+- [ ] 34-02-PLAN.md — Admin trash UI (4 sheets: events/campaigns/orgs/bands + Trash2 badges + sonner toasts + restoreAll for campaigns/orgs)
+- [ ] 34-03-PLAN.md — Customer trash UI (3 sheets: events/campaigns/bands — org-scoped, no orgs trash)
+
 ---
 
 _For project context, see .planning/PROJECT.md_

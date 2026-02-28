@@ -8,6 +8,26 @@ interface Env {
   HUB_URL: string;
 }
 
+const SECURITY_HEADERS: Record<string, string> = {
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "X-XSS-Protection": "1; mode=block",
+};
+
+function withSecurityHeaders(response: Response): Response {
+  const newHeaders = new Headers(response.headers);
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    newHeaders.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+}
+
 interface KVEntry {
   url: string;
   eventId: string;
@@ -52,7 +72,10 @@ document.cookie="sm-scanned-band=${bandId};domain=.sparkmotion.net;path=/;max-ag
 </body></html>`;
 
   return new Response(html, {
-    headers: { "Content-Type": "text/html;charset=UTF-8" },
+    headers: {
+      "Content-Type": "text/html;charset=UTF-8",
+      ...SECURITY_HEADERS,
+    },
   });
 }
 
@@ -61,16 +84,16 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") {
-      return Response.json({ status: "ok" });
+      return withSecurityHeaders(Response.json({ status: "ok" }));
     }
 
     if (url.pathname !== "/e") {
-      return Response.json({ error: "Not found" }, { status: 404 });
+      return withSecurityHeaders(Response.json({ error: "Not found" }, { status: 404 }));
     }
 
     const bandId = url.searchParams.get("bandId");
     if (!bandId) {
-      return Response.json({ error: "bandId is required" }, { status: 400 });
+      return withSecurityHeaders(Response.json({ error: "bandId is required" }, { status: 400 }));
     }
 
     // Scan-mode: editor has cookie set — return band ID page, skip normal redirect
@@ -97,7 +120,7 @@ export default {
 
       try {
         const cf = (request as any).cf;
-        return await fetch(hubUrl.toString(), {
+        const hubResponse = await fetch(hubUrl.toString(), {
           headers: {
             "x-forwarded-for": request.headers.get("cf-connecting-ip") ?? "",
             "user-agent": request.headers.get("user-agent") ?? "",
@@ -106,8 +129,12 @@ export default {
           },
           redirect: "manual",
         });
+        return withSecurityHeaders(hubResponse);
       } catch {
-        return Response.redirect(env.FALLBACK_URL || "https://sparkmotion.io", 302);
+        return withSecurityHeaders(new Response(null, {
+          status: 302,
+          headers: { Location: env.FALLBACK_URL || "https://sparkmotion.io" },
+        }));
       }
     }
 
@@ -126,7 +153,10 @@ export default {
     // Fire-and-forget: analytics + DB logging (does NOT block redirect)
     ctx.waitUntil(logTap(env, bandId, entry, request));
 
-    return Response.redirect(redirectUrl, 302);
+    return withSecurityHeaders(new Response(null, {
+      status: 302,
+      headers: { Location: redirectUrl },
+    }));
   },
 } satisfies ExportedHandler<Env>;
 

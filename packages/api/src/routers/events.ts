@@ -13,15 +13,15 @@ export const eventsRouter = router({
     .query(async ({ ctx, input }) => {
       const where =
         ctx.user.role === "ADMIN"
-          ? input?.orgId ? { orgId: input.orgId } : {}
-          : { orgId: ctx.user.orgId ?? undefined };
+          ? input?.orgId ? { orgId: input.orgId, deletedAt: null } : { deletedAt: null }
+          : { orgId: ctx.user.orgId ?? undefined, deletedAt: null };
       const events = await db.event.findMany({
         where,
         include: {
           org: true,
           windows: true,
           campaign: { select: { id: true, name: true } },
-          _count: { select: { bands: true } }
+          _count: { select: { bands: { where: { deletedAt: null } } } }
         },
         orderBy: { createdAt: "desc" },
       });
@@ -43,13 +43,13 @@ export const eventsRouter = router({
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const event = await db.event.findUniqueOrThrow({
-        where: { id: input.id },
+        where: { id: input.id, deletedAt: null },
         include: {
           org: true,
           windows: true,
-          bands: { take: 100 },
+          bands: { where: { deletedAt: null }, take: 100 },
           campaign: { select: { id: true, name: true } },
-          _count: { select: { bands: true } }
+          _count: { select: { bands: { where: { deletedAt: null } } } }
         },
       });
 
@@ -148,7 +148,7 @@ export const eventsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...rawData } = input;
-      const existing = await db.event.findUniqueOrThrow({ where: { id } });
+      const existing = await db.event.findUniqueOrThrow({ where: { id, deletedAt: null } });
       if (ctx.user.role === "CUSTOMER" && existing.orgId !== ctx.user.orgId) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
@@ -183,7 +183,7 @@ export const eventsRouter = router({
     .input(z.object({ id: z.string(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       const event = await db.event.findUniqueOrThrow({
-        where: { id: input.id },
+        where: { id: input.id, deletedAt: null },
         select: { id: true, orgId: true, timezone: true },
       });
 
@@ -212,16 +212,29 @@ export const eventsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const event = await db.event.findUniqueOrThrow({ where: { id: input.id } });
+      const event = await db.event.findUniqueOrThrow({ where: { id: input.id, deletedAt: null } });
       if (ctx.user.role === "CUSTOMER" && event.orgId !== ctx.user.orgId) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
-      // Fetch band IDs before deletion (cascade will remove them from DB)
       const bands = await db.band.findMany({
-        where: { eventId: input.id },
+        where: { eventId: input.id, deletedAt: null },
         select: { bandId: true },
       });
-      await db.event.delete({ where: { id: input.id } });
+      const now = new Date();
+      await db.$transaction([
+        db.event.update({
+          where: { id: input.id },
+          data: {
+            deletedAt: now,
+            deletedBy: ctx.user.id,
+            ...(event.campaignId ? { deletedCampaignId: event.campaignId, campaignId: null } : {}),
+          },
+        }),
+        db.band.updateMany({
+          where: { eventId: input.id, deletedAt: null },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        }),
+      ]);
       // Invalidate event cache (includes analytics keys) + band caches
       Promise.all([
         invalidateEventCache(input.id),
@@ -233,7 +246,7 @@ export const eventsRouter = router({
     .input(z.object({ ids: z.array(z.string()).min(1).max(50) }))
     .mutation(async ({ input, ctx }) => {
       const events = await db.event.findMany({
-        where: { id: { in: input.ids } },
+        where: { id: { in: input.ids }, deletedAt: null },
       });
 
       if (events.length === 0) {
@@ -247,13 +260,32 @@ export const eventsRouter = router({
         }
       }
 
-      // Fetch band IDs before deletion (cascade will remove them from DB)
       const bands = await db.band.findMany({
-        where: { eventId: { in: input.ids } },
+        where: { eventId: { in: input.ids }, deletedAt: null },
         select: { bandId: true },
       });
 
-      await db.event.deleteMany({ where: { id: { in: input.ids } } });
+      const now = new Date();
+      const eventIds = events.map((e) => e.id);
+
+      await db.$transaction(async (tx) => {
+        // Store campaignId in deletedCampaignId for events that have one
+        const eventsWithCampaign = events.filter((e) => e.campaignId);
+        for (const e of eventsWithCampaign) {
+          await tx.event.update({
+            where: { id: e.id },
+            data: { deletedCampaignId: e.campaignId, campaignId: null },
+          });
+        }
+        await tx.event.updateMany({
+          where: { id: { in: eventIds } },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        });
+        await tx.band.updateMany({
+          where: { eventId: { in: eventIds }, deletedAt: null },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        });
+      });
 
       // Invalidate event caches (includes analytics keys) + band caches
       Promise.all([
@@ -268,7 +300,7 @@ export const eventsRouter = router({
     .input(z.object({ ids: z.array(z.string()).min(1).max(50) }))
     .mutation(async ({ input, ctx }) => {
       const events = await db.event.findMany({
-        where: { id: { in: input.ids } },
+        where: { id: { in: input.ids }, deletedAt: null },
         include: { windows: true },
       });
 
@@ -320,4 +352,98 @@ export const eventsRouter = router({
         )
       );
     }),
+
+  trashCount: protectedProcedure.query(async ({ ctx }) => {
+    const where = ctx.user.role === "ADMIN"
+      ? { deletedAt: { not: null } as const }
+      : { orgId: ctx.user.orgId ?? undefined, deletedAt: { not: null } as const };
+    return db.event.count({ where });
+  }),
+
+  listDeleted: protectedProcedure
+    .input(z.object({ orgId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const where = ctx.user.role === "ADMIN"
+        ? { ...(input?.orgId ? { orgId: input.orgId } : {}), deletedAt: { not: null } as const }
+        : { orgId: ctx.user.orgId ?? undefined, deletedAt: { not: null } as const };
+      const events = await db.event.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          deletedAt: true,
+          deletedBy: true,
+          orgId: true,
+          org: { select: { name: true } },
+        },
+        orderBy: { deletedAt: "desc" },
+      });
+      const userIds = events.map((e) => e.deletedBy).filter((id): id is string => !!id);
+      const users = userIds.length > 0
+        ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
+        : [];
+      const userMap = new Map(users.map((u) => [u.id, u.name || u.email]));
+      return events.map((e) => ({
+        ...e,
+        deletedByName: e.deletedBy ? userMap.get(e.deletedBy) ?? null : null,
+      }));
+    }),
+
+  restore: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const event = await db.event.findUniqueOrThrow({ where: { id: input.id } });
+      if (!event.deletedAt) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Event is not deleted" });
+      }
+      if (ctx.user.role === "CUSTOMER" && event.orgId !== ctx.user.orgId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      await db.$transaction([
+        db.event.update({
+          where: { id: input.id },
+          data: {
+            deletedAt: null,
+            deletedBy: null,
+            // Restore campaign association if it was stored before deletion
+            ...(event.deletedCampaignId ? { campaignId: event.deletedCampaignId, deletedCampaignId: null } : {}),
+          },
+        }),
+        // Restore bands that were cascade-deleted at the same time
+        db.band.updateMany({
+          where: { eventId: input.id, deletedAt: { gte: event.deletedAt } },
+          data: { deletedAt: null, deletedBy: null },
+        }),
+      ]);
+      return { success: true };
+    }),
+
+  restoreAll: protectedProcedure.mutation(async ({ ctx }) => {
+    const where = ctx.user.role === "ADMIN"
+      ? { deletedAt: { not: null } as const }
+      : { orgId: ctx.user.orgId ?? undefined, deletedAt: { not: null } as const };
+    const deletedEvents = await db.event.findMany({ where, select: { id: true, deletedAt: true, deletedCampaignId: true } });
+    if (deletedEvents.length === 0) return { restored: 0 };
+
+    const eventIds = deletedEvents.map((e) => e.id);
+    await db.$transaction(async (tx) => {
+      // Restore campaign associations
+      const eventsWithCampaign = deletedEvents.filter((e) => e.deletedCampaignId);
+      for (const e of eventsWithCampaign) {
+        await tx.event.update({
+          where: { id: e.id },
+          data: { campaignId: e.deletedCampaignId, deletedCampaignId: null },
+        });
+      }
+      await tx.event.updateMany({
+        where: { id: { in: eventIds } },
+        data: { deletedAt: null, deletedBy: null },
+      });
+      await tx.band.updateMany({
+        where: { eventId: { in: eventIds }, deletedAt: { not: null } },
+        data: { deletedAt: null, deletedBy: null },
+      });
+    });
+    return { restored: deletedEvents.length };
+  }),
 });

@@ -50,7 +50,7 @@ async function autoAssignBand(
   try {
     // 1. Look up org by slug
     const org = await db.organization.findUnique({
-      where: { slug: orgSlug },
+      where: { slug: orgSlug, deletedAt: null },
       select: { id: true, websiteUrl: true },
     });
 
@@ -68,6 +68,7 @@ async function autoAssignBand(
           id: eventId,
           orgId: org.id,
           status: { in: ["ACTIVE", "DRAFT"] },
+          deletedAt: null,
         },
         select: { id: true, name: true, latitude: true, longitude: true },
       });
@@ -124,6 +125,7 @@ async function autoAssignBand(
         FROM "Event" e
         WHERE e."orgId" = ${org.id}
           AND e.status IN ('ACTIVE', 'DRAFT')
+          AND e."deletedAt" IS NULL
           AND e.latitude IS NOT NULL
           AND e.longitude IS NOT NULL
         ORDER BY "distanceMiles" ASC, "nextWindowStart" ASC NULLS LAST
@@ -144,6 +146,7 @@ async function autoAssignBand(
         where: {
           orgId: org.id,
           status: { in: ["ACTIVE", "DRAFT"] },
+          deletedAt: null,
         },
         orderBy: [
           { windows: { _count: "desc" } },
@@ -197,7 +200,7 @@ async function autoAssignBand(
         console.log(`[AutoAssign] Band ${bandId} already exists (race condition)`);
         // Use findFirst since bandId is no longer globally unique (compound unique with eventId)
         band = await db.band.findFirst({
-          where: { bandId },
+          where: { bandId, deletedAt: null },
           include: {
             event: {
               include: {
@@ -347,7 +350,7 @@ export async function GET(request: NextRequest) {
    try {
     // Find all bands with this bandId (supports multi-event bands)
     const bands = await db.band.findMany({
-      where: { bandId },
+      where: { bandId, deletedAt: null },
       include: {
         event: {
           include: {
@@ -453,7 +456,7 @@ export async function GET(request: NextRequest) {
         } else {
           // Auto-assignment failed, check if org has websiteUrl
           const org = await db.organization.findUnique({
-            where: { slug: orgSlug },
+            where: { slug: orgSlug, deletedAt: null },
             select: { websiteUrl: true },
           });
 
@@ -553,7 +556,7 @@ export async function GET(request: NextRequest) {
     if (orgSlug) {
       try {
         const org = await db.organization.findUnique({
-          where: { slug: orgSlug },
+          where: { slug: orgSlug, deletedAt: null },
           select: { websiteUrl: true },
         });
         if (org?.websiteUrl) return NextResponse.redirect(org.websiteUrl, 302);

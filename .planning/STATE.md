@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T03:20:00Z"
+last_updated: "2026-02-28T22:35:33.266Z"
 progress:
-  total_phases: 31
-  completed_phases: 25
-  total_plans: 69
-  completed_plans: 65
+  total_phases: 34
+  completed_phases: 29
+  total_plans: 77
+  completed_plans: 74
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 31 — Comprehensive end-to-end load testing and max capacity assessment
-Plan: 03 (IN PROGRESS — paused at checkpoint:human-verify Task 3) — validated e2e-load.js, deleted 6 old scripts, awaiting Grafana Cloud run
-Status: Phase 31 IN PROGRESS — Plans 01 and 02 complete, Plan 03 Tasks 1+2 complete (paused at Task 3 checkpoint)
-Last activity: 2026-02-28 — Phase 31-03 Tasks 1+2 executed: k6 inspect validated all 5 scenarios, deleted 6 superseded scripts, updated README
+Phase: 34 — Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
+Plan: 03 COMPLETE — Customer trash UI: 3 TrashButton Sheet components (events/campaigns/bands) integrated into customer page headers
+Status: Phase 34 COMPLETE — 3 of 3 plans complete; awaiting human-verify checkpoint before marking fully verified
+Last activity: 2026-02-28 — Phase 34-03 complete: customer trash UI built for events/campaigns/bands with org-scoped sheets, restore, undo, and restoreAll
 
-Progress: (2 of 3 plans complete + Plan 03 Tasks 1+2 done, paused at Task 3 checkpoint — Phase 31 In Progress)
+Progress: (3 of 3 plans complete — Phase 34 done)
 
 ## Performance Metrics
 
@@ -310,6 +310,25 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 31-03]: k6 inspect with env vars is the correct validation tool for scenario-based scripts — `--duration` overrides scenarios entirely in k6 v1.5
 - [Phase 31-03]: Auth warning in staging dry-run is expected graceful behavior — script returns `{ cookie: "" }` and continues without crash
 - [Phase 31-03]: README rewritten around unified 5-scenario e2e architecture; 6 old isolated scripts deleted
+- [Phase 32-04]: pnpm audit --audit-level=high in CI: only high/critical fail build, avoiding moderate/low false positive noise in monorepos
+- [Phase 32-04]: Dependabot ignores major version bumps for Next.js/tRPC/Prisma — minor/patch security PRs auto-opened, major upgrades require manual review
+- [Phase 32-04]: GitHub secret scanning + push protection enabled via repo settings — blocks credential leaks before they reach remote (SOC 2 requirement complete)
+- [Phase 32-03]: Security headers production-only in Next.js to avoid HSTS issues with localhost; Response.redirect() replaced in Worker since opaque responses block header mutation; Redis TLS guard uses console.warn not throw to surface misconfiguration without crashing
+- [Phase 32-01]: AuditLog writes are fire-and-forget — mutations and auth flows never block on audit I/O
+- [Phase 32-01]: rawInput not stored in audit logs — only result.data captured as newValue (avoids logging passwords)
+- [Phase 32-02]: AnalyticsSummary windowId/redirectUrl as non-nullable String @default('') — NULL != NULL in PostgreSQL unique constraints would allow duplicate rows
+- [Phase 32-02]: AnalyticsSummary has no FK relations — denormalized summary table survives event/window deletion
+- [Phase 33-01]: AuditLog has no FK relation to User — userId is plain String?; resolve users via separate db.user.findMany with id: { in: [...] } filter, build Map for O(1) lookup
+- [Phase 33-01]: buildWhere helper extracted and shared between list and export procedures to avoid duplicating filter logic
+- [Phase 33-01]: action filter uses contains (partial match), failedLogins7d uses in (exact match for auth.login_failure, auth.lockout)
+- [Phase 33-01]: stats db.$transaction wraps 3 count queries; groupBy runs separately (Prisma restriction — groupBy not allowed in transactions)
+- [Phase 33]: keepPreviousData: true (not placeholderData arrow) — tRPC v10 overload requires PlaceholderDataFunction<T> with args, not zero-arg function
+- [Phase 33]: getActionBadge exported from audit-table.tsx and imported by audit-detail-sheet.tsx to avoid duplicating badge color logic
+- [Phase 33]: isRecord() type guard required before diff rendering — oldValue/newValue are Json? (unknown), must narrow to Record<string,unknown> before Object.keys()
+- [Phase 34]: OrgTrashButton omits Undo action — org restores cascade-restore children; re-deleting via undo would cascade-delete them again
+- [Phase 34]: bands.restoreAll skipped is a count (number), not array — toast shows count only, not ID list
+- [Phase 34]: TrashButton pattern: trashCount always fetches for badge, listDeleted uses enabled:open guard
+- [Phase 34]: Customer TrashButton components omit deletedByName display — org-scoped context makes attribution less relevant; no orgId prop needed on customer BandTrashButton since backend auto-scopes
 
 ### Pending Todos
 
@@ -317,6 +336,9 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 34 added: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
+- Phase 33 added: Build audit logging UI page for SOC2 compliance
+- Phase 32 added: SOC 2 backend compliance hardening
 - Phase 31 added: Comprehensive end-to-end load testing and max capacity assessment
 - Phase 30 added: Add analytics tracking for fallback and org URL taps
 - Phase 29 added: Add user management page for creating/deleting Admins and Customers with email invitations
@@ -384,6 +406,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: 31-03-PLAN.md Task 3 checkpoint:human-verify — user must run Grafana Cloud test and review results
-Resume file: None
-Next step: User runs ./load-tests/run-k6.sh staging e2e-load.js --cloud-exec, reviews results, then continue plan
+Stopped at: Completed 34-03-PLAN.md — awaiting human-verify checkpoint for customer trash UI
+Resume file: N/A — Phase 34 fully executed; next steps depend on human verification outcome
+Next step: Verify customer trash UI in browser, then proceed to next phase

@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BandsPage() {
   const orgs = await db.organization.findMany({
+    where: { deletedAt: null },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

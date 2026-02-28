@@ -22,11 +22,13 @@ export default async function EventsPage({
   searchParams: { campaignId?: string; search?: string; status?: string; page?: string };
 }) {
   const campaigns = await db.campaign.findMany({
+    where: { deletedAt: null },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 
   const orgs = await db.organization.findMany({
+    where: { deletedAt: null },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -36,6 +38,7 @@ export default async function EventsPage({
   const status = searchParams.status;
 
   const where: Prisma.EventWhereInput = {
+    deletedAt: null,
     ...(searchParams.campaignId ? { campaignId: searchParams.campaignId } : {}),
     ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
     ...(status && status in EventStatus ? { status: status as EventStatus } : {}),
@@ -50,7 +53,7 @@ export default async function EventsPage({
       include: {
         org: { select: { name: true } },
         campaign: { select: { id: true, name: true } },
-        _count: { select: { bands: true } },
+        _count: { select: { bands: { where: { deletedAt: null } } } },
       },
     }),
     db.event.count({ where }),

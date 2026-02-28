@@ -14,8 +14,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Check, Flag, ArrowRightLeft, X } from "lucide-react";
+import { Check, Flag, Globe, ArrowRightLeft, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -36,6 +35,7 @@ import {
 import { TagBadge } from "./tag-badge";
 import { ReassignDialog } from "./reassign-dialog";
 import { BandDetailDialog } from "./band-detail-dialog";
+import { BandTrashButton } from "./band-trash-button";
 
 function useDebounce(value: string, delay: number) {
   const [debounced, setDebounced] = useState(value);
@@ -170,7 +170,7 @@ export function BandReviewTable() {
                 row.original.flagged ? (
                   <Flag className="w-4 h-4 fill-red-500 text-red-500" />
                 ) : (
-                  <Badge variant="secondary" className="text-xs">Auto</Badge>
+                  <Globe className="w-3.5 h-3.5 text-muted-foreground" />
                 )
               )}
             </div>
@@ -285,6 +285,8 @@ export function BandReviewTable() {
             Flagged
           </label>
         </div>
+
+        <BandTrashButton />
       </div>
 
       {/* Table */}

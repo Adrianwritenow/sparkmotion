@@ -246,8 +246,8 @@ async function seedPostgres() {
       const batch = [];
       const end = Math.min(i + DB_BATCH_SIZE, TAP_LOG_COUNT);
       for (let j = i; j < end; j++) {
-        const bandId = bandIds[Math.floor(Math.random() * bandIds.length)];
-        const mode = modes[Math.floor(Math.random() * modes.length)];
+        const bandId = bandIds[Math.floor(Math.random() * bandIds.length)]!;
+        const mode = modes[Math.floor(Math.random() * modes.length)]!;
         const timeOffset = gaussianRandom() * durationMs;
         const tappedAt = new Date(eventStart.getTime() + timeOffset);
 
@@ -255,7 +255,7 @@ async function seedPostgres() {
           bandId,
           eventId: event.id,
           modeServed: mode,
-          redirectUrl: modeUrls[mode],
+          redirectUrl: modeUrls[mode]!,
           tappedAt,
           userAgent: "k6-loadtest/1.0",
           ipAddress: `10.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`,
@@ -504,7 +504,7 @@ async function seedMultiEvent() {
 
       // Get band internal IDs for FK references
       const bands = await db.band.findMany({
-        where: { eventId: firstEventId, bandId: { startsWith: MULTI_EVENTS[0].prefix } },
+        where: { eventId: firstEventId, bandId: { startsWith: MULTI_EVENTS[0]!.prefix } },
         select: { id: true },
       });
       const bandIds = bands.map((b) => b.id);
@@ -525,8 +525,8 @@ async function seedMultiEvent() {
         const batch = [];
         const end = Math.min(i + DB_BATCH_SIZE, TAP_LOG_COUNT);
         for (let j = i; j < end; j++) {
-          const bandId = bandIds[Math.floor(Math.random() * bandIds.length)];
-          const mode = modes[Math.floor(Math.random() * modes.length)];
+          const bandId = bandIds[Math.floor(Math.random() * bandIds.length)]!;
+          const mode = modes[Math.floor(Math.random() * modes.length)]!;
           const timeOffset = gaussianRandom() * durationMs;
           const tappedAt = new Date(eventStart.getTime() + timeOffset);
 
@@ -534,7 +534,7 @@ async function seedMultiEvent() {
             bandId,
             eventId: firstEventId,
             modeServed: mode,
-            redirectUrl: modeUrls[mode],
+            redirectUrl: modeUrls[mode]!,
             tappedAt,
             userAgent: "k6-loadtest/1.0",
             ipAddress: `10.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`,
