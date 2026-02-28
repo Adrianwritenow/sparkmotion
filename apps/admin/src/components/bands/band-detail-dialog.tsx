@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Flag } from "lucide-react";
 import {
   Dialog,
@@ -20,6 +21,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface BandRow {
   id: string;
@@ -43,6 +53,14 @@ interface BandDetailDialogProps {
   onReassign: (bandId: string) => void;
 }
 
+const MODE_LABELS: Record<string, string> = {
+  PRE: "Pre-Event",
+  LIVE: "Live Event",
+  POST: "Post-Event",
+  FALLBACK: "Fallback",
+  DEFAULT: "Default",
+};
+
 export function BandDetailDialog({ band, onClose, onReassign }: BandDetailDialogProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -51,6 +69,11 @@ export function BandDetailDialog({ band, onClose, onReassign }: BandDetailDialog
   const utils = trpc.useUtils();
   const { data: tagsData } = trpc.tags.list.useQuery();
   const tags = tagsData ?? [];
+
+  const { data: tapLogs, isLoading: tapLogsLoading } = trpc.bands.tapLogs.useQuery(
+    { bandId: band?.id ?? "" },
+    { enabled: !!band }
+  );
 
   const updateBand = trpc.bands.update.useMutation({
     onSuccess: () => {
@@ -87,7 +110,7 @@ export function BandDetailDialog({ band, onClose, onReassign }: BandDetailDialog
 
   return (
     <Dialog open={!!band} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle className="font-mono">{band?.bandId}</DialogTitle>
         </DialogHeader>
@@ -145,48 +168,96 @@ export function BandDetailDialog({ band, onClose, onReassign }: BandDetailDialog
               </div>
             </div>
 
-            {/* Editable fields */}
-            <div className="space-y-3 border-t pt-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Name</label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Registrant name"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Email</label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Registrant email"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Tag</label>
-                <Select value={tagId} onValueChange={setTagId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="No tag" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No tag</SelectItem>
-                    {tags.map((tag: { id: string; title: string }) => (
-                      <SelectItem key={tag.id} value={tag.id}>
-                        {tag.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            {/* Tabs */}
+            <Tabs defaultValue="metadata">
+              <TabsList className="w-full">
+                <TabsTrigger value="metadata" className="flex-1">Metadata</TabsTrigger>
+                <TabsTrigger value="taplog" className="flex-1">Tap Log</TabsTrigger>
+              </TabsList>
 
-            {updateBand.error && (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {updateBand.error.message}
-              </p>
-            )}
+              <TabsContent value="metadata" className="mt-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Name</label>
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Registrant name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Email</label>
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Registrant email"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Tag</label>
+                    <Select value={tagId} onValueChange={setTagId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No tag" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No tag</SelectItem>
+                        {tags.map((tag: { id: string; title: string }) => (
+                          <SelectItem key={tag.id} value={tag.id}>
+                            {tag.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {updateBand.error && (
+                  <p className="text-sm text-red-600 dark:text-red-400 mt-3">
+                    {updateBand.error.message}
+                  </p>
+                )}
+              </TabsContent>
+
+              <TabsContent value="taplog" className="mt-4">
+                {tapLogsLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
+                  </div>
+                ) : !tapLogs?.length ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    No taps recorded
+                  </p>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Event</TableHead>
+                          <TableHead>Window</TableHead>
+                          <TableHead>Date & Time</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tapLogs.map((log) => (
+                          <TableRow key={log.id}>
+                            <TableCell className="text-sm">{log.event.name}</TableCell>
+                            <TableCell className="text-sm">
+                              {log.window?.title ?? MODE_LABELS[log.modeServed] ?? log.modeServed}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {new Date(log.tappedAt).toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         )}
 

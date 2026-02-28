@@ -359,6 +359,33 @@ export const bandsRouter = router({
       return { resolvedCount: bands.length };
     }),
 
+  tapLogs: protectedProcedure
+    .input(z.object({ bandId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const band = await db.band.findUnique({
+        where: { id: input.bandId },
+        select: { event: { select: { orgId: true } } },
+      });
+      if (!band) throw new TRPCError({ code: "NOT_FOUND", message: "Band not found" });
+      if (ctx.user.role === "CUSTOMER" && band.event.orgId !== ctx.user.orgId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      return db.tapLog.findMany({
+        where: { bandId: input.bandId },
+        select: {
+          id: true,
+          tappedAt: true,
+          modeServed: true,
+          redirectUrl: true,
+          event: { select: { name: true } },
+          window: { select: { windowType: true, title: true } },
+        },
+        orderBy: { tappedAt: "desc" },
+        take: 100,
+      });
+    }),
+
   flaggedCount: protectedProcedure
     .query(async ({ ctx }) => {
       const where: Prisma.BandWhereInput = {
