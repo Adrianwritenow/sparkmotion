@@ -15,6 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Check, Flag, Globe, ArrowRightLeft, X } from "lucide-react";
+import { BandTrashButton } from "./band-trash-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -306,6 +307,8 @@ export function BandReviewTable({ orgs }: BandReviewTableProps) {
             Flagged
           </label>
         </div>
+
+        <BandTrashButton orgId={orgId && orgId !== "all" ? orgId : undefined} />
       </div>
 
       {/* Table */}
