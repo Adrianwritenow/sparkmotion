@@ -6,7 +6,6 @@ interface Env {
   UPSTASH_REDIS_REST_TOKEN: string;
   FALLBACK_URL: string;
   HUB_URL: string;
-  WEBFLOW_ORIGIN: string;
 }
 
 interface KVEntry {
@@ -66,19 +65,7 @@ export default {
     }
 
     if (url.pathname !== "/e") {
-      // Proxy non-redirect traffic to Webflow microsite
-      const origin = new URL(env.WEBFLOW_ORIGIN);
-      const webflowUrl = new URL(url.pathname + url.search, origin);
-      const response = await fetch(webflowUrl.toString(), {
-        headers: {
-          "Host": origin.hostname,
-          "X-Forwarded-Host": url.hostname,
-        },
-      });
-      return new Response(response.body, {
-        status: response.status,
-        headers: response.headers,
-      });
+      return Response.json({ error: "Not found" }, { status: 404 });
     }
 
     const bandId = url.searchParams.get("bandId");
