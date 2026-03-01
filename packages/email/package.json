@@ -10,7 +10,7 @@
     "resend": "^4.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^25",
     "@types/react": "^18.3.0",
     "typescript": "^5.7.0"
   }
