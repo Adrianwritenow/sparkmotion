@@ -2,12 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockReset } from 'vitest-mock-extended';
 
 // ─── Module-level mocks ────────────────────────────────────────────────────────
-// Routers import `db` at module scope from @sparkmotion/database, so the entire
-// module must be mocked before any router code runs.
-//
-// The vi.mock factory uses an async import of test-mocks.ts (not test-utils.ts).
-// test-mocks.ts has NO router imports, so it does not create a circular dependency
-// with the router under test.
 
 vi.mock('@sparkmotion/database', async () => {
   const { prismaMock } = await import('../test-mocks');
@@ -39,6 +33,7 @@ import { prismaMock } from '../test-mocks';
 beforeEach(() => {
   mockReset(prismaMock);
   vi.clearAllMocks();
+  prismaMock.changeLog.create.mockResolvedValue({} as any);
 });
 
 // ─── bands.list ───────────────────────────────────────────────────────────────
@@ -52,7 +47,9 @@ describe('bands.list', () => {
     const result = await caller.bands.list({ eventId: 'event-1' });
 
     expect(prismaMock.band.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { eventId: 'event-1' } })
+      expect.objectContaining({
+        where: expect.objectContaining({ eventId: 'event-1', deletedAt: null }),
+      })
     );
     expect(result.bands).toHaveLength(1);
     expect(result.totalCount).toBe(1);
@@ -85,7 +82,9 @@ describe('bands.listAll', () => {
     const result = await caller.bands.listAll({});
 
     expect(prismaMock.band.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} })
+      expect.objectContaining({
+        where: expect.objectContaining({ deletedAt: null }),
+      })
     );
     expect(result.bands).toHaveLength(1);
   });
@@ -99,7 +98,10 @@ describe('bands.listAll', () => {
 
     expect(prismaMock.band.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ event: { orgId: 'org-1' } }),
+        where: expect.objectContaining({
+          deletedAt: null,
+          event: expect.objectContaining({ orgId: 'org-1' }),
+        }),
       })
     );
   });
@@ -193,7 +195,9 @@ describe('bands.activityFeed', () => {
     await caller.bands.activityFeed({});
 
     expect(prismaMock.event.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'org-1' } })
+      expect.objectContaining({
+        where: expect.objectContaining({ orgId: 'org-1', deletedAt: null }),
+      })
     );
   });
 });

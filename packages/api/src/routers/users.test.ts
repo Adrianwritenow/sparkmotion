@@ -29,6 +29,7 @@ const mockUserRow = {
 
 beforeEach(() => {
   mockReset(prismaMock);
+  prismaMock.changeLog.create.mockResolvedValue({} as any);
 });
 
 // ─── users.me ─────────────────────────────────────────────────────────────────
