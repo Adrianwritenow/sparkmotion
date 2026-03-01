@@ -52,7 +52,7 @@ export function Sidebar({ isMobile = false }: SidebarProps) {
     { href: "/organizations", label: "Organizations", icon: Building2 },
     { href: "/events", label: "Events", icon: CalendarDays },
     { href: "/campaigns", label: "Campaigns", icon: Megaphone },
-    { href: "/bands", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
+    { href: "/activity", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
     { href: "/users", label: "Users", icon: Users },
     { href: "/change-log", label: "Change Log", icon: ClipboardList },
   ];
