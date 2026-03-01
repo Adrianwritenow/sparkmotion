@@ -18,14 +18,5 @@
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=20"
-  },
-  "pnpm": {
-    "auditConfig": {
-      "ignoreCves": [
-        "GHSA-5j98-mcp5-4vw2",
-        "GHSA-h25m-26qc-wcjf",
-        "GHSA-7v5v-9h63-cj86"
-      ]
-    }
   }
 }
