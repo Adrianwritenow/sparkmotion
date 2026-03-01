@@ -35,6 +35,7 @@ import { createTestCaller, createMockEvent, createMockWindow } from '../test-uti
 
 beforeEach(() => {
   mockReset(prismaMock);
+  prismaMock.changeLog.create.mockResolvedValue({} as any);
 });
 
 // ─── windows.list ──────────────────────────────────────────────────────────────
