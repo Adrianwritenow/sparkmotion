@@ -9,6 +9,7 @@ import { WindowsList } from "./windows-list";
 import { EventsAnalytics } from "./events-analytics";
 import { BandsTable } from "../bands/bands-table";
 import { BandCsvUpload } from "../bands/band-csv-upload";
+import { BandTrashButton } from "../bands/band-trash-button";
 import { Megaphone, Copy, Check } from "lucide-react";
 import type { Event } from "@sparkmotion/database";
 
@@ -117,7 +118,10 @@ export function EventDetailTabs({ event, activeTab, campaigns }: EventDetailTabs
               <h3 className="text-lg font-semibold">
                 {event._count.bands} {event._count.bands === 1 ? 'Band' : 'Bands'}
               </h3>
-              <BandCsvUpload eventId={event.id} />
+              <div className="flex items-center gap-2">
+                <BandTrashButton eventId={event.id} />
+                <BandCsvUpload eventId={event.id} />
+              </div>
             </div>
             <BandsTable eventId={event.id} />
           </div>

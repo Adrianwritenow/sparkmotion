@@ -60,7 +60,14 @@ export function ChangeDetailSheet({
   const { label, className } = getActionBadge(row.action);
   const isAuthEvent = row.action.startsWith("auth.");
 
-  const oldRecord = isRecord(row.oldValue) ? row.oldValue : null;
+  const oldRecord = isRecord(row.oldValue)
+    ? row.oldValue
+    : Array.isArray(row.oldValue) && row.oldValue.length === 1 && isRecord(row.oldValue[0])
+      ? row.oldValue[0]
+      : null;
+  const oldRecords = Array.isArray(row.oldValue) && row.oldValue.length > 1
+    ? (row.oldValue as Record<string, unknown>[])
+    : null;
   const newRecord = isRecord(row.newValue) ? row.newValue : null;
 
   // Extract auth event details from newValue when available
@@ -78,17 +85,19 @@ export function ChangeDetailSheet({
           <SheetTitle className="text-left text-sm font-medium text-muted-foreground">
             {format(row.createdAt, "EEEE, MMMM d, yyyy 'at' HH:mm:ss")}
           </SheetTitle>
-          <SheetDescription className="text-left space-y-1">
-            <div>
-              <span className="font-medium text-foreground">User: </span>
-              {row.user
-                ? `${row.user.name ?? ""} ${row.user.email}`.trim()
-                : "System"}
-            </div>
-            <div>
-              <span className="font-medium text-foreground">Resource: </span>
-              {row.resource}
-              {row.resourceId ? ` / ${row.resourceId}` : " / N/A"}
+          <SheetDescription asChild>
+            <div className="text-left space-y-1 text-sm text-muted-foreground">
+              <div>
+                <span className="font-medium text-foreground">User: </span>
+                {row.user
+                  ? `${row.user.name ?? ""} ${row.user.email}`.trim()
+                  : "System"}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">Resource: </span>
+                {row.resource}
+                {row.resourceId ? ` / ${row.resourceId}` : " / N/A"}
+              </div>
             </div>
           </SheetDescription>
         </SheetHeader>
@@ -152,7 +161,25 @@ export function ChangeDetailSheet({
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Previous Value
                 </h3>
-                {oldRecord === null ? (
+                {oldRecords ? (
+                  <div className="space-y-3">
+                    {oldRecords.map((rec, idx) => (
+                      <div key={idx} className="space-y-1 border-b pb-2 last:border-0">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          Item {idx + 1}
+                        </div>
+                        {Object.entries(rec).map(([key, val]) => (
+                          <div key={key} className="p-2 rounded text-xs bg-muted/30">
+                            <div className="text-muted-foreground font-medium mb-1">{key}</div>
+                            <pre className="font-mono text-xs whitespace-pre-wrap break-all">
+                              {renderValue(val)}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : oldRecord === null ? (
                   <div className="flex items-start gap-2 p-3 rounded-md bg-muted/50 text-sm text-muted-foreground">
                     <Info className="h-4 w-4 mt-0.5 shrink-0" />
                     <span>Previous state not captured</span>
