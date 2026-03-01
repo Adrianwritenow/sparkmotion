@@ -13,7 +13,7 @@
     "@sparkmotion/api": "workspace:*",
     "@sparkmotion/database": "workspace:*",
     "@sparkmotion/redis": "workspace:*",
-    "@vercel/functions": "^3.4.2",
+    "@vercel/functions": "^3.4.3",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
