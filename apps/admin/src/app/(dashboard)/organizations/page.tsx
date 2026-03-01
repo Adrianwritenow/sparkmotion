@@ -35,7 +35,7 @@ export default async function OrganizationsPage({
         contactEmail: true,
         _count: {
           select: {
-            events: true,
+            events: { where: { deletedAt: null } },
             users: true,
           },
         },
