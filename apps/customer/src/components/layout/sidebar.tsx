@@ -1,26 +1,26 @@
 "use client";
 
-import React, { createElement, useEffect, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
-import { useTheme } from "next-themes";
-import { trpc } from "@/lib/trpc";
-import { SmLogotype } from "@/components/sm-logotype";
 import {
-  LayoutDashboard,
   CalendarDays,
-  Megaphone,
   Disc3,
-
-  Sun,
-  Moon,
-  Monitor,
+  LayoutDashboard,
   LogOut,
+  Megaphone,
+  Monitor,
+  Moon,
   PanelLeft,
   PanelRight,
+  Sun,
   User,
 } from "lucide-react";
+import React, { createElement, useEffect, useState } from "react";
+import { signOut, useSession } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+
+import Link from "next/link";
+import { SmLogotype } from "@/components/sm-logotype";
+import { trpc } from "@/lib/trpc";
+import { useTheme } from "next-themes";
 
 interface SidebarProps {
   isMobile?: boolean;
@@ -48,7 +48,7 @@ export function Sidebar({ isMobile = false }: SidebarProps) {
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/events", label: "Events", icon: CalendarDays },
     { href: "/campaigns", label: "Campaigns", icon: Megaphone },
-    { href: "/bands", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
+    { href: "/activity", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
   ];
 
   return (
