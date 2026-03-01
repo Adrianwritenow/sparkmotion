@@ -403,19 +403,21 @@ export const bandsRouter = router({
       return db.band.count({ where });
     }),
 
-  trashCount: protectedProcedure.query(async ({ ctx }) => {
-    const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
-      ? { deletedAt: { not: null } }
-      : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! } };
-    return db.band.count({ where });
-  }),
-
-  listDeleted: protectedProcedure
-    .input(z.object({ orgId: z.string().optional() }).optional())
+  trashCount: protectedProcedure
+    .input(z.object({ eventId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
-        ? { deletedAt: { not: null }, ...(input?.orgId ? { event: { orgId: input.orgId } } : {}) }
-        : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! } };
+        ? { deletedAt: { not: null }, ...(input?.eventId ? { eventId: input.eventId } : {}) }
+        : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
+      return db.band.count({ where });
+    }),
+
+  listDeleted: protectedProcedure
+    .input(z.object({ orgId: z.string().optional(), eventId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
+        ? { deletedAt: { not: null }, ...(input?.orgId ? { event: { orgId: input.orgId } } : {}), ...(input?.eventId ? { eventId: input.eventId } : {}) }
+        : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
       const bands = await db.band.findMany({
         where,
         select: {
@@ -468,10 +470,12 @@ export const bandsRouter = router({
       return { restored: 1, skipped: 0 };
     }),
 
-  restoreAll: protectedProcedure.mutation(async ({ ctx }) => {
-    const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
-      ? { deletedAt: { not: null } }
-      : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! } };
+  restoreAll: protectedProcedure
+    .input(z.object({ eventId: z.string().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
+        ? { deletedAt: { not: null }, ...(input?.eventId ? { eventId: input.eventId } : {}) }
+        : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
     const deletedBands = await db.band.findMany({
       where,
       select: { id: true, bandId: true, eventId: true },

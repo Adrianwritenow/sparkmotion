@@ -22,42 +22,41 @@ function daysRemaining(deletedAt: Date | string) {
 
 interface BandTrashButtonProps {
   orgId?: string;
+  eventId?: string;
 }
 
-export function BandTrashButton({ orgId }: BandTrashButtonProps) {
+export function BandTrashButton({ orgId, eventId }: BandTrashButtonProps) {
   const [open, setOpen] = useState(false);
   const utils = trpc.useUtils();
 
-  const { data: count = 0 } = trpc.bands.trashCount.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-  });
+  const { data: count = 0 } = trpc.bands.trashCount.useQuery(
+    eventId ? { eventId } : undefined,
+    { refetchOnWindowFocus: false },
+  );
 
   const { data: deletedBands = [], isLoading } = trpc.bands.listDeleted.useQuery(
-    orgId ? { orgId } : undefined,
+    orgId || eventId ? { orgId, eventId } : undefined,
     { enabled: open }
   );
 
+  const invalidateAll = () => {
+    utils.bands.trashCount.invalidate();
+    utils.bands.listDeleted.invalidate();
+    utils.bands.listAll.invalidate();
+    if (eventId) utils.bands.list.invalidate();
+  };
+
   const restoreMutation = trpc.bands.restore.useMutation({
-    onSuccess: () => {
-      utils.bands.trashCount.invalidate();
-      utils.bands.listDeleted.invalidate();
-      utils.bands.listAll.invalidate();
-    },
+    onSuccess: invalidateAll,
   });
 
   const softDeleteMutation = trpc.bands.delete.useMutation({
-    onSuccess: () => {
-      utils.bands.trashCount.invalidate();
-      utils.bands.listDeleted.invalidate();
-      utils.bands.listAll.invalidate();
-    },
+    onSuccess: invalidateAll,
   });
 
   const restoreAllMutation = trpc.bands.restoreAll.useMutation({
     onSuccess: (result) => {
-      utils.bands.trashCount.invalidate();
-      utils.bands.listDeleted.invalidate();
-      utils.bands.listAll.invalidate();
+      invalidateAll();
       const total = result.restored + result.skipped;
       if (result.skipped > 0) {
         toast.warning(
@@ -117,7 +116,7 @@ export function BandTrashButton({ orgId }: BandTrashButtonProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => restoreAllMutation.mutate()}
+                  onClick={() => restoreAllMutation.mutate(eventId ? { eventId } : undefined)}
                   disabled={restoreAllMutation.isPending}
                   className="w-full"
                 >
