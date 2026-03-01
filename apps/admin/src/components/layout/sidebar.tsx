@@ -1,28 +1,29 @@
 "use client";
 
-import React, { createElement, useEffect, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
-import { useTheme } from "next-themes";
-import { trpc } from "@/lib/trpc";
-import { SmLogotype } from "@/components/sm-logotype";
 import {
-  LayoutDashboard,
   Building2,
   CalendarDays,
-  Megaphone,
+  ClipboardList,
   Disc3,
-  Users,
-
-  Sun,
-  Moon,
-  Monitor,
+  LayoutDashboard,
   LogOut,
+  Megaphone,
+  Monitor,
+  Moon,
   PanelLeft,
   PanelRight,
+  Sun,
   User,
+  Users,
 } from "lucide-react";
+import React, { createElement, useEffect, useState } from "react";
+import { signOut, useSession } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+
+import Link from "next/link";
+import { SmLogotype } from "@/components/sm-logotype";
+import { trpc } from "@/lib/trpc";
+import { useTheme } from "next-themes";
 
 interface SidebarProps {
   isMobile?: boolean;
@@ -53,6 +54,7 @@ export function Sidebar({ isMobile = false }: SidebarProps) {
     { href: "/campaigns", label: "Campaigns", icon: Megaphone },
     { href: "/bands", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
     { href: "/users", label: "Users", icon: Users },
+    { href: "/change-log", label: "Change Log", icon: ClipboardList },
   ];
 
   return (

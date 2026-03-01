@@ -31,9 +31,39 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo test
 
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Run pnpm audit (ignore known transitive CVEs)
+        run: |
+          pnpm audit --json > /tmp/audit.json 2>/dev/null || true
+          node -e "
+            const data = JSON.parse(require('fs').readFileSync('/tmp/audit.json','utf8'));
+            const known = new Set(process.env.KNOWN_CVES.split(','));
+            const unknown = Object.values(data.advisories || {}).filter(a =>
+              (a.severity === 'high' || a.severity === 'critical') &&
+              !known.has(a.github_advisory_id)
+            );
+            if (unknown.length) {
+              console.error(unknown.length + ' unknown high/critical vulnerabilities:');
+              unknown.forEach(a => console.error('  - ' + a.title + ' (' + a.github_advisory_id + ')'));
+              process.exit(1);
+            }
+            console.log('Audit passed (' + known.size + ' known transitive CVEs ignored)');
+          "
+        env:
+          KNOWN_CVES: "GHSA-5j98-mcp5-4vw2,GHSA-h25m-26qc-wcjf,GHSA-7v5v-9h63-cj86"
+
   build:
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test, audit]
     env:
       AUTH_SECRET: placeholder
       AUTH_URL: http://localhost:3000

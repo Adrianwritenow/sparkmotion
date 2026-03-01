@@ -21,11 +21,11 @@ export default async function EventDetailPage({
   }
 
   const event = await db.event.findUnique({
-    where: { id: params.id },
+    where: { id: params.id, deletedAt: null },
     include: {
       org: { select: { name: true } },
       windows: { orderBy: { startTime: "asc" } },
-      _count: { select: { bands: true } },
+      _count: { select: { bands: { where: { deletedAt: null } } } },
       campaign: { select: { id: true, name: true } },
     },
   });
@@ -35,7 +35,7 @@ export default async function EventDetailPage({
   }
 
   const campaigns = await db.campaign.findMany({
-    where: { orgId: session.user.orgId },
+    where: { orgId: session.user.orgId, deletedAt: null },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

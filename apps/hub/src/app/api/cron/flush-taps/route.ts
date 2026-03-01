@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
         // Resolve NFC bandId strings to internal CUIDs
         const uniqueBandIds = [...new Set(taps.map((t) => t.bandId))];
         const bands = await db.band.findMany({
-          where: { bandId: { in: uniqueBandIds } },
+          where: { bandId: { in: uniqueBandIds }, deletedAt: null },
           select: { id: true, bandId: true },
         });
         const bandIdMap = new Map(bands.map((b) => [b.bandId, b.id]));

@@ -22,16 +22,17 @@ export default async function CampaignDetailPage({
   }
 
   const campaign = await db.campaign.findUnique({
-    where: { id: params.id },
+    where: { id: params.id, deletedAt: null },
     include: {
       org: { select: { name: true } },
       events: {
+        where: { deletedAt: null },
         orderBy: { createdAt: "desc" },
         include: {
-          _count: { select: { bands: true } },
+          _count: { select: { bands: { where: { deletedAt: null } } } },
         },
       },
-      _count: { select: { events: true } },
+      _count: { select: { events: { where: { deletedAt: null } } } },
     },
   });
 
@@ -40,7 +41,7 @@ export default async function CampaignDetailPage({
   }
 
   const campaigns = await db.campaign.findMany({
-    where: { orgId: session.user.orgId },
+    where: { orgId: session.user.orgId, deletedAt: null },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

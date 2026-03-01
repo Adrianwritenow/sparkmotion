@@ -30,6 +30,7 @@ import { createTestCaller, createMockCampaign, createMockOrg } from '../test-uti
 beforeEach(() => {
   mockReset(prismaMock);
   vi.clearAllMocks();
+  prismaMock.changeLog.create.mockResolvedValue({} as any);
 });
 
 // ─── campaigns.list ───────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ describe('campaigns.list', () => {
     const result = await caller.campaigns.list({});
 
     expect(prismaMock.campaign.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} })
+      expect.objectContaining({ where: { deletedAt: null } })
     );
     expect(result).toHaveLength(1);
     expect(result[0]!.id).toBe('campaign-1');
@@ -70,7 +71,7 @@ describe('campaigns.list', () => {
     await caller.campaigns.list({ orgId: 'org-2' });
 
     expect(prismaMock.campaign.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'org-2' } })
+      expect.objectContaining({ where: { orgId: 'org-2', deletedAt: null } })
     );
   });
 
@@ -81,7 +82,7 @@ describe('campaigns.list', () => {
     await caller.campaigns.list({});
 
     expect(prismaMock.campaign.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'org-1' } })
+      expect.objectContaining({ where: { orgId: 'org-1', deletedAt: null } })
     );
   });
 
@@ -107,7 +108,7 @@ describe('campaigns.byId', () => {
     const result = await caller.campaigns.byId({ id: 'campaign-1' });
 
     expect(prismaMock.campaign.findUniqueOrThrow).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'campaign-1' } })
+      expect.objectContaining({ where: { id: 'campaign-1', deletedAt: null } })
     );
     expect(result.id).toBe('campaign-1');
     expect(result).toHaveProperty('aggregateEngagement');
@@ -161,6 +162,7 @@ describe('campaigns.update', () => {
   it('ADMIN updates campaign', async () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const updated = createMockCampaign({ name: 'Updated Campaign' });
+    prismaMock.campaign.findUniqueOrThrow.mockResolvedValue({ orgId: 'org-1' } as any);
     prismaMock.campaign.update.mockResolvedValue(updated as any);
 
     const result = await caller.campaigns.update({ id: 'campaign-1', name: 'Updated Campaign' });
@@ -177,7 +179,7 @@ describe('campaigns.update', () => {
   it('CUSTOMER cannot update campaign belonging to different org', async () => {
     const caller = createTestCaller({ role: 'CUSTOMER', orgId: 'org-2' });
     prismaMock.campaign.findUniqueOrThrow.mockResolvedValue(
-      createMockCampaign({ orgId: 'org-1' }) as any
+      { orgId: 'org-1' } as any
     );
 
     await expect(
@@ -188,21 +190,19 @@ describe('campaigns.update', () => {
 
 // ─── campaigns.delete ─────────────────────────────────────────────────────────
 describe('campaigns.delete', () => {
-  it('ADMIN deletes campaign', async () => {
+  it('ADMIN soft-deletes campaign', async () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
-    prismaMock.campaign.delete.mockResolvedValue(createMockCampaign() as any);
+    prismaMock.$transaction.mockResolvedValue([{}, { count: 0 }] as any);
 
     await caller.campaigns.delete({ id: 'campaign-1' });
 
-    expect(prismaMock.campaign.delete).toHaveBeenCalledWith({
-      where: { id: 'campaign-1' },
-    });
+    expect(prismaMock.$transaction).toHaveBeenCalled();
   });
 
   it('CUSTOMER cannot delete campaign belonging to different org', async () => {
     const caller = createTestCaller({ role: 'CUSTOMER', orgId: 'org-2' });
     prismaMock.campaign.findUniqueOrThrow.mockResolvedValue(
-      createMockCampaign({ orgId: 'org-1' }) as any
+      { orgId: 'org-1' } as any
     );
 
     await expect(caller.campaigns.delete({ id: 'campaign-1' })).rejects.toThrow('Forbidden');

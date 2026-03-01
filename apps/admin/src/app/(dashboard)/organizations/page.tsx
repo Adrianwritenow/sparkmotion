@@ -4,6 +4,7 @@ import { Building2, Users, ArrowUpRight, Calendar } from "lucide-react";
 import { AddOrgButton } from "@/components/organizations/add-org-button";
 import { ListFilterBar } from "@/components/list-filter-bar";
 import { OrgActions } from "@/components/organizations/org-actions";
+import { OrgTrashButton } from "@/components/organizations/org-trash-button";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +19,8 @@ export default async function OrganizationsPage({
   const search = searchParams.search?.trim() || "";
 
   const where = search
-    ? { name: { contains: search, mode: "insensitive" as const } }
-    : {};
+    ? { name: { contains: search, mode: "insensitive" as const }, deletedAt: null }
+    : { deletedAt: null };
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -39,7 +40,7 @@ export default async function OrganizationsPage({
           },
         },
         events: {
-          where: { status: "ACTIVE" },
+          where: { status: "ACTIVE", deletedAt: null },
           select: { id: true },
           take: 1,
         },
@@ -50,7 +51,7 @@ export default async function OrganizationsPage({
     }),
     db.organization.count({ where }),
     db.organization.count({
-      where: { createdAt: { lt: thirtyDaysAgo } },
+      where: { createdAt: { lt: thirtyDaysAgo }, deletedAt: null },
     }),
     db.user.count({
       where: { orgId: { not: null }, createdAt: { lt: thirtyDaysAgo } },
@@ -58,7 +59,7 @@ export default async function OrganizationsPage({
   ]);
 
   // Stats use unfiltered totals for platform-wide metrics
-  const totalOrgs = await db.organization.count();
+  const totalOrgs = await db.organization.count({ where: { deletedAt: null } });
   const totalUsers = await db.user.count({ where: { orgId: { not: null } } });
 
   const orgGrowth = orgs30DaysAgo > 0
@@ -85,7 +86,10 @@ export default async function OrganizationsPage({
             Manage and monitor all client organizations
           </p>
         </div>
-        <AddOrgButton className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors" />
+        <div className="flex items-center gap-2">
+          <OrgTrashButton />
+          <AddOrgButton className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors" />
+        </div>
       </div>
 
       {/* Stats Row */}

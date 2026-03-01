@@ -14,12 +14,12 @@ export default async function EventDetailPage({
   searchParams: { tab?: string };
 }) {
   const event = await db.event.findUnique({
-    where: { id: params.id },
+    where: { id: params.id, deletedAt: null },
     include: {
       org: { select: { name: true } },
       windows: { orderBy: { startTime: "asc" } },
       campaign: { select: { id: true, name: true } },
-      _count: { select: { bands: true } },
+      _count: { select: { bands: { where: { deletedAt: null } } } },
     },
   });
 
@@ -28,6 +28,7 @@ export default async function EventDetailPage({
   }
 
   const campaigns = await db.campaign.findMany({
+    where: { deletedAt: null },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

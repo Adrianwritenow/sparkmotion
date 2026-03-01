@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { Suspense, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,6 @@ const PASSWORD_RULES = [
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const { data: session } = useSession();
   const token = searchParams.get("token");
 
@@ -38,9 +37,8 @@ function ResetPasswordForm() {
   });
 
   const changePassword = trpc.auth.changePassword.useMutation({
-    onSuccess: async () => {
-      await signOut({ redirect: false });
-      router.push("/auth/signin");
+    onSuccess: () => {
+      signOut({ callbackUrl: "/auth/signin" });
     },
     onError: (err) => setError(err.message),
   });

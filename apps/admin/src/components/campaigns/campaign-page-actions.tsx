@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { CampaignFormDialog } from "./campaign-form-dialog";
+import { CampaignTrashButton } from "./campaign-trash-button";
 
 interface CampaignPageActionsProps {
   orgs: Array<{ id: string; name: string }>;
@@ -18,6 +19,8 @@ export function CampaignPageActions({
 
   return (
     <>
+      <CampaignTrashButton />
+
       {/* Desktop/tablet button (768px+) */}
       <Button
         onClick={() => setDialogOpen(true)}

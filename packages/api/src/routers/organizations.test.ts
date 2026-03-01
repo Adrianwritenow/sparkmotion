@@ -37,6 +37,7 @@ import { createTestCaller, createMockOrg } from '../test-utils';
 beforeEach(() => {
   mockReset(prismaMock);
   vi.clearAllMocks();
+  prismaMock.changeLog.create.mockResolvedValue({} as any);
 });
 
 // ─── organizations.list ───────────────────────────────────────────────────────
@@ -52,7 +53,10 @@ describe('organizations.list', () => {
     const result = await caller.organizations.list();
 
     expect(prismaMock.organization.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { name: 'asc' } })
+      expect.objectContaining({
+        where: { deletedAt: null },
+        orderBy: { name: 'asc' },
+      })
     );
     expect(result).toHaveLength(2);
     expect(result[0]!.id).toBe('org-1');
@@ -84,7 +88,7 @@ describe('organizations.byId', () => {
     const result = await caller.organizations.byId({ id: 'org-1' });
 
     expect(prismaMock.organization.findUniqueOrThrow).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'org-1' } })
+      expect.objectContaining({ where: { id: 'org-1', deletedAt: null } })
     );
     expect(result.id).toBe('org-1');
   });
@@ -245,15 +249,19 @@ describe('organizations.update', () => {
 
 // ─── organizations.delete ────────────────────────────────────────────────────
 describe('organizations.delete', () => {
-  it('ADMIN can delete an organization', async () => {
+  it('ADMIN soft-deletes an organization', async () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
-    prismaMock.organization.delete.mockResolvedValue(createMockOrg() as any);
+    prismaMock.$transaction.mockImplementation(async (args: any) => {
+      if (Array.isArray(args)) return args.map(() => ({}));
+      return args(prismaMock);
+    });
+    prismaMock.organization.update.mockResolvedValue(createMockOrg() as any);
+    prismaMock.event.updateMany.mockResolvedValue({ count: 0 } as any);
+    prismaMock.campaign.updateMany.mockResolvedValue({ count: 0 } as any);
+    prismaMock.band.updateMany.mockResolvedValue({ count: 0 } as any);
 
     const result = await caller.organizations.delete({ id: 'org-1' });
 
-    expect(prismaMock.organization.delete).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'org-1' } })
-    );
     expect(result).toEqual({ success: true });
   });
 

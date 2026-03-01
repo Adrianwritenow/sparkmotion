@@ -49,6 +49,7 @@ import { getEventEngagement } from '../lib/engagement';
 beforeEach(() => {
   mockReset(prismaMock);
   vi.clearAllMocks();
+  prismaMock.changeLog.create.mockResolvedValue({} as any);
 });
 
 // ─── events.list ──────────────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ describe('events.list', () => {
     const result = await caller.events.list({});
 
     expect(prismaMock.event.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} })
+      expect.objectContaining({ where: { deletedAt: null } })
     );
     expect(result).toHaveLength(1);
     expect(result[0]!.id).toBe('event-1');
@@ -81,7 +82,7 @@ describe('events.list', () => {
     await caller.events.list({ orgId: 'org-2' });
 
     expect(prismaMock.event.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'org-2' } })
+      expect.objectContaining({ where: { orgId: 'org-2', deletedAt: null } })
     );
   });
 
@@ -93,7 +94,7 @@ describe('events.list', () => {
     await caller.events.list({});
 
     expect(prismaMock.event.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'org-1' } })
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 'org-1', deletedAt: null }) })
     );
   });
 
@@ -137,7 +138,7 @@ describe('events.byId', () => {
     const result = await caller.events.byId({ id: 'event-1' });
 
     expect(prismaMock.event.findUniqueOrThrow).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'event-1' } })
+      expect.objectContaining({ where: { id: 'event-1', deletedAt: null } })
     );
     expect(result.currentMode).toBe('live');
     expect(result.tapCount).toBe(10);
@@ -203,21 +204,32 @@ describe('events.update', () => {
     await expect(
       caller.events.update({ id: 'event-1', name: 'Hacked' })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(prismaMock.event.findUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'event-1', deletedAt: null } })
+    );
   });
 });
 
 // ─── events.delete ────────────────────────────────────────────────────────────
 describe('events.delete', () => {
-  it('ADMIN deletes event', async () => {
+  it('ADMIN soft-deletes event', async () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const existing = createMockEvent();
     prismaMock.event.findUniqueOrThrow.mockResolvedValue(existing as any);
     prismaMock.band.findMany.mockResolvedValue([]);
-    prismaMock.event.delete.mockResolvedValue(existing as any);
+    prismaMock.$transaction.mockImplementation(async (args: any) => {
+      if (Array.isArray(args)) return args.map(() => ({}));
+      return args(prismaMock);
+    });
+    prismaMock.event.update.mockResolvedValue(existing as any);
+    prismaMock.band.updateMany.mockResolvedValue({ count: 0 } as any);
 
     await caller.events.delete({ id: 'event-1' });
 
-    expect(prismaMock.event.delete).toHaveBeenCalledWith({ where: { id: 'event-1' } });
+    expect(prismaMock.event.findUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'event-1', deletedAt: null } })
+    );
     expect(invalidateEventCache).toHaveBeenCalledWith('event-1');
   });
 

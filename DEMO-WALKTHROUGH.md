@@ -429,7 +429,7 @@ Organization (multi-tenant root)
         |     - tapCount, firstTapAt, lastTapAt (updated by flush cron)
         |     - @@unique([bandId, eventId])
         |
-        +-- TapLog[] (immutable audit log)
+        +-- TapLog[] (immutable change log)
               - modeServed (PRE|LIVE|POST|FALLBACK)
               - redirectUrl, userAgent, ipAddress, tappedAt
               - ~600K rows per event at scale

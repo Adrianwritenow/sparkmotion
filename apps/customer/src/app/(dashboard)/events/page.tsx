@@ -35,11 +35,11 @@ export default async function EventsPage({
 
   const [org, campaigns] = await Promise.all([
     db.organization.findUnique({
-      where: { id: session.user.orgId },
+      where: { id: session.user.orgId, deletedAt: null },
       select: { name: true },
     }),
     db.campaign.findMany({
-      where: { orgId: session.user.orgId },
+      where: { orgId: session.user.orgId, deletedAt: null },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -49,6 +49,7 @@ export default async function EventsPage({
 
   const where: Prisma.EventWhereInput = {
     orgId: session.user.orgId,
+    deletedAt: null,
     ...(searchParams.campaignId ? { campaignId: searchParams.campaignId } : {}),
     ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
     ...(status && status in EventStatus ? { status: status as EventStatus } : {}),
@@ -61,7 +62,7 @@ export default async function EventsPage({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
-        _count: { select: { bands: true } },
+        _count: { select: { bands: { where: { deletedAt: null } } } },
         campaign: { select: { id: true, name: true } },
       },
     }),

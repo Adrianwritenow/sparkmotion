@@ -19,19 +19,21 @@ export default async function DashboardPage() {
     recentEvents,
     recentOrgs,
   ] = await db.$transaction([
-    db.organization.count(),
-    db.event.count(),
-    db.event.count({ where: { status: "ACTIVE" } }),
-    db.band.count(),
+    db.organization.count({ where: { deletedAt: null } }),
+    db.event.count({ where: { deletedAt: null } }),
+    db.event.count({ where: { status: "ACTIVE", deletedAt: null } }),
+    db.band.count({ where: { deletedAt: null } }),
     db.event.findMany({
+      where: { deletedAt: null },
       take: 5,
       orderBy: { updatedAt: "desc" },
       include: { org: { select: { name: true } } },
     }),
     db.organization.findMany({
+      where: { deletedAt: null },
       take: 4,
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { events: true } } },
+      include: { _count: { select: { events: { where: { deletedAt: null } } } } },
     }),
   ]);
 
