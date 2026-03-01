@@ -9,7 +9,7 @@
   "dependencies": {
     "@sparkmotion/database": "workspace:*",
     "bcryptjs": "^2.4.3",
-    "dotenv": "^16.4.0",
+    "dotenv": "^17.3.1",
     "ioredis": "^5.4.0"
   },
   "devDependencies": {
