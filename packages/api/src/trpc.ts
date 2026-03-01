@@ -82,6 +82,15 @@ const changeLog = middleware(async ({ ctx, next, type, path, rawInput }) => {
         null) as string | null;
   }
 
+  // Extract batch IDs for deleteMany/restoreAll operations
+  let resourceIds: string[] | null = null;
+  if (!resourceId && rawInput && typeof rawInput === "object") {
+    const input = rawInput as Record<string, unknown>;
+    if (Array.isArray(input.ids)) {
+      resourceIds = input.ids as string[];
+    }
+  }
+
   // Capture oldValue before mutation for updates/deletes
   let oldValue: Prisma.InputJsonValue | undefined = undefined;
   const isUpdateOrDelete = action.includes("update") || action.includes("delete") || action.includes("toggle") || action.includes("change") || action.includes("remove") || action.includes("restore");
@@ -91,6 +100,19 @@ const changeLog = middleware(async ({ ctx, next, type, path, rawInput }) => {
       try {
         const existing = await finder(resourceId);
         if (existing != null) {
+          oldValue = JSON.parse(JSON.stringify(existing)) as Prisma.InputJsonValue;
+        }
+      } catch {
+        // Best-effort — don't block mutation if lookup fails
+      }
+    }
+  } else if (isUpdateOrDelete && resourceIds && resourceIds.length > 0) {
+    const finder = prismaModelMap[resourceType];
+    if (finder) {
+      try {
+        const records = await Promise.all(resourceIds.map((id) => finder(id)));
+        const existing = records.filter(Boolean);
+        if (existing.length > 0) {
           oldValue = JSON.parse(JSON.stringify(existing)) as Prisma.InputJsonValue;
         }
       } catch {
@@ -124,7 +146,7 @@ const changeLog = middleware(async ({ ctx, next, type, path, rawInput }) => {
         userId: ctx.user?.id ?? null,
         action: path,
         resource,
-        resourceId,
+        resourceId: resourceId ?? (resourceIds ? resourceIds.join(",") : null),
         oldValue,
         newValue,
         ipAddress,

@@ -95,7 +95,9 @@ export default async function CampaignsPage({
             Manage and monitor all campaigns
           </p>
         </div>
-        <CampaignPageActions orgId={session.user.orgId} availableEvents={events} />
+        <div className="flex gap-2">
+          <CampaignPageActions orgId={session.user.orgId} availableEvents={events} />
+        </div>
       </div>
 
       {/* Search, Status Filter & Pagination */}
