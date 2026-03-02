@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T23:30:00.000Z"
+last_updated: "2026-03-02T22:18:30.034Z"
 progress:
   total_phases: 36
-  completed_phases: 29
+  completed_phases: 30
   total_plans: 80
   completed_plans: 77
 ---
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 36 — Code cleanup, dead code removal, and reusable abstractions
-Plan: 02 COMPLETE — Moved 8 business components/hooks/utils to packages/ui; generic TrashSheet reduces 7 trash buttons from ~175 to 65-85 lines each; velocity-sparkline bug fixed
-Status: Phase 36 Plan 02 COMPLETE — 2 of N plans complete; proceeding to next plan
-Last activity: 2026-03-02 — Phase 36-02 complete: 18 local duplicates deleted, TrashSheet abstraction saves ~736 lines, all import sites updated
+Plan: 03 COMPLETE — Extracted enforceOrgAccess, ACTIVE/DELETED constants, createTrashProcedures factory; deleted dead costProjection code
+Status: Phase 36 Plans 01-03 COMPLETE — 3 of 3 plans complete; Phase 36 done
+Last activity: 2026-03-02 — Phase 36-03 complete: enforceOrgAccess + ACTIVE/DELETED constants + trash factory + costProjection dead code deleted, 96 tests pass
 
-Progress: (2 of N plans complete — Phase 36 in progress)
+Progress: (3 of 3 plans complete — Phase 36 COMPLETE)
 
 ## Performance Metrics
 
@@ -335,6 +335,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 36-02]: EventModeHeader unified with showOrgName optional prop rather than moved (trpc coupling); admin defaults true, customer false
 - [Phase 36-02]: TrashSheet uses controlled open/onOpenChange props; each trash button manages its own open state independently
 - [Phase 36-02]: velocity-sparkline threshold bug in customer: 5x red must be checked BEFORE 2x yellow to avoid yellow absorbing red case
+- [Phase 36]: createTrashProcedures factory covers events/campaigns/organizations — bands excluded due to unique eventId-scoped input signature (KISS)
+- [Phase 36]: enforceOrgAccess used for simple entity org-checks; analytics procedures retain pattern-level org-scoping
 
 ### Pending Todos
 
