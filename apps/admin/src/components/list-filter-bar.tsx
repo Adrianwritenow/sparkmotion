@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ interface ListFilterBarProps {
   pageSize: number;
   currentPage: number;
   searchPlaceholder?: string;
+  children?: React.ReactNode;
 }
 
 export function ListFilterBar({
@@ -28,6 +29,7 @@ export function ListFilterBar({
   pageSize,
   currentPage,
   searchPlaceholder = "Search...",
+  children,
 }: ListFilterBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -60,68 +62,77 @@ export function ListFilterBar({
     router.push(buildUrl({ status: value === "all" ? undefined : value, page: undefined }));
   };
 
+  const hasActiveFilters = Array.from(searchParams.entries()).some(
+    ([key]) => key !== "page"
+  );
+
+  const handleClearFilters = () => {
+    setSearchValue("");
+    router.push("?");
+  };
+
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const end = Math.min(currentPage * pageSize, totalItems);
 
   return (
-    <div className="space-y-4">
-      {/* Search + Status Filter Row */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder={searchPlaceholder}
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        {statusOptions && (
-          <Select
-            value={searchParams.get("status") ?? "all"}
-            onValueChange={handleStatusChange}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {statusOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <div className="relative flex-1 max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder={searchPlaceholder}
+          value={searchValue}
+          onChange={(e) => setSearchValue(e.target.value)}
+          className="pl-9"
+        />
       </div>
-
-      {/* Pagination Row */}
+      {children}
+      {statusOptions && (
+        <Select
+          value={searchParams.get("status") ?? "all"}
+          onValueChange={handleStatusChange}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {statusOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {hasActiveFilters && (
+        <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+          <X className="w-4 h-4 mr-1" />
+          Clear filters
+        </Button>
+      )}
       {totalItems > 0 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <p className="text-sm text-muted-foreground whitespace-nowrap">
             Showing {start}-{end} of {totalItems}
           </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage <= 1}
-              onClick={() => router.push(buildUrl({ page: String(currentPage - 1) }))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage >= totalPages}
-              onClick={() => router.push(buildUrl({ page: String(currentPage + 1) }))}
-            >
-              Next
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage <= 1}
+            onClick={() => router.push(buildUrl({ page: String(currentPage - 1) }))}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage >= totalPages}
+            onClick={() => router.push(buildUrl({ page: String(currentPage + 1) }))}
+          >
+            Next
+          </Button>
         </div>
       )}
     </div>

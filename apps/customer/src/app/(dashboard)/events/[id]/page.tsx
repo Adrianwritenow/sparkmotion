@@ -103,6 +103,15 @@ export default async function EventDetailPage({
                 </span>
               </div>
             )}
+            {event.startDate && (
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-4 h-4" />
+                <span>
+                  {new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  {event.endDate && ` - ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
               <span>

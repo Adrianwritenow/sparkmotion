@@ -1,10 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Copy, X, Trash2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Copy, X, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { EventCardList } from "./event-card-list";
 import { DeleteEventsDialog } from "./delete-events-dialog";
@@ -34,8 +41,15 @@ interface EventListWithActionsProps {
   showCampaign?: boolean;
 }
 
+const EVENT_SORT_OPTIONS = [
+  { value: "createdAt", label: "Creation Date" },
+  { value: "startDate", label: "Start Date" },
+  { value: "endDate", label: "End Date" },
+];
+
 export function EventListWithActions({ events, showOrg, showCampaign }: EventListWithActionsProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const utils = trpc.useUtils();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -87,6 +101,24 @@ export function EventListWithActions({ events, showOrg, showCampaign }: EventLis
     deleteEvents.mutate({ ids: Array.from(selectedIds) });
   };
 
+  const buildUrl = (overrides: Record<string, string | undefined>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    return `?${params.toString()}`;
+  };
+
+  const handleSortChange = (value: string) => {
+    router.push(buildUrl({ sort: value === "createdAt" ? undefined : value, page: undefined }));
+  };
+
+  const handleDirToggle = () => {
+    const currentDir = searchParams.get("dir") ?? "desc";
+    router.push(buildUrl({ dir: currentDir === "desc" ? "asc" : undefined, page: undefined }));
+  };
+
   // Derive org name from selected events
   const selectedEvents = events.filter((e) => selectedIds.has(e.id));
   const uniqueOrgNames = [...new Set(selectedEvents.map((e) => e.org?.name).filter((n): n is string => !!n))];
@@ -95,8 +127,8 @@ export function EventListWithActions({ events, showOrg, showCampaign }: EventLis
 
   return (
     <div>
-      {/* Select All Row */}
-      <div className="flex items-center gap-3 mb-4">
+      {/* Select All + Sort Row */}
+      <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           <Checkbox
             checked={events.length > 0 && selectedIds.size === events.length}
@@ -107,6 +139,36 @@ export function EventListWithActions({ events, showOrg, showCampaign }: EventLis
               ? `${selectedIds.size} of ${events.length} selected`
               : "Select all"}
           </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Select
+            value={searchParams.get("sort") ?? "createdAt"}
+            onValueChange={handleSortChange}
+          >
+            <SelectTrigger className="w-[160px] h-8 text-xs">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              {EVENT_SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleDirToggle}
+            title={searchParams.get("dir") === "asc" ? "Ascending" : "Descending"}
+          >
+            {searchParams.get("dir") === "asc" ? (
+              <ArrowUp className="w-3.5 h-3.5" />
+            ) : (
+              <ArrowDown className="w-3.5 h-3.5" />
+            )}
+          </Button>
         </div>
       </div>
 

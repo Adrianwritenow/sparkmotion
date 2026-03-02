@@ -20,6 +20,8 @@ interface EventCardListProps {
     status: string;
     createdAt: Date;
     updatedAt: Date;
+    startDate?: Date | null;
+    endDate?: Date | null;
     location?: string | null;
     venueName?: string | null;
     formattedAddress?: string | null;
@@ -126,11 +128,13 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
             <div className="flex items-center gap-2">
               <CalendarDays className="w-4 h-4" />
               <span>
-                {new Date(event.updatedAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {event.startDate && event.endDate ? (
+                  `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                ) : event.startDate ? (
+                  `Starts ${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                ) : (
+                  new Date(event.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                )}
               </span>
             </div>
             {showOrg && event.org && (
