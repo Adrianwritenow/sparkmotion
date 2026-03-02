@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T22:01:52.245Z"
+last_updated: "2026-03-02T23:30:00.000Z"
 progress:
   total_phases: 36
   completed_phases: 29
   total_plans: 80
-  completed_plans: 75
+  completed_plans: 77
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 36 — Code cleanup, dead code removal, and reusable abstractions
-Plan: 01 COMPLETE — Migrated all 20 shadcn primitives to packages/ui; both apps import from @sparkmotion/ui/*
-Status: Phase 36 Plan 01 COMPLETE — 1 of N plans complete; proceeding to next plan
-Last activity: 2026-03-02 — Phase 36-01 complete: 40 duplicated UI files eliminated, ~473 import sites updated, both apps build successfully
+Plan: 02 COMPLETE — Moved 8 business components/hooks/utils to packages/ui; generic TrashSheet reduces 7 trash buttons from ~175 to 65-85 lines each; velocity-sparkline bug fixed
+Status: Phase 36 Plan 02 COMPLETE — 2 of N plans complete; proceeding to next plan
+Last activity: 2026-03-02 — Phase 36-02 complete: 18 local duplicates deleted, TrashSheet abstraction saves ~736 lines, all import sites updated
 
-Progress: (1 of N plans complete — Phase 36 in progress)
+Progress: (2 of N plans complete — Phase 36 in progress)
 
 ## Performance Metrics
 
@@ -331,6 +331,10 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 34]: Customer TrashButton components omit deletedByName display — org-scoped context makes attribution less relevant; no orgId prop needed on customer BandTrashButton since backend auto-scopes
 - [Phase 36]: Used customer chart.tsx (380 lines) as canonical — superset API with labelFormatter/formatter props; backwards-compatible with admin usage
 - [Phase 36]: Import shadcn primitives from @sparkmotion/ui/component-name subpath exports; cn from @sparkmotion/ui; no local copies in apps
+- [Phase 36-02]: kpi-cards and velocity-sparkline kept in apps (trpc coupling); live-kpi-cards and connection-status moved (data passed as props only)
+- [Phase 36-02]: EventModeHeader unified with showOrgName optional prop rather than moved (trpc coupling); admin defaults true, customer false
+- [Phase 36-02]: TrashSheet uses controlled open/onOpenChange props; each trash button manages its own open state independently
+- [Phase 36-02]: velocity-sparkline threshold bug in customer: 5x red must be checked BEFORE 2x yellow to avoid yellow absorbing red case
 
 ### Pending Todos
 
@@ -408,7 +412,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 34-03-PLAN.md — awaiting human-verify checkpoint for customer trash UI
-Resume file: N/A — Phase 34 fully executed; next steps depend on human verification outcome
-Next step: Verify customer trash UI in browser, then proceed to next phase
+Last session: 2026-03-02
+Stopped at: Completed 36-02-PLAN.md — shared business components + TrashSheet abstraction
+Resume file: N/A — Phase 36 Plan 02 fully executed; proceed to next plan
+Next step: Continue Phase 36 with next plan (36-03 or subsequent)
