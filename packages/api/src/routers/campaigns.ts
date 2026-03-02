@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db, Prisma } from "@sparkmotion/database";
+import { enforceOrgAccess } from "../lib/auth";
 import { getEventEngagement } from "../lib/engagement";
 import { ACTIVE } from "../lib/soft-delete";
 import { createTrashProcedures } from "../lib/trash";
@@ -158,16 +159,11 @@ export const campaignsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
 
-      // Check ownership for CUSTOMER role
-      if (ctx.user.role === "CUSTOMER") {
-        const campaign = await db.campaign.findUniqueOrThrow({
-          where: { id, ...ACTIVE },
-          select: { orgId: true },
-        });
-        if (campaign.orgId !== ctx.user.orgId) {
-          throw new Error("Forbidden: You can only update campaigns in your organization");
-        }
-      }
+      const campaign = await db.campaign.findUniqueOrThrow({
+        where: { id, ...ACTIVE },
+        select: { orgId: true },
+      });
+      enforceOrgAccess(ctx, campaign.orgId);
 
       return db.campaign.update({ where: { id }, data });
     }),
@@ -203,16 +199,11 @@ export const campaignsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Check ownership for CUSTOMER role
-      if (ctx.user.role === "CUSTOMER") {
-        const campaign = await db.campaign.findUniqueOrThrow({
-          where: { id: input.id, ...ACTIVE },
-          select: { orgId: true },
-        });
-        if (campaign.orgId !== ctx.user.orgId) {
-          throw new Error("Forbidden: You can only delete campaigns in your organization");
-        }
-      }
+      const campaign = await db.campaign.findUniqueOrThrow({
+        where: { id: input.id, ...ACTIVE },
+        select: { orgId: true },
+      });
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const now = new Date();
       await db.$transaction([
