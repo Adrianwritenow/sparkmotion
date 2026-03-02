@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
+import { TRPCError } from "@trpc/server";
 import { db, Prisma } from "@sparkmotion/database";
 import { getEventEngagement } from "../lib/engagement";
 
@@ -222,6 +223,143 @@ export const campaignsRouter = router({
           data: { deletedCampaignId: input.id, campaignId: null },
         }),
       ]);
+    }),
+
+  deleteMany: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.string()).min(1).max(50),
+      deleteEvents: z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const campaigns = await db.campaign.findMany({
+        where: { id: { in: input.ids }, deletedAt: null },
+      });
+
+      if (campaigns.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No campaigns found" });
+      }
+
+      if (ctx.user.role === "CUSTOMER") {
+        const unauthorized = campaigns.some((c) => c.orgId !== ctx.user.orgId);
+        if (unauthorized) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
+      const now = new Date();
+      const campaignIds = campaigns.map((c) => c.id);
+
+      await db.$transaction(async (tx) => {
+        for (const id of campaignIds) {
+          if (input.deleteEvents) {
+            // Soft-delete associated events and their bands
+            const events = await tx.event.findMany({
+              where: { campaignId: id, deletedAt: null },
+              select: { id: true },
+            });
+            const eventIds = events.map((e) => e.id);
+            if (eventIds.length > 0) {
+              await tx.band.updateMany({
+                where: { eventId: { in: eventIds }, deletedAt: null },
+                data: { deletedAt: now, deletedBy: ctx.user.id },
+              });
+              await tx.event.updateMany({
+                where: { id: { in: eventIds } },
+                data: { deletedAt: now, deletedBy: ctx.user.id, deletedCampaignId: id, campaignId: null },
+              });
+            }
+          } else {
+            // Unlink events from campaign (preserve them)
+            await tx.event.updateMany({
+              where: { campaignId: id, deletedAt: null },
+              data: { deletedCampaignId: id, campaignId: null },
+            });
+          }
+        }
+        await tx.campaign.updateMany({
+          where: { id: { in: campaignIds } },
+          data: { deletedAt: now, deletedBy: ctx.user.id },
+        });
+      });
+
+      return { deletedCount: campaigns.length };
+    }),
+
+  duplicate: protectedProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(50) }))
+    .mutation(async ({ input, ctx }) => {
+      const campaigns = await db.campaign.findMany({
+        where: { id: { in: input.ids }, deletedAt: null },
+        include: {
+          events: {
+            where: { deletedAt: null },
+            include: { windows: true },
+          },
+        },
+      });
+
+      if (campaigns.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No campaigns found" });
+      }
+
+      if (ctx.user.role === "CUSTOMER") {
+        const unauthorized = campaigns.some((c) => c.orgId !== ctx.user.orgId);
+        if (unauthorized) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
+      return db.$transaction(async (tx) => {
+        const created = [];
+        for (const campaign of campaigns) {
+          const newCampaign = await tx.campaign.create({
+            data: {
+              name: `${campaign.name} (Copy)`,
+              orgId: campaign.orgId,
+              status: "DRAFT",
+              startDate: campaign.startDate,
+              endDate: campaign.endDate,
+            },
+          });
+          for (const event of campaign.events) {
+            await tx.event.create({
+              data: {
+                name: `${event.name} (Copy)`,
+                orgId: event.orgId,
+                campaignId: newCampaign.id,
+                city: event.city,
+                state: event.state,
+                country: event.country,
+                zipcode: event.zipcode,
+                location: event.location,
+                venueName: event.venueName,
+                formattedAddress: event.formattedAddress,
+                latitude: event.latitude,
+                longitude: event.longitude,
+                timezone: event.timezone,
+                scheduleMode: event.scheduleMode,
+                fallbackUrl: event.fallbackUrl,
+                estimatedAttendees: event.estimatedAttendees,
+                startDate: event.startDate,
+                endDate: event.endDate,
+                status: "DRAFT",
+                windows: {
+                  create: event.windows.map((w) => ({
+                    windowType: w.windowType,
+                    url: w.url,
+                    startTime: w.startTime,
+                    endTime: w.endTime,
+                    isManual: w.isManual,
+                    isActive: false,
+                  })),
+                },
+              },
+            });
+          }
+          created.push(newCampaign);
+        }
+        return created;
+      });
     }),
 
   trashCount: protectedProcedure.query(async ({ ctx }) => {

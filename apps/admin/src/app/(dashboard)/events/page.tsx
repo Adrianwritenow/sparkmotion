@@ -19,7 +19,7 @@ const EVENT_STATUS_OPTIONS = [
 export default async function EventsPage({
   searchParams,
 }: {
-  searchParams: { campaignId?: string; search?: string; status?: string; page?: string };
+  searchParams: { campaignId?: string; search?: string; status?: string; page?: string; sort?: string; dir?: string };
 }) {
   const campaigns = await db.campaign.findMany({
     where: { deletedAt: null },
@@ -44,10 +44,13 @@ export default async function EventsPage({
     ...(status && status in EventStatus ? { status: status as EventStatus } : {}),
   };
 
+  const sortField = (["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "createdAt") as "createdAt" | "startDate" | "endDate";
+  const sortDir = searchParams.dir === "asc" ? "asc" as const : "desc" as const;
+
   const [events, totalCount] = await Promise.all([
     db.event.findMany({
       where,
-      orderBy: { updatedAt: "desc" },
+      orderBy: { [sortField]: sortDir },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
@@ -88,17 +91,7 @@ export default async function EventsPage({
         </div>
       </div>
 
-      {/* Campaign Filter */}
-      {campaigns.length > 0 && (
-        <div className="mb-6">
-          <CampaignFilter
-            campaigns={campaigns}
-            selected={searchParams.campaignId}
-          />
-        </div>
-      )}
-
-      {/* Search, Status Filter & Pagination */}
+      {/* Search, Filters & Pagination */}
       <div className="mb-6">
         <ListFilterBar
           statusOptions={EVENT_STATUS_OPTIONS}
@@ -106,7 +99,14 @@ export default async function EventsPage({
           pageSize={PAGE_SIZE}
           currentPage={page}
           searchPlaceholder="Search events..."
-        />
+        >
+          {campaigns.length > 0 && (
+            <CampaignFilter
+              campaigns={campaigns}
+              selected={searchParams.campaignId}
+            />
+          )}
+        </ListFilterBar>
       </div>
 
       {/* Events Card List */}

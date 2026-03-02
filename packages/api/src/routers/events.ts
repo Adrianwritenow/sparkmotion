@@ -9,7 +9,11 @@ import { getEventEngagement } from "../lib/engagement";
 
 export const eventsRouter = router({
   list: protectedProcedure
-    .input(z.object({ orgId: z.string().optional() }).optional())
+    .input(z.object({
+      orgId: z.string().optional(),
+      sortBy: z.enum(["createdAt", "startDate", "endDate"]).optional(),
+      sortDir: z.enum(["asc", "desc"]).optional(),
+    }).optional())
     .query(async ({ ctx, input }) => {
       const where =
         ctx.user.role === "ADMIN"
@@ -23,7 +27,7 @@ export const eventsRouter = router({
           campaign: { select: { id: true, name: true } },
           _count: { select: { bands: { where: { deletedAt: null } } } }
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { [input?.sortBy ?? "createdAt"]: input?.sortDir ?? "desc" },
       });
 
       // Batch engagement + tap stats via shared lib
@@ -100,6 +104,8 @@ export const eventsRouter = router({
         longitude: z.number().optional(),
         timezone: z.string().optional(),
         estimatedAttendees: z.number().int().positive().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
         campaignId: z.string().optional(),
       })
     )
@@ -143,6 +149,8 @@ export const eventsRouter = router({
         scheduleMode: z.boolean().optional(),
         status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
         estimatedAttendees: z.number().int().positive().nullable().optional(),
+        startDate: z.date().nullable().optional(),
+        endDate: z.date().nullable().optional(),
         campaignId: z.string().nullable().optional(),
       })
     )
@@ -336,6 +344,8 @@ export const eventsRouter = router({
               scheduleMode: event.scheduleMode,
               fallbackUrl: event.fallbackUrl,
               estimatedAttendees: event.estimatedAttendees,
+              startDate: event.startDate,
+              endDate: event.endDate,
               status: "DRAFT",
               windows: {
                 create: event.windows.map((w) => ({

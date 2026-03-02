@@ -13,57 +13,52 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { EventCardList } from "./event-card-list";
-import { DeleteEventsDialog } from "./delete-events-dialog";
+import { CampaignCardList } from "./campaign-card-list";
+import { DeleteCampaignsDialog } from "./delete-campaigns-dialog";
 
-type EventItem = {
+type CampaignItem = {
   id: string;
   name: string;
   status: string;
-  createdAt: Date;
-  updatedAt: Date;
-  location?: string | null;
-  venueName?: string | null;
-  formattedAddress?: string | null;
+  startDate: Date | null;
+  endDate: Date | null;
   org?: { name: string } | null;
-  windows?: Array<{ isActive: boolean }>;
-  _count: { bands: number };
-  tapCount?: number;
-  engagementPercent?: number;
-  campaign?: { id: string; name: string } | null;
+  _count: { events: number };
+  aggregateEngagement?: number;
+  totalBands?: number;
+  locations?: string[];
 };
 
-interface EventListWithActionsProps {
-  events: EventItem[];
+interface CampaignListWithActionsProps {
+  campaigns: CampaignItem[];
   showOrg?: boolean;
-  showCampaign?: boolean;
   orgName: string;
 }
 
-const EVENT_SORT_OPTIONS = [
+const CAMPAIGN_SORT_OPTIONS = [
   { value: "createdAt", label: "Creation Date" },
   { value: "startDate", label: "Start Date" },
   { value: "endDate", label: "End Date" },
 ];
 
-export function EventListWithActions({ events, showOrg, showCampaign, orgName }: EventListWithActionsProps) {
+export function CampaignListWithActions({ campaigns, showOrg, orgName }: CampaignListWithActionsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const utils = trpc.useUtils();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const duplicateEvents = trpc.events.duplicate.useMutation({
+  const duplicateCampaigns = trpc.campaigns.duplicate.useMutation({
     onSuccess: () => {
-      utils.events.list.invalidate();
+      utils.campaigns.list.invalidate();
       setSelectedIds(new Set());
       router.refresh();
     },
   });
 
-  const deleteEvents = trpc.events.deleteMany.useMutation({
+  const deleteCampaigns = trpc.campaigns.deleteMany.useMutation({
     onSuccess: () => {
-      utils.events.list.invalidate();
+      utils.campaigns.list.invalidate();
       setSelectedIds(new Set());
       setDeleteDialogOpen(false);
       router.refresh();
@@ -83,21 +78,21 @@ export function EventListWithActions({ events, showOrg, showCampaign, orgName }:
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.size === events.length) {
+    if (selectedIds.size === campaigns.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(events.map((e) => e.id)));
+      setSelectedIds(new Set(campaigns.map((c) => c.id)));
     }
   };
 
   const handleDuplicate = () => {
     if (selectedIds.size === 0) return;
-    duplicateEvents.mutate({ ids: Array.from(selectedIds) });
+    duplicateCampaigns.mutate({ ids: Array.from(selectedIds) });
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = (deleteEvents: boolean) => {
     if (selectedIds.size === 0) return;
-    deleteEvents.mutate({ ids: Array.from(selectedIds) });
+    deleteCampaigns.mutate({ ids: Array.from(selectedIds), deleteEvents });
   };
 
   const buildUrl = (overrides: Record<string, string | undefined>) => {
@@ -118,18 +113,21 @@ export function EventListWithActions({ events, showOrg, showCampaign, orgName }:
     router.push(buildUrl({ dir: currentDir === "desc" ? "asc" : undefined, page: undefined }));
   };
 
+  const selectedCampaigns = campaigns.filter((c) => selectedIds.has(c.id));
+  const associatedEventCount = selectedCampaigns.reduce((sum, c) => sum + c._count.events, 0);
+
   return (
     <div>
       {/* Select All + Sort Row */}
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2">
           <Checkbox
-            checked={events.length > 0 && selectedIds.size === events.length}
+            checked={campaigns.length > 0 && selectedIds.size === campaigns.length}
             onCheckedChange={handleSelectAll}
           />
           <span className="text-sm text-muted-foreground">
             {selectedIds.size > 0
-              ? `${selectedIds.size} of ${events.length} selected`
+              ? `${selectedIds.size} of ${campaigns.length} selected`
               : "Select all"}
           </span>
         </div>
@@ -142,7 +140,7 @@ export function EventListWithActions({ events, showOrg, showCampaign, orgName }:
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
-              {EVENT_SORT_OPTIONS.map((opt) => (
+              {CAMPAIGN_SORT_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -165,11 +163,10 @@ export function EventListWithActions({ events, showOrg, showCampaign, orgName }:
         </div>
       </div>
 
-      {/* Event List */}
-      <EventCardList
-        events={events}
+      {/* Campaign List */}
+      <CampaignCardList
+        campaigns={campaigns}
         showOrg={showOrg}
-        showCampaign={showCampaign}
         selectable={true}
         selectedIds={selectedIds}
         onSelectionChange={handleSelectionChange}
@@ -180,15 +177,15 @@ export function EventListWithActions({ events, showOrg, showCampaign, orgName }:
         <div className="sticky bottom-6 z-50 flex justify-center">
           <div className="flex items-center gap-3 bg-background border border-border rounded-lg shadow-lg px-4 py-3">
             <span className="text-sm font-medium">
-              {selectedIds.size} event{selectedIds.size !== 1 ? "s" : ""} selected
+              {selectedIds.size} campaign{selectedIds.size !== 1 ? "s" : ""} selected
             </span>
             <Button
               size="sm"
               onClick={handleDuplicate}
-              disabled={duplicateEvents.isPending}
+              disabled={duplicateCampaigns.isPending}
             >
               <Copy className="w-4 h-4 mr-2" />
-              {duplicateEvents.isPending ? "Duplicating..." : "Duplicate"}
+              {duplicateCampaigns.isPending ? "Duplicating..." : "Duplicate"}
             </Button>
             <Button
               variant="destructive"
@@ -206,14 +203,15 @@ export function EventListWithActions({ events, showOrg, showCampaign, orgName }:
       )}
 
       {/* Delete Confirmation Dialog */}
-      <DeleteEventsDialog
+      <DeleteCampaignsDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         count={selectedIds.size}
-        eventNames={events.filter((e) => selectedIds.has(e.id)).map((e) => e.name)}
+        campaignNames={selectedCampaigns.map((c) => c.name)}
         orgName={orgName}
+        associatedEventCount={associatedEventCount}
         onConfirm={handleDeleteConfirm}
-        isPending={deleteEvents.isPending}
+        isPending={deleteCampaigns.isPending}
       />
     </div>
   );
