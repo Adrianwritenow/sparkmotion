@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T22:35:33.266Z"
+last_updated: "2026-03-02T22:01:52.245Z"
 progress:
-  total_phases: 34
+  total_phases: 36
   completed_phases: 29
-  total_plans: 77
-  completed_plans: 74
+  total_plans: 80
+  completed_plans: 75
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 34 — Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
-Plan: 03 COMPLETE — Customer trash UI: 3 TrashButton Sheet components (events/campaigns/bands) integrated into customer page headers
-Status: Phase 34 COMPLETE — 3 of 3 plans complete; awaiting human-verify checkpoint before marking fully verified
-Last activity: 2026-02-28 — Phase 34-03 complete: customer trash UI built for events/campaigns/bands with org-scoped sheets, restore, undo, and restoreAll
+Phase: 36 — Code cleanup, dead code removal, and reusable abstractions
+Plan: 01 COMPLETE — Migrated all 20 shadcn primitives to packages/ui; both apps import from @sparkmotion/ui/*
+Status: Phase 36 Plan 01 COMPLETE — 1 of N plans complete; proceeding to next plan
+Last activity: 2026-03-02 — Phase 36-01 complete: 40 duplicated UI files eliminated, ~473 import sites updated, both apps build successfully
 
-Progress: (3 of 3 plans complete — Phase 34 done)
+Progress: (1 of N plans complete — Phase 36 in progress)
 
 ## Performance Metrics
 
@@ -329,6 +329,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 34]: bands.restoreAll skipped is a count (number), not array — toast shows count only, not ID list
 - [Phase 34]: TrashButton pattern: trashCount always fetches for badge, listDeleted uses enabled:open guard
 - [Phase 34]: Customer TrashButton components omit deletedByName display — org-scoped context makes attribution less relevant; no orgId prop needed on customer BandTrashButton since backend auto-scopes
+- [Phase 36]: Used customer chart.tsx (380 lines) as canonical — superset API with labelFormatter/formatter props; backwards-compatible with admin usage
+- [Phase 36]: Import shadcn primitives from @sparkmotion/ui/component-name subpath exports; cn from @sparkmotion/ui; no local copies in apps
 
 ### Pending Todos
 
@@ -336,6 +338,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 36 added: Code cleanup - dead code removal and reusable abstractions
 - Phase 34 added: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
 - Phase 33 added: Build audit logging UI page for SOC2 compliance
 - Phase 32 added: SOC 2 backend compliance hardening
