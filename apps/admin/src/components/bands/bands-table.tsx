@@ -8,10 +8,10 @@ import {
 } from "@tanstack/react-table";
 import { trpc } from "@/lib/trpc";
 import { Check, Flag, Trash2, X } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@sparkmotion/ui/tabs";
+import { Input } from "@sparkmotion/ui/input";
+import { Button } from "@sparkmotion/ui/button";
 import {
   Table,
   TableBody,
@@ -19,21 +19,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@sparkmotion/ui/table";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 import { getColumns, BandWithTag } from "./bands-columns";
 import { DeleteBandsDialog } from "./delete-bands-dialog";
 

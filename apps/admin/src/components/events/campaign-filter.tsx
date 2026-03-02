@@ -7,7 +7,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 
 interface CampaignFilterProps {
   campaigns: Array<{ id: string; name: string }>;

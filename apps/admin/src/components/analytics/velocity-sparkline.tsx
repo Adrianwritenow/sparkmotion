@@ -1,8 +1,8 @@
 'use client';
 
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { Card, CardContent, CardHeader, CardTitle } from "@sparkmotion/ui/card";
+import { ChartContainer, type ChartConfig } from "@sparkmotion/ui/chart";
 import { LineChart, Line } from "recharts";
 
 const chartConfig = {

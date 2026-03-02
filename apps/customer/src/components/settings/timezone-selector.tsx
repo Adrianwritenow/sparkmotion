@@ -1,14 +1,14 @@
 'use client';
 import { trpc } from '@/lib/trpc';
-import { Label } from '@/components/ui/label';
+import { Label } from '@sparkmotion/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { US_TIMEZONES } from '@/lib/us-timezones';
+} from '@sparkmotion/ui/select';
+import { US_TIMEZONES } from '@sparkmotion/ui';
 
 export function TimezoneSelector() {
   const { data: user } = trpc.users.me.useQuery();

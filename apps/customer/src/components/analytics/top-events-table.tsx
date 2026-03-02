@@ -1,8 +1,8 @@
 "use client";
 
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@sparkmotion/ui/card";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -10,7 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@sparkmotion/ui/table";
 
 interface TopEventsTableProps {
   from: string;

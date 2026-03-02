@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 import {
   Form,
   FormControl,
@@ -21,24 +21,24 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+} from "@sparkmotion/ui/form";
+import { Input } from "@sparkmotion/ui/input";
+import { Button } from "@sparkmotion/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+} from "@sparkmotion/ui/popover";
+import { Calendar } from "@sparkmotion/ui/calendar";
 import { trpc } from "@/lib/trpc";
-import { cn } from "@/lib/utils";
+import { cn } from "@sparkmotion/ui";
 
 function getShortTzName(date: Date, timezone: string): string {
   try {

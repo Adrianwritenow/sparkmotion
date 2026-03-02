@@ -3,9 +3,9 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Band } from "@sparkmotion/database";
 import { Flag, Globe } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@sparkmotion/ui/badge";
+import { Button } from "@sparkmotion/ui/button";
+import { Checkbox } from "@sparkmotion/ui/checkbox";
 
 export type BandWithTag = Band & {
   tag?: { id: string; title: string } | null;

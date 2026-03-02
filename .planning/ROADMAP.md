@@ -240,6 +240,28 @@ Plans:
 - [ ] 34-02-PLAN.md — Admin trash UI (4 sheets: events/campaigns/orgs/bands + Trash2 badges + sonner toasts + restoreAll for campaigns/orgs)
 - [ ] 34-03-PLAN.md — Customer trash UI (3 sheets: events/campaigns/bands — org-scoped, no orgs trash)
 
+### Phase 35: Code cleanup - remove dead code and extract reusable abstractions
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 34
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 35 to break down)
+
+### Phase 36: Code cleanup - dead code removal and reusable abstractions
+
+**Goal:** Consolidate ~20 duplicated shadcn primitives and ~10 business components into packages/ui, extract tRPC router patterns (enforceOrgAccess, soft-delete constants, trash procedure factory), create generic TrashSheet UI component, and remove dead code (costProjection). No new features — pure refactoring for maintainability.
+**Requirements**: TBD
+**Depends on:** Phase 35
+**Plans:** 3/3 plans complete
+
+Plans:
+- [ ] 36-01-PLAN.md — Migrate all 20 shadcn primitives to packages/ui with subpath exports, update ~413 import sites in both apps
+- [ ] 36-02-PLAN.md — Move business components/hooks/utils to packages/ui, unify near-duplicates, create generic TrashSheet
+- [ ] 36-03-PLAN.md — Extract tRPC patterns (enforceOrgAccess, ACTIVE/DELETED, createTrashProcedures factory), delete dead costProjection code
+
 ---
 
 _For project context, see .planning/PROJECT.md_

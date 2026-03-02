@@ -8,9 +8,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+} from "@sparkmotion/ui/dialog";
+import { Button } from "@sparkmotion/ui/button";
+import { Input } from "@sparkmotion/ui/input";
 import { Loader2 } from "lucide-react";
 
 interface DeleteEventsDialogProps {

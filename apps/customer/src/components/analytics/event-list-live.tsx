@@ -1,9 +1,9 @@
 'use client';
 
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@sparkmotion/ui/card";
+import { Badge } from "@sparkmotion/ui/badge";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 
 interface EventListLiveProps {
   onSelectEvent: (eventId: string) => void;

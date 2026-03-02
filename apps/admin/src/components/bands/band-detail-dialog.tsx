@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@sparkmotion/ui/button";
+import { Input } from "@sparkmotion/ui/input";
+import { Badge } from "@sparkmotion/ui/badge";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { Flag } from "lucide-react";
 import {
   Dialog,
@@ -13,15 +13,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from "@sparkmotion/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@sparkmotion/ui/tabs";
 import {
   Table,
   TableBody,
@@ -29,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@sparkmotion/ui/table";
 
 interface BandRow {
   id: string;

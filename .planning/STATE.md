@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T22:35:33.266Z"
+last_updated: "2026-03-02T22:18:30.034Z"
 progress:
-  total_phases: 34
-  completed_phases: 29
-  total_plans: 77
-  completed_plans: 74
+  total_phases: 36
+  completed_phases: 30
+  total_plans: 80
+  completed_plans: 77
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 34 — Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
-Plan: 03 COMPLETE — Customer trash UI: 3 TrashButton Sheet components (events/campaigns/bands) integrated into customer page headers
-Status: Phase 34 COMPLETE — 3 of 3 plans complete; awaiting human-verify checkpoint before marking fully verified
-Last activity: 2026-02-28 — Phase 34-03 complete: customer trash UI built for events/campaigns/bands with org-scoped sheets, restore, undo, and restoreAll
+Phase: 36 — Code cleanup, dead code removal, and reusable abstractions
+Plan: 03 COMPLETE — Extracted enforceOrgAccess, ACTIVE/DELETED constants, createTrashProcedures factory; deleted dead costProjection code
+Status: Phase 36 Plans 01-03 COMPLETE — 3 of 3 plans complete; Phase 36 done
+Last activity: 2026-03-02 — Phase 36-03 complete: enforceOrgAccess + ACTIVE/DELETED constants + trash factory + costProjection dead code deleted, 96 tests pass
 
-Progress: (3 of 3 plans complete — Phase 34 done)
+Progress: (3 of 3 plans complete — Phase 36 COMPLETE)
 
 ## Performance Metrics
 
@@ -329,6 +329,14 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 34]: bands.restoreAll skipped is a count (number), not array — toast shows count only, not ID list
 - [Phase 34]: TrashButton pattern: trashCount always fetches for badge, listDeleted uses enabled:open guard
 - [Phase 34]: Customer TrashButton components omit deletedByName display — org-scoped context makes attribution less relevant; no orgId prop needed on customer BandTrashButton since backend auto-scopes
+- [Phase 36]: Used customer chart.tsx (380 lines) as canonical — superset API with labelFormatter/formatter props; backwards-compatible with admin usage
+- [Phase 36]: Import shadcn primitives from @sparkmotion/ui/component-name subpath exports; cn from @sparkmotion/ui; no local copies in apps
+- [Phase 36-02]: kpi-cards and velocity-sparkline kept in apps (trpc coupling); live-kpi-cards and connection-status moved (data passed as props only)
+- [Phase 36-02]: EventModeHeader unified with showOrgName optional prop rather than moved (trpc coupling); admin defaults true, customer false
+- [Phase 36-02]: TrashSheet uses controlled open/onOpenChange props; each trash button manages its own open state independently
+- [Phase 36-02]: velocity-sparkline threshold bug in customer: 5x red must be checked BEFORE 2x yellow to avoid yellow absorbing red case
+- [Phase 36]: createTrashProcedures factory covers events/campaigns/organizations — bands excluded due to unique eventId-scoped input signature (KISS)
+- [Phase 36]: enforceOrgAccess used for simple entity org-checks; analytics procedures retain pattern-level org-scoping
 
 ### Pending Todos
 
@@ -336,6 +344,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 36 added: Code cleanup - dead code removal and reusable abstractions
 - Phase 34 added: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
 - Phase 33 added: Build audit logging UI page for SOC2 compliance
 - Phase 32 added: SOC 2 backend compliance hardening
@@ -405,7 +414,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 34-03-PLAN.md — awaiting human-verify checkpoint for customer trash UI
-Resume file: N/A — Phase 34 fully executed; next steps depend on human verification outcome
-Next step: Verify customer trash UI in browser, then proceed to next phase
+Last session: 2026-03-02
+Stopped at: Completed 36-02-PLAN.md — shared business components + TrashSheet abstraction
+Resume file: N/A — Phase 36 Plan 02 fully executed; proceed to next plan
+Next step: Continue Phase 36 with next plan (36-03 or subsequent)

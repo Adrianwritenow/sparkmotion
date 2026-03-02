@@ -7,9 +7,9 @@ import { signIn, getSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@sparkmotion/ui/button";
+import { Input } from "@sparkmotion/ui/input";
+import { Label } from "@sparkmotion/ui/label";
 import { toast } from "sonner";
 import { SmLogotype } from "@/components/sm-logotype";
 

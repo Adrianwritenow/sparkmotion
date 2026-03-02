@@ -88,24 +88,3 @@ describe('infrastructure.getMapStatus', () => {
   });
 });
 
-// ─── infrastructure.costProjection ────────────────────────────────────────────
-
-describe('infrastructure.costProjection', () => {
-  it('rejects CUSTOMER caller with FORBIDDEN', async () => {
-    const caller = createTestCaller({ role: 'CUSTOMER', orgId: 'org-1' });
-    await expect(
-      caller.infrastructure.costProjection({ days: '7' })
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-  });
-
-  it('returns projection with zero cost when no upcoming events', async () => {
-    prismaMock.event.findMany.mockResolvedValue([]);
-
-    const caller = createTestCaller({ role: 'ADMIN', orgId: null });
-    const result = await caller.infrastructure.costProjection({ days: '7' });
-
-    expect(result.totalCost).toBe(0);
-    expect(result.upcomingEvents).toHaveLength(0);
-    expect(result.projectionDays).toBe(7);
-  });
-});

@@ -4,9 +4,9 @@ export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@sparkmotion/ui/button";
+import { Input } from "@sparkmotion/ui/input";
+import { Label } from "@sparkmotion/ui/label";
 import { SmLogotype } from "@/components/sm-logotype";
 import { trpc } from "@/lib/trpc";
 

@@ -2,8 +2,8 @@
 
 import { Activity, ShieldAlert, Trash2, UserCheck } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
+import { StatCard } from "@sparkmotion/ui";
 
 interface StatsData {
   totalEvents24h: number;

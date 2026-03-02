@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 
 interface CampaignSettingsProps {
   campaign: { id: string; name: string };

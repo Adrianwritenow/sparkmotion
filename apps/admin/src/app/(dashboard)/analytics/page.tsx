@@ -10,14 +10,13 @@ import { KpiCards } from "@/components/analytics/kpi-cards";
 import { TapTrendChart } from "@/components/analytics/tap-trend-chart";
 import { TopEventsTable } from "@/components/analytics/top-events-table";
 import { EventListLive } from "@/components/analytics/event-list-live";
-import { LiveKpiCards } from "@/components/analytics/live-kpi-cards";
-import { ConnectionStatus } from "@/components/analytics/connection-status";
+import { LiveKpiCards, ConnectionStatus } from "@sparkmotion/ui";
 import { VelocitySparkline } from "@/components/analytics/velocity-sparkline";
 import { ExportCsvButton } from "@/components/analytics/export-csv-button";
 import { CohortRetention } from "@/components/analytics/cohort-retention";
 import { EventComparison } from "@/components/analytics/event-comparison";
 import { useEventStream } from "@/hooks/use-event-stream";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@sparkmotion/ui/card";
 
 export default function AnalyticsPage() {
   // Default to all time for historical analytics

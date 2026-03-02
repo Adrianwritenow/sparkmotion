@@ -184,7 +184,7 @@ describe('campaigns.update', () => {
 
     await expect(
       caller.campaigns.update({ id: 'campaign-1', name: 'Hacked' })
-    ).rejects.toThrow('Forbidden');
+    ).rejects.toThrow('FORBIDDEN');
   });
 });
 
@@ -192,6 +192,9 @@ describe('campaigns.update', () => {
 describe('campaigns.delete', () => {
   it('ADMIN soft-deletes campaign', async () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
+    prismaMock.campaign.findUniqueOrThrow.mockResolvedValue(
+      { orgId: 'org-1' } as any
+    );
     prismaMock.$transaction.mockResolvedValue([{}, { count: 0 }] as any);
 
     await caller.campaigns.delete({ id: 'campaign-1' });
@@ -205,6 +208,6 @@ describe('campaigns.delete', () => {
       { orgId: 'org-1' } as any
     );
 
-    await expect(caller.campaigns.delete({ id: 'campaign-1' })).rejects.toThrow('Forbidden');
+    await expect(caller.campaigns.delete({ id: 'campaign-1' })).rejects.toThrow('FORBIDDEN');
   });
 });

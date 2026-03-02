@@ -4,6 +4,8 @@ import { router, adminProcedure, protectedProcedure } from "../trpc";
 import { db, Prisma } from "@sparkmotion/database";
 import { invalidateEventCache, invalidateBandCache } from "@sparkmotion/redis";
 import { generateRedirectMap } from "../services/redirect-map-generator";
+import { enforceOrgAccess } from "../lib/auth";
+import { ACTIVE, DELETED } from "../lib/soft-delete";
 
 const AUTO_ASSIGN_DISTANCE_THRESHOLD = 50; // miles
 
@@ -11,7 +13,7 @@ export const bandsRouter = router({
   list: protectedProcedure
     .input(z.object({ eventId: z.string(), search: z.string().nullish(), page: z.number().min(1).default(1), pageSize: z.number().min(1).max(100).default(20) }))
     .query(async ({ input }) => {
-      const where: any = { eventId: input.eventId, deletedAt: null };
+      const where: any = { eventId: input.eventId, ...ACTIVE };
       if (input.search) {
         where.bandId = { contains: input.search, mode: "insensitive" };
       }
@@ -37,7 +39,7 @@ export const bandsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const event = await db.event.findUnique({
-        where: { id: input.eventId, deletedAt: null },
+        where: { id: input.eventId, ...ACTIVE },
         select: { orgId: true },
       });
       if (!event) {
@@ -72,7 +74,7 @@ export const bandsRouter = router({
       tagId: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const band = await db.band.findUnique({ where: { id: input.id, deletedAt: null }, include: { event: { select: { orgId: true } } } });
+      const band = await db.band.findUnique({ where: { id: input.id, ...ACTIVE }, include: { event: { select: { orgId: true } } } });
       if (!band) throw new TRPCError({ code: "NOT_FOUND", message: "Band not found" });
       if (ctx.user.role !== "ADMIN" && band.event.orgId !== ctx.user.orgId) {
         throw new TRPCError({ code: "FORBIDDEN" });
@@ -88,7 +90,7 @@ export const bandsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const band = await db.band.findUnique({ where: { id: input.id, deletedAt: null }, include: { event: { select: { orgId: true } } } });
+      const band = await db.band.findUnique({ where: { id: input.id, ...ACTIVE }, include: { event: { select: { orgId: true } } } });
       if (!band) throw new TRPCError({ code: "NOT_FOUND", message: "Band not found" });
       if (ctx.user.role !== "ADMIN" && band.event.orgId !== ctx.user.orgId) {
         throw new TRPCError({ code: "FORBIDDEN" });
@@ -106,7 +108,7 @@ export const bandsRouter = router({
     .input(z.object({ ids: z.array(z.string()).min(1).max(500) }))
     .mutation(async ({ ctx, input }) => {
       const bands = await db.band.findMany({
-        where: { id: { in: input.ids }, deletedAt: null },
+        where: { id: { in: input.ids }, ...ACTIVE },
         select: { id: true, bandId: true, eventId: true, event: { select: { orgId: true } } },
       });
       if (bands.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No bands found" });
@@ -129,7 +131,7 @@ export const bandsRouter = router({
     .input(z.object({ id: z.string(), eventId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const band = await db.band.findUnique({
-        where: { id: input.id, deletedAt: null },
+        where: { id: input.id, ...ACTIVE },
         include: { event: { select: { orgId: true } } },
       });
       if (!band) throw new TRPCError({ code: "NOT_FOUND" });
@@ -138,7 +140,7 @@ export const bandsRouter = router({
       }
       // Verify target event exists and belongs to same org
       const targetEvent = await db.event.findUnique({
-        where: { id: input.eventId, deletedAt: null },
+        where: { id: input.eventId, ...ACTIVE },
         select: { orgId: true },
       });
       if (!targetEvent) throw new TRPCError({ code: "NOT_FOUND", message: "Target event not found" });
@@ -174,8 +176,8 @@ export const bandsRouter = router({
       const orgId = ctx.user.role === "CUSTOMER" ? ctx.user.orgId! : input.orgId;
 
       const where: Prisma.BandWhereInput = {
-        deletedAt: null,
-        ...(orgId ? { event: { orgId, deletedAt: null } } : { event: { deletedAt: null } }),
+        ...ACTIVE,
+        ...(orgId ? { event: { orgId, ...ACTIVE } } : { event: { ...ACTIVE } }),
         ...(input.search ? { bandId: { contains: input.search, mode: "insensitive" } } : {}),
         ...(input.autoAssignedOnly ? { autoAssigned: true } : {}),
         ...(input.flaggedOnly ? { flagged: true } : {}),
@@ -220,7 +222,7 @@ export const bandsRouter = router({
 
       // Verify target event exists + auth
       const targetEvent = await db.event.findUnique({
-        where: { id: targetEventId, deletedAt: null },
+        where: { id: targetEventId, ...ACTIVE },
         select: { orgId: true },
       });
       if (!targetEvent) throw new TRPCError({ code: "NOT_FOUND", message: "Target event not found" });
@@ -231,14 +233,14 @@ export const bandsRouter = router({
       // Verify all source bands belong to user's org
       if (ctx.user.role === "CUSTOMER") {
         const orgBands = await db.band.count({
-          where: { id: { in: bandIds }, deletedAt: null, event: { orgId: ctx.user.orgId! } },
+          where: { id: { in: bandIds }, ...ACTIVE, event: { orgId: ctx.user.orgId! } },
         });
         if (orgBands !== bandIds.length) throw new TRPCError({ code: "FORBIDDEN" });
       }
 
       // Get original eventIds and bandId values for collision check and cache invalidation
       const sourceBands = await db.band.findMany({
-        where: { id: { in: bandIds }, deletedAt: null },
+        where: { id: { in: bandIds }, ...ACTIVE },
         select: { id: true, bandId: true, eventId: true },
       });
       const originalEventIds = [...new Set(sourceBands.map((b) => b.eventId))];
@@ -302,7 +304,7 @@ export const bandsRouter = router({
       if (input.eventId) {
         eventFilter = { eventId: input.eventId };
       } else if (orgId) {
-        const events = await db.event.findMany({ where: { orgId, deletedAt: null }, select: { id: true } });
+        const events = await db.event.findMany({ where: { orgId, ...ACTIVE }, select: { id: true } });
         eventFilter = { eventId: { in: events.map((e) => e.id) } };
       }
 
@@ -350,7 +352,7 @@ export const bandsRouter = router({
     .input(z.object({ ids: z.array(z.string()).min(1).max(500) }))
     .mutation(async ({ ctx, input }) => {
       const bands = await db.band.findMany({
-        where: { id: { in: input.ids }, flagged: true, deletedAt: null },
+        where: { id: { in: input.ids }, flagged: true, ...ACTIVE },
         select: { id: true, event: { select: { orgId: true } } },
       });
       if (bands.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No flagged bands found" });
@@ -370,13 +372,11 @@ export const bandsRouter = router({
     .input(z.object({ bandId: z.string() }))
     .query(async ({ ctx, input }) => {
       const band = await db.band.findUnique({
-        where: { id: input.bandId, deletedAt: null },
+        where: { id: input.bandId, ...ACTIVE },
         select: { event: { select: { orgId: true } } },
       });
       if (!band) throw new TRPCError({ code: "NOT_FOUND", message: "Band not found" });
-      if (ctx.user.role === "CUSTOMER" && band.event.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, band.event.orgId);
 
       return db.tapLog.findMany({
         where: { bandId: input.bandId },
@@ -397,8 +397,8 @@ export const bandsRouter = router({
     .query(async ({ ctx }) => {
       const where: Prisma.BandWhereInput = {
         flagged: true,
-        deletedAt: null,
-        ...(ctx.user.role === "CUSTOMER" ? { event: { orgId: ctx.user.orgId!, deletedAt: null } } : { event: { deletedAt: null } }),
+        ...ACTIVE,
+        ...(ctx.user.role === "CUSTOMER" ? { event: { orgId: ctx.user.orgId!, ...ACTIVE } } : { event: { ...ACTIVE } }),
       };
       return db.band.count({ where });
     }),
@@ -407,8 +407,8 @@ export const bandsRouter = router({
     .input(z.object({ eventId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
-        ? { deletedAt: { not: null }, ...(input?.eventId ? { eventId: input.eventId } : {}) }
-        : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
+        ? { ...DELETED, ...(input?.eventId ? { eventId: input.eventId } : {}) }
+        : { ...DELETED, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
       return db.band.count({ where });
     }),
 
@@ -416,8 +416,8 @@ export const bandsRouter = router({
     .input(z.object({ orgId: z.string().optional(), eventId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
-        ? { deletedAt: { not: null }, ...(input?.orgId ? { event: { orgId: input.orgId } } : {}), ...(input?.eventId ? { eventId: input.eventId } : {}) }
-        : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
+        ? { ...DELETED, ...(input?.orgId ? { event: { orgId: input.orgId } } : {}), ...(input?.eventId ? { eventId: input.eventId } : {}) }
+        : { ...DELETED, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
       const bands = await db.band.findMany({
         where,
         select: {
@@ -451,12 +451,10 @@ export const bandsRouter = router({
       if (!band.deletedAt) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Band is not deleted" });
       }
-      if (ctx.user.role === "CUSTOMER" && band.event.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, band.event.orgId);
       // Check for conflict: same bandId+eventId already exists non-deleted
       const conflict = await db.band.findFirst({
-        where: { bandId: band.bandId, eventId: band.eventId, deletedAt: null, id: { not: band.id } },
+        where: { bandId: band.bandId, eventId: band.eventId, ...ACTIVE, id: { not: band.id } },
       });
       if (conflict) {
         return { restored: 0, skipped: 1 };
@@ -474,8 +472,8 @@ export const bandsRouter = router({
     .input(z.object({ eventId: z.string().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
       const where: Prisma.BandWhereInput = ctx.user.role === "ADMIN"
-        ? { deletedAt: { not: null }, ...(input?.eventId ? { eventId: input.eventId } : {}) }
-        : { deletedAt: { not: null }, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
+        ? { ...DELETED, ...(input?.eventId ? { eventId: input.eventId } : {}) }
+        : { ...DELETED, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
     const deletedBands = await db.band.findMany({
       where,
       select: { id: true, bandId: true, eventId: true },
@@ -487,7 +485,7 @@ export const bandsRouter = router({
     for (const band of deletedBands) {
       // Check for conflict
       const conflict = await db.band.findFirst({
-        where: { bandId: band.bandId, eventId: band.eventId, deletedAt: null, id: { not: band.id } },
+        where: { bandId: band.bandId, eventId: band.eventId, ...ACTIVE, id: { not: band.id } },
       });
       if (conflict) {
         skipped++;

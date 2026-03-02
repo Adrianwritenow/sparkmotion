@@ -8,10 +8,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+} from "@sparkmotion/ui/dialog";
+import { Button } from "@sparkmotion/ui/button";
+import { Input } from "@sparkmotion/ui/input";
+import { Checkbox } from "@sparkmotion/ui/checkbox";
 import { TriangleAlert, Loader2 } from "lucide-react";
 
 interface DeleteCampaignsDialogProps {
