@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@sparkmotion/ui/badge";
-import { ModeIndicator } from "./mode-indicator";
+import { ModeIndicator } from "@sparkmotion/ui";
 import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { EventStatus } from "@sparkmotion/database";
 
@@ -16,9 +16,10 @@ const statusVariants: Record<EventStatus, "default" | "secondary" | "destructive
 
 interface EventModeHeaderProps {
   eventId: string;
+  showOrgName?: boolean;
 }
 
-export function EventModeHeader({ eventId }: EventModeHeaderProps) {
+export function EventModeHeader({ eventId, showOrgName = true }: EventModeHeaderProps) {
   const { data: event, isLoading, refetch } = trpc.events.byId.useQuery({ id: eventId });
 
   useEffect(() => {
@@ -79,7 +80,7 @@ export function EventModeHeader({ eventId }: EventModeHeaderProps) {
         <Badge variant={statusVariants[event.status]}>{event.status}</Badge>
         <ModeIndicator mode={event.currentMode.toLowerCase() as "pre" | "live" | "post"} />
       </div>
-      <p className="text-muted-foreground mt-2">{event.org?.name}</p>
+      {showOrgName && <p className="text-muted-foreground mt-2">{event.org?.name}</p>}
     </div>
   );
 }

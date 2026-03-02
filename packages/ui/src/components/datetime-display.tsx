@@ -1,7 +1,7 @@
 'use client';
 import { format } from 'date-fns';
 import { tz } from '@date-fns/tz';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@sparkmotion/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 function getShortTzName(date: Date, timezone: string): string {
   try {

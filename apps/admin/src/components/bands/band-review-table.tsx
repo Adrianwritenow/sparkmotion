@@ -33,7 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@sparkmotion/ui/table";
-import { TagBadge } from "./tag-badge";
+import { TagBadge } from "@sparkmotion/ui";
 import { ReassignDialog } from "./reassign-dialog";
 import { BandDetailDialog } from "./band-detail-dialog";
 

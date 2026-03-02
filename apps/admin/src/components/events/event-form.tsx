@@ -29,8 +29,7 @@ import { Calendar } from "@sparkmotion/ui/calendar";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@sparkmotion/ui";
-import { GooglePlacesAutocomplete } from "./google-places-autocomplete";
-import { getTimezoneForLocation } from "@/lib/us-timezones";
+import { GooglePlacesAutocomplete, getTimezoneForLocation } from "@sparkmotion/ui";
 
 const eventFormSchema = z.object({
   orgId: z.string().min(1, "Organization is required"),

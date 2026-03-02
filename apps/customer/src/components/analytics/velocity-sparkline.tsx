@@ -55,8 +55,8 @@ export function VelocitySparkline({ eventId }: VelocitySparklineProps) {
     const latest = values[values.length - 1];
 
     if (avg === 0 || latest === undefined) return '#9ca3af'; // gray for no data
-    if (latest > avg * 2) return '#f59e0b'; // yellow
     if (latest > avg * 5) return '#ef4444'; // red
+    if (latest > avg * 2) return '#f59e0b'; // yellow
     return '#10b981'; // green
   };
 

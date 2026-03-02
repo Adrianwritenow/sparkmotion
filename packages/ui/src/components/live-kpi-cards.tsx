@@ -1,8 +1,8 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from "@sparkmotion/ui/card";
-import { Badge } from "@sparkmotion/ui/badge";
-import { Skeleton } from "@sparkmotion/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Skeleton } from "./ui/skeleton";
 
 interface LiveKpiCardsProps {
   data: {

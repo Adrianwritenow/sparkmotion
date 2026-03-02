@@ -25,8 +25,7 @@ import { cn } from "@sparkmotion/ui";
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "next/navigation";
 import { Event, EventStatus } from "@sparkmotion/database";
-import { GooglePlacesAutocomplete } from "./google-places-autocomplete";
-import { getTimezoneForLocation } from "@/lib/us-timezones";
+import { GooglePlacesAutocomplete, getTimezoneForLocation } from "@sparkmotion/ui";
 
 const eventSchema = z.object({
   name: z.string().min(1, "Name is required"),

@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@sparkmotion/ui/select";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useDebounce } from "@sparkmotion/ui";
 
 interface ListFilterBarProps {
   statusOptions?: { value: string; label: string }[];

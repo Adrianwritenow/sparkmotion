@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { MapPin } from "lucide-react";
-import { Input } from "@sparkmotion/ui/input";
+import { Input } from "./ui/input";
 import usePlacesAutocomplete, {
   getGeocode,
   getLatLng,
 } from "use-places-autocomplete";
-import { cn } from "@sparkmotion/ui";
+import { cn } from "../lib/utils";
 
 declare global {
   interface Window {

@@ -3,7 +3,7 @@
 import { Activity, ShieldAlert, Trash2, UserCheck } from "lucide-react";
 
 import { Skeleton } from "@sparkmotion/ui/skeleton";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard } from "@sparkmotion/ui";
 
 interface StatsData {
   totalEvents24h: number;

@@ -2,7 +2,7 @@ import { Activity, Building2, Calendar, Users } from "lucide-react";
 
 import { RecentEventsTable } from "@/components/dashboard/recent-events-table";
 import { RecentOrgs } from "@/components/dashboard/recent-orgs";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { StatCard } from "@sparkmotion/ui";
 import { auth } from "@sparkmotion/auth";
 import { db } from "@sparkmotion/database";
 

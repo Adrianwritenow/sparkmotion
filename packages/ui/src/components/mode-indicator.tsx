@@ -1,5 +1,5 @@
-import { Badge } from "@sparkmotion/ui/badge";
-import { cn } from "@sparkmotion/ui";
+import { Badge } from "./ui/badge";
+import { cn } from "../lib/utils";
 
 const MODE_CONFIG = {
   pre: { label: "Pre-Event", colors: "bg-yellow-500 text-white border-yellow-600 hover:bg-yellow-600" },

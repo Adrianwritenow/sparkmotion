@@ -5,9 +5,8 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@sparkmotion/ui/button";
 import { Input } from "@sparkmotion/ui/input";
 import { Switch } from "@sparkmotion/ui/switch";
-import { ModeIndicator } from "./mode-indicator";
+import { ModeIndicator, DateTimeDisplay } from "@sparkmotion/ui";
 import { WindowFormDialog } from "./window-form";
-import { DateTimeDisplay } from "./datetime-display";
 import { Shield, Clock, ExternalLink, Pencil, Plus, Trash2, Check, X, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
