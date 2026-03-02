@@ -33,14 +33,14 @@ export function EventTrashButton() {
     },
   });
 
-  const items: TrashItem[] = deletedEvents.map((e) => ({
+  const items: TrashItem[] = deletedEvents.map((e: any) => ({
     id: e.id,
     displayName: e.name,
     deletedAt: e.deletedAt!,
   }));
 
   const handleRestore = async (id: string) => {
-    const event = deletedEvents.find((e) => e.id === id);
+    const event = deletedEvents.find((e: any) => e.id === id);
     await restoreMutation.mutateAsync({ id });
     toast.success(`"${event?.name}" restored`, {
       action: { label: "Undo", onClick: () => softDeleteMutation.mutate({ id }) },

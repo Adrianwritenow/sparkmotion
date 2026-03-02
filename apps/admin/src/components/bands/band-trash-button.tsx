@@ -47,7 +47,7 @@ export function BandTrashButton({ orgId, eventId }: BandTrashButtonProps) {
     },
   });
 
-  const items: TrashItem[] = deletedBands.map((b) => ({
+  const items: TrashItem[] = deletedBands.map((b: any) => ({
     id: b.id,
     displayName: b.bandId,
     deletedAt: b.deletedAt!,
@@ -56,7 +56,7 @@ export function BandTrashButton({ orgId, eventId }: BandTrashButtonProps) {
   }));
 
   const handleRestore = async (id: string) => {
-    const band = deletedBands.find((b) => b.id === id);
+    const band = deletedBands.find((b: any) => b.id === id);
     const result = await restoreMutation.mutateAsync({ id });
     if (result.skipped === 1) {
       toast.warning(`Band "${band?.bandId}" skipped — ID already exists in this event`);

@@ -33,14 +33,14 @@ export function CampaignTrashButton() {
     },
   });
 
-  const items: TrashItem[] = deletedCampaigns.map((c) => ({
+  const items: TrashItem[] = deletedCampaigns.map((c: any) => ({
     id: c.id,
     displayName: c.name,
     deletedAt: c.deletedAt!,
   }));
 
   const handleRestore = async (id: string) => {
-    const campaign = deletedCampaigns.find((c) => c.id === id);
+    const campaign = deletedCampaigns.find((c: any) => c.id === id);
     await restoreMutation.mutateAsync({ id });
     toast.success(`"${campaign?.name}" restored`, {
       action: { label: "Undo", onClick: () => softDeleteMutation.mutate({ id }) },

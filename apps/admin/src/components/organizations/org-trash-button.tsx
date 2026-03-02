@@ -33,7 +33,7 @@ export function OrgTrashButton() {
     },
   });
 
-  const items: TrashItem[] = deletedOrgs.map((o) => ({
+  const items: TrashItem[] = deletedOrgs.map((o: any) => ({
     id: o.id,
     displayName: o.name,
     deletedAt: o.deletedAt!,
@@ -41,7 +41,7 @@ export function OrgTrashButton() {
   }));
 
   const handleRestore = async (id: string) => {
-    const org = deletedOrgs.find((o) => o.id === id);
+    const org = deletedOrgs.find((o: any) => o.id === id);
     await restoreMutation.mutateAsync({ id });
     toast.success(`"${org?.name}" restored`);
     // No undo action — per Phase 34 decision

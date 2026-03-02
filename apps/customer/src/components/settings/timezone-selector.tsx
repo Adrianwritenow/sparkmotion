@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@sparkmotion/ui/select';
-import { US_TIMEZONES } from '@/lib/us-timezones';
+import { US_TIMEZONES } from '@sparkmotion/ui';
 
 export function TimezoneSelector() {
   const { data: user } = trpc.users.me.useQuery();
