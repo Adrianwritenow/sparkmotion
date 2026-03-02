@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { CalendarDays, Building2, Megaphone, MapPin, TrendingUp, Users } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function formatCampaignLocations(locations: string[]): string {
   const [first] = locations;
@@ -24,6 +25,9 @@ interface CampaignCardListProps {
     locations?: string[];
   }>;
   showOrg?: boolean;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (id: string) => void;
 }
 
 function CampaignStatusBadge({ status }: { status: string }) {
@@ -67,16 +71,30 @@ function formatCompact(n: number): string {
 export function CampaignCardList({
   campaigns,
   showOrg = true,
+  selectable = false,
+  selectedIds,
+  onSelectionChange,
 }: CampaignCardListProps) {
   const router = useRouter();
 
   return (
     <div className="space-y-4">
-      {campaigns.map((campaign) => (
-        <div
-          key={campaign.id}
+      {campaigns.map((campaign) => {
+        const isSelected = selectable && selectedIds?.has(campaign.id);
+
+        return (
+        <div key={campaign.id} className="flex items-start gap-3">
+          {selectable && (
+            <div className="pt-5">
+              <Checkbox
+                checked={!!isSelected}
+                onCheckedChange={() => onSelectionChange?.(campaign.id)}
+              />
+            </div>
+          )}
+          <div
           onClick={() => router.push(`/campaigns/${campaign.id}`)}
-          className="bg-card border border-border rounded-lg p-5 hover:border-primary/30 transition-colors cursor-pointer"
+          className={`flex-1 bg-card border border-border rounded-lg p-5 hover:border-primary/30 transition-colors cursor-pointer ${isSelected ? "ring-2 ring-primary" : ""}`}
         >
           {/* Top Row */}
           <div className="flex items-start justify-between mb-3">
@@ -172,7 +190,9 @@ export function CampaignCardList({
             </button>
           </div>
         </div>
-      ))}
+        </div>
+        );
+      })}
     </div>
   );
 }

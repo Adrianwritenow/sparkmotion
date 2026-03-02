@@ -113,6 +113,8 @@ model Event {
   fallbackUrl        String?     // Default redirect URL when no routing window is active
   status             EventStatus @default(DRAFT)
   estimatedAttendees Int?
+  startDate          DateTime?
+  endDate            DateTime?
   deletedAt          DateTime?
   deletedBy          String?
   createdAt          DateTime    @default(now())

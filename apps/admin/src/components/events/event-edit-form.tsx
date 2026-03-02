@@ -13,6 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "next/navigation";
 import { Event, EventStatus } from "@sparkmotion/database";
@@ -35,6 +44,8 @@ const eventSchema = z.object({
   estimatedAttendees: z.union([z.number().int().positive(), z.nan(), z.null()]).optional().transform(val =>
     val === undefined || val === null || Number.isNaN(val) ? null : val
   ),
+  startDate: z.date().nullable().optional(),
+  endDate: z.date().nullable().optional(),
   campaignId: z.string().nullable().optional(),
 });
 
@@ -79,6 +90,8 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
       timezone: event.timezone || "UTC",
       status: event.status,
       estimatedAttendees: event.estimatedAttendees ?? undefined,
+      startDate: event.startDate ? new Date(event.startDate) : null,
+      endDate: event.endDate ? new Date(event.endDate) : null,
       campaignId: event.campaignId ?? "",
     },
   });
@@ -87,6 +100,8 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
   const currentLocation = watch("location");
   const currentFormattedAddress = watch("formattedAddress");
   const currentCampaignId = watch("campaignId");
+  const currentStartDate = watch("startDate");
+  const currentEndDate = watch("endDate");
   const updateEvent = trpc.events.update.useMutation({
     onSuccess: () => {
       utils.events.list.invalidate();
@@ -111,6 +126,8 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
       timezone: data.timezone,
       status: data.status,
       estimatedAttendees: data.estimatedAttendees,
+      startDate: data.startDate,
+      endDate: data.endDate,
       campaignId: data.campaignId && data.campaignId !== "none" ? data.campaignId : null,
     });
   };
@@ -200,6 +217,62 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Start Date</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !currentStartDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {currentStartDate ? format(currentStartDate, "MMM d, yyyy") : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={currentStartDate ?? undefined}
+                onSelect={(date) => {
+                  setValue("startDate", date ?? null, { shouldDirty: true });
+                  if (date && currentEndDate && currentEndDate < date) {
+                    setValue("endDate", null, { shouldDirty: true });
+                  }
+                }}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="space-y-2">
+          <Label>End Date</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !currentEndDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {currentEndDate ? format(currentEndDate, "MMM d, yyyy") : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={currentEndDate ?? undefined}
+                onSelect={(date) => setValue("endDate", date ?? null, { shouldDirty: true })}
+                disabled={currentStartDate ? { before: currentStartDate } : undefined}
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 

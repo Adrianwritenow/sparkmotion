@@ -1,6 +1,6 @@
 import { db, Prisma, CampaignStatus } from "@sparkmotion/database";
 import { getEventEngagement, aggregateCampaignEngagement } from "@sparkmotion/api";
-import { CampaignCardList } from "@/components/campaigns/campaign-card-list";
+import { CampaignListWithActions } from "@/components/campaigns/campaign-list-with-actions";
 import { CampaignPageActions } from "@/components/campaigns/campaign-page-actions";
 import { ListFilterBar } from "@/components/list-filter-bar";
 
@@ -17,7 +17,7 @@ const CAMPAIGN_STATUS_OPTIONS = [
 export default async function CampaignsPage({
   searchParams,
 }: {
-  searchParams: { search?: string; status?: string; page?: string };
+  searchParams: { search?: string; status?: string; page?: string; sort?: string; dir?: string };
 }) {
   const page = Math.max(1, Number(searchParams.page) || 1);
   const search = searchParams.search?.trim() || "";
@@ -32,7 +32,7 @@ export default async function CampaignsPage({
   const [campaigns, totalCount] = await Promise.all([
     db.campaign.findMany({
       where,
-      orderBy: { updatedAt: "desc" },
+      orderBy: { [(["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "createdAt") as string]: searchParams.dir === "asc" ? "asc" as const : "desc" as const },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
@@ -43,7 +43,7 @@ export default async function CampaignsPage({
         },
         _count: {
           select: {
-            events: { where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null } },
+            events: { where: { deletedAt: null } },
           },
         },
       },
@@ -111,7 +111,7 @@ export default async function CampaignsPage({
 
       {/* Campaigns List or Empty State */}
       {campaignsWithStats.length > 0 ? (
-        <CampaignCardList campaigns={campaignsWithStats} showOrg={true} />
+        <CampaignListWithActions campaigns={campaignsWithStats} showOrg={true} />
       ) : (
         <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
           <p className="text-muted-foreground mb-4">No campaigns found</p>

@@ -20,6 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { GooglePlacesAutocomplete } from "./google-places-autocomplete";
 import { getTimezoneForLocation } from "@/lib/us-timezones";
 
@@ -39,6 +48,8 @@ const eventFormSchema = z.object({
   estimatedAttendees: z.union([z.number().int().positive(), z.nan()]).optional().transform(val =>
     val === undefined || Number.isNaN(val) ? undefined : val
   ),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
   campaignId: z.string().optional(),
 });
 
@@ -69,6 +80,8 @@ export function EventForm({ onSubmit, isPending, orgs, campaigns, defaultCampaig
       country: "",
       zipcode: "",
       estimatedAttendees: undefined,
+      startDate: undefined,
+      endDate: undefined,
       campaignId: defaultCampaignId ?? "",
     },
   });
@@ -201,6 +214,86 @@ export function EventForm({ onSubmit, isPending, orgs, campaigns, defaultCampaig
             </FormItem>
           )}
         />
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="startDate"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Start Date (Optional)</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {field.value ? format(field.value, "MMM d, yyyy") : "Pick a date"}
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        const currentEnd = form.getValues("endDate");
+                        if (date && currentEnd && currentEnd < date) {
+                          form.setValue("endDate", undefined);
+                        }
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="endDate"
+            render={({ field }) => {
+              const startDate = form.watch("startDate");
+              return (
+                <FormItem className="flex flex-col">
+                  <FormLabel>End Date (Optional)</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {field.value ? format(field.value, "MMM d, yyyy") : "Pick a date"}
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={startDate ? { before: startDate } : undefined}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
+          />
+        </div>
 
         <Button type="submit" disabled={isPending} className="w-full">
           {isPending ? "Creating..." : "Create Event"}
