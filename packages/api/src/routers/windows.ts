@@ -5,6 +5,8 @@ import { db } from "@sparkmotion/database";
 import { invalidateEventCache } from "@sparkmotion/redis";
 import { generateRedirectMap } from "../services/redirect-map-generator";
 import { evaluateEventSchedule } from "../services/evaluate-schedule";
+import { enforceOrgAccess } from "../lib/auth";
+import { ACTIVE } from "../lib/soft-delete";
 
 export const windowsRouter = router({
   list: protectedProcedure
@@ -115,10 +117,7 @@ export const windowsRouter = router({
         include: { event: true },
       });
 
-      // If customer role, verify event belongs to their org
-      if (ctx.user.role === "CUSTOMER" && window.event.orgId !== ctx.user.orgId) {
-        throw new Error("Access denied");
-      }
+      enforceOrgAccess(ctx, window.event.orgId);
 
       // Use transaction to enforce one-live-window constraint and disable schedule mode
       const updated = await db.$transaction(async (tx) => {
@@ -172,9 +171,7 @@ export const windowsRouter = router({
         include: { event: true },
       });
 
-      if (ctx.user.role === "CUSTOMER" && existing.event.orgId !== ctx.user.orgId) {
-        throw new Error("Access denied");
-      }
+      enforceOrgAccess(ctx, existing.event.orgId);
 
       // Validate startTime < endTime
       if (input.startTime >= input.endTime) {
@@ -259,10 +256,7 @@ export const windowsRouter = router({
         include: { event: true },
       });
 
-      // If customer role, verify event belongs to their org
-      if (ctx.user.role === "CUSTOMER" && window.event.orgId !== ctx.user.orgId) {
-        throw new Error("Access denied");
-      }
+      enforceOrgAccess(ctx, window.event.orgId);
 
       await db.eventWindow.delete({ where: { id: input.id } });
       invalidateEventCache(window.eventId).catch(console.error);

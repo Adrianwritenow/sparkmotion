@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db, Prisma } from "@sparkmotion/database";
 import { getEventEngagement } from "../lib/engagement";
+import { ACTIVE, DELETED } from "../lib/soft-delete";
 
 export const campaignsRouter = router({
   list: protectedProcedure
@@ -10,17 +11,17 @@ export const campaignsRouter = router({
     .query(async ({ ctx, input }) => {
       const where =
         ctx.user.role === "ADMIN"
-          ? input?.orgId ? { orgId: input.orgId, deletedAt: null } : { deletedAt: null }
-          : { orgId: ctx.user.orgId!, deletedAt: null };
+          ? input?.orgId ? { orgId: input.orgId, ...ACTIVE } : { ...ACTIVE }
+          : { orgId: ctx.user.orgId!, ...ACTIVE };
       const campaigns = await db.campaign.findMany({
         where,
         include: {
           org: true,
           events: {
-            where: { deletedAt: null },
-            select: { id: true, location: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
+            where: { ...ACTIVE },
+            select: { id: true, location: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
           },
-          _count: { select: { events: { where: { deletedAt: null } } } },
+          _count: { select: { events: { where: { ...ACTIVE } } } },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -63,15 +64,15 @@ export const campaignsRouter = router({
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: input.id, deletedAt: null },
+        where: { id: input.id, ...ACTIVE },
         include: {
           org: true,
           events: {
-            where: { deletedAt: null },
+            where: { ...ACTIVE },
             orderBy: { createdAt: "desc" },
-            select: { id: true, location: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
+            select: { id: true, location: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
           },
-          _count: { select: { events: { where: { deletedAt: null } } } },
+          _count: { select: { events: { where: { ...ACTIVE } } } },
         },
       });
 
@@ -159,7 +160,7 @@ export const campaignsRouter = router({
       // Check ownership for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const campaign = await db.campaign.findUniqueOrThrow({
-          where: { id, deletedAt: null },
+          where: { id, ...ACTIVE },
           select: { orgId: true },
         });
         if (campaign.orgId !== ctx.user.orgId) {
@@ -174,11 +175,11 @@ export const campaignsRouter = router({
     .input(z.object({ campaignId: z.string() }))
     .query(async ({ input }) => {
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: input.campaignId, deletedAt: null },
+        where: { id: input.campaignId, ...ACTIVE },
         select: { orgId: true },
       });
       return db.event.findMany({
-        where: { orgId: campaign.orgId, campaignId: null, deletedAt: null },
+        where: { orgId: campaign.orgId, campaignId: null, ...ACTIVE },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       });
@@ -204,7 +205,7 @@ export const campaignsRouter = router({
       // Check ownership for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const campaign = await db.campaign.findUniqueOrThrow({
-          where: { id: input.id, deletedAt: null },
+          where: { id: input.id, ...ACTIVE },
           select: { orgId: true },
         });
         if (campaign.orgId !== ctx.user.orgId) {
@@ -219,7 +220,7 @@ export const campaignsRouter = router({
           data: { deletedAt: now, deletedBy: ctx.user.id },
         }),
         db.event.updateMany({
-          where: { campaignId: input.id, deletedAt: null },
+          where: { campaignId: input.id, ...ACTIVE },
           data: { deletedCampaignId: input.id, campaignId: null },
         }),
       ]);
@@ -232,7 +233,7 @@ export const campaignsRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const campaigns = await db.campaign.findMany({
-        where: { id: { in: input.ids }, deletedAt: null },
+        where: { id: { in: input.ids }, ...ACTIVE },
       });
 
       if (campaigns.length === 0) {
@@ -254,13 +255,13 @@ export const campaignsRouter = router({
           if (input.deleteEvents) {
             // Soft-delete associated events and their bands
             const events = await tx.event.findMany({
-              where: { campaignId: id, deletedAt: null },
+              where: { campaignId: id, ...ACTIVE },
               select: { id: true },
             });
             const eventIds = events.map((e) => e.id);
             if (eventIds.length > 0) {
               await tx.band.updateMany({
-                where: { eventId: { in: eventIds }, deletedAt: null },
+                where: { eventId: { in: eventIds }, ...ACTIVE },
                 data: { deletedAt: now, deletedBy: ctx.user.id },
               });
               await tx.event.updateMany({
@@ -271,7 +272,7 @@ export const campaignsRouter = router({
           } else {
             // Unlink events from campaign (preserve them)
             await tx.event.updateMany({
-              where: { campaignId: id, deletedAt: null },
+              where: { campaignId: id, ...ACTIVE },
               data: { deletedCampaignId: id, campaignId: null },
             });
           }
@@ -289,10 +290,10 @@ export const campaignsRouter = router({
     .input(z.object({ ids: z.array(z.string()).min(1).max(50) }))
     .mutation(async ({ input, ctx }) => {
       const campaigns = await db.campaign.findMany({
-        where: { id: { in: input.ids }, deletedAt: null },
+        where: { id: { in: input.ids }, ...ACTIVE },
         include: {
           events: {
-            where: { deletedAt: null },
+            where: { ...ACTIVE },
             include: { windows: true },
           },
         },
@@ -364,8 +365,8 @@ export const campaignsRouter = router({
 
   trashCount: protectedProcedure.query(async ({ ctx }) => {
     const where = ctx.user.role === "ADMIN"
-      ? { deletedAt: { not: null } as const }
-      : { orgId: ctx.user.orgId!, deletedAt: { not: null } as const };
+      ? { ...DELETED }
+      : { orgId: ctx.user.orgId!, ...DELETED };
     return db.campaign.count({ where });
   }),
 
@@ -373,8 +374,8 @@ export const campaignsRouter = router({
     .input(z.object({ orgId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const where = ctx.user.role === "ADMIN"
-        ? { ...(input?.orgId ? { orgId: input.orgId } : {}), deletedAt: { not: null } as const }
-        : { orgId: ctx.user.orgId!, deletedAt: { not: null } as const };
+        ? { ...(input?.orgId ? { orgId: input.orgId } : {}), ...DELETED }
+        : { orgId: ctx.user.orgId!, ...DELETED };
       const campaigns = await db.campaign.findMany({
         where,
         select: {
@@ -415,7 +416,7 @@ export const campaignsRouter = router({
         }),
         // Re-associate events that had this campaignId before deletion
         db.event.updateMany({
-          where: { deletedCampaignId: input.id, deletedAt: null },
+          where: { deletedCampaignId: input.id, ...ACTIVE },
           data: { campaignId: input.id, deletedCampaignId: null },
         }),
       ]);
@@ -424,8 +425,8 @@ export const campaignsRouter = router({
 
   restoreAll: protectedProcedure.mutation(async ({ ctx }) => {
     const where = ctx.user.role === "ADMIN"
-      ? { deletedAt: { not: null } as const }
-      : { orgId: ctx.user.orgId!, deletedAt: { not: null } as const };
+      ? { ...DELETED }
+      : { orgId: ctx.user.orgId!, ...DELETED };
     const deletedCampaigns = await db.campaign.findMany({ where, select: { id: true } });
     if (deletedCampaigns.length === 0) return { restored: 0 };
 
@@ -438,7 +439,7 @@ export const campaignsRouter = router({
       // Re-associate events for each campaign
       for (const id of campaignIds) {
         await tx.event.updateMany({
-          where: { deletedCampaignId: id, deletedAt: null },
+          where: { deletedCampaignId: id, ...ACTIVE },
           data: { campaignId: id, deletedCampaignId: null },
         });
       }

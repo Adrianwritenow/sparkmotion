@@ -5,6 +5,8 @@ import { db } from "@sparkmotion/database";
 import { Prisma } from "@sparkmotion/database";
 import { TRPCError } from "@trpc/server";
 import { getEventEngagement, aggregateCampaignEngagement } from "../lib/engagement";
+import { enforceOrgAccess } from "../lib/auth";
+import { ACTIVE } from "../lib/soft-delete";
 
 // Shared input schema for date range queries
 const dateRangeInput = z.object({
@@ -84,7 +86,7 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: input.eventId, deletedAt: null },
+          where: { id: input.eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -119,7 +121,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: input.eventId, deletedAt: null },
+          where: { id: input.eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -150,7 +152,7 @@ export const analyticsRouter = router({
             ${dateFilter}
             ${windowFilter}
         `),
-        db.band.count({ where: { eventId: input.eventId, deletedAt: null } }),
+        db.band.count({ where: { eventId: input.eventId, ...ACTIVE } }),
       ]);
       const uniqueBands = Number(tapCounts[0]?.unique_bands ?? 0);
 
@@ -192,7 +194,7 @@ export const analyticsRouter = router({
       if (isLive) {
         const [redisAnalytics, totalBands] = await Promise.all([
           getAnalytics(eventId),
-          db.band.count({ where: { eventId, deletedAt: null } }),
+          db.band.count({ where: { eventId, ...ACTIVE } }),
         ]);
 
         const { totalTaps, uniqueTaps, byMode } = redisAnalytics;
@@ -244,7 +246,7 @@ export const analyticsRouter = router({
 
       // Get event IDs matching org scope
       const events = await db.event.findMany({
-        where: { ...eventWhere, deletedAt: null },
+        where: { ...eventWhere, ...ACTIVE },
         select: { id: true },
       });
       const eventIds = events.map(e => e.id);
@@ -308,10 +310,10 @@ export const analyticsRouter = router({
         // Total bands (for activity calculation)
         db.band.count({
           where: eventIds.length > 0
-            ? { eventId: { in: eventIds }, deletedAt: null }
+            ? { eventId: { in: eventIds }, ...ACTIVE }
             : eventId
-            ? { eventId, deletedAt: null }
-            : { deletedAt: null },
+            ? { eventId, ...ACTIVE }
+            : { ...ACTIVE },
         }),
 
         // Mode distribution
@@ -371,7 +373,7 @@ export const analyticsRouter = router({
 
       // Get event IDs matching org scope
       const events = await db.event.findMany({
-        where: { ...eventWhere, deletedAt: null },
+        where: { ...eventWhere, ...ACTIVE },
         select: { id: true },
       });
       const eventIds = events.map(e => e.id);
@@ -418,7 +420,7 @@ export const analyticsRouter = router({
 
       // Get event IDs matching org scope
       const events = await db.event.findMany({
-        where: { ...eventWhere, deletedAt: null },
+        where: { ...eventWhere, ...ACTIVE },
         select: { id: true },
       });
       const eventIds = events.map(e => e.id);
@@ -460,7 +462,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -517,7 +519,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -574,19 +576,17 @@ export const analyticsRouter = router({
 
       // Get campaign's ACTIVE/COMPLETED events (with org-scoping)
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
             select: { id: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -647,19 +647,17 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
             select: { id: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -724,20 +722,18 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
-            select: { id: true, name: true, location: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
+            select: { id: true, name: true, location: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
             orderBy: { createdAt: "desc" },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -760,7 +756,7 @@ export const analyticsRouter = router({
             ${dateFilter}
             ${windowFilter}
         `),
-        db.band.count({ where: { eventId: { in: eventIds }, deletedAt: null } }),
+        db.band.count({ where: { eventId: { in: eventIds }, ...ACTIVE } }),
         db.$queryRaw<Array<{ eventId: string; total_taps: bigint; unique_bands: bigint }>>(Prisma.sql`
           SELECT
             "eventId",
@@ -858,7 +854,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -956,19 +952,17 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
             select: { id: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -1020,7 +1014,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -1072,19 +1066,17 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
             select: { id: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -1138,7 +1130,7 @@ export const analyticsRouter = router({
 
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
-        const event = await db.event.findUnique({ where: { id: eventId, deletedAt: null }, select: { orgId: true } });
+        const event = await db.event.findUnique({ where: { id: eventId, ...ACTIVE }, select: { orgId: true } });
         if (!event || event.orgId !== ctx.user.orgId) {
           throw new TRPCError({ code: "FORBIDDEN" });
         }
@@ -1172,7 +1164,7 @@ export const analyticsRouter = router({
 
       // Get total bands with first tap
       const totalBands = await db.band.count({
-        where: { eventId, firstTapAt: { not: null }, deletedAt: null },
+        where: { eventId, firstTapAt: { not: null }, ...ACTIVE },
       });
 
       const retention: Record<string, number> = {};
@@ -1215,7 +1207,7 @@ export const analyticsRouter = router({
 
       if (ctx.user.role === "CUSTOMER") {
         const events = await db.event.findMany({
-          where: { orgId: ctx.user.orgId!, deletedAt: null },
+          where: { orgId: ctx.user.orgId!, ...ACTIVE },
           select: { id: true },
         });
         where.eventId = { in: events.map(e => e.id) };
@@ -1258,7 +1250,7 @@ export const analyticsRouter = router({
       // Org-scoping: verify CUSTOMER has access to all requested events
       if (ctx.user.role === "CUSTOMER") {
         const accessibleEvents = await db.event.findMany({
-          where: { id: { in: eventIds }, orgId: ctx.user.orgId!, deletedAt: null },
+          where: { id: { in: eventIds }, orgId: ctx.user.orgId!, ...ACTIVE },
           select: { id: true },
         });
         if (accessibleEvents.length !== eventIds.length) {

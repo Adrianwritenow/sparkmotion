@@ -3,6 +3,8 @@ import { router, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db } from "@sparkmotion/database";
 import { sendContactEmail } from "@sparkmotion/email";
+import { enforceOrgAccess } from "../lib/auth";
+import { ACTIVE, DELETED } from "../lib/soft-delete";
 
 export const organizationsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -11,14 +13,14 @@ export const organizationsRouter = router({
     }
 
     return db.organization.findMany({
-      where: { deletedAt: null },
+      where: { ...ACTIVE },
       select: {
         id: true,
         name: true,
         slug: true,
         websiteUrl: true,
         contactEmail: true,
-        _count: { select: { events: { where: { deletedAt: null } } } },
+        _count: { select: { events: { where: { ...ACTIVE } } } },
       },
       orderBy: { name: "asc" },
     });
@@ -28,8 +30,8 @@ export const organizationsRouter = router({
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       return db.organization.findUniqueOrThrow({
-        where: { id: input.id, deletedAt: null },
-        include: { _count: { select: { events: { where: { deletedAt: null } }, users: true } } },
+        where: { id: input.id, ...ACTIVE },
+        include: { _count: { select: { events: { where: { ...ACTIVE } }, users: true } } },
       });
     }),
 
@@ -139,15 +141,15 @@ export const organizationsRouter = router({
           data: { deletedAt: now, deletedBy: ctx.user.id },
         }),
         db.event.updateMany({
-          where: { orgId: input.id, deletedAt: null },
+          where: { orgId: input.id, ...ACTIVE },
           data: { deletedAt: now, deletedBy: ctx.user.id },
         }),
         db.campaign.updateMany({
-          where: { orgId: input.id, deletedAt: null },
+          where: { orgId: input.id, ...ACTIVE },
           data: { deletedAt: now, deletedBy: ctx.user.id },
         }),
         db.band.updateMany({
-          where: { event: { orgId: input.id }, deletedAt: null },
+          where: { event: { orgId: input.id }, ...ACTIVE },
           data: { deletedAt: now, deletedBy: ctx.user.id },
         }),
       ]);
@@ -155,12 +157,12 @@ export const organizationsRouter = router({
     }),
 
   trashCount: adminProcedure.query(async () => {
-    return db.organization.count({ where: { deletedAt: { not: null } } });
+    return db.organization.count({ where: { ...DELETED } });
   }),
 
   listDeleted: adminProcedure.query(async () => {
     const orgs = await db.organization.findMany({
-      where: { deletedAt: { not: null } },
+      where: { ...DELETED },
       select: {
         id: true,
         name: true,
@@ -214,7 +216,7 @@ export const organizationsRouter = router({
 
   restoreAll: adminProcedure.mutation(async () => {
     const deletedOrgs = await db.organization.findMany({
-      where: { deletedAt: { not: null } },
+      where: { ...DELETED },
       select: { id: true, deletedAt: true },
     });
     if (deletedOrgs.length === 0) return { restored: 0 };
@@ -249,9 +251,7 @@ export const organizationsRouter = router({
       name: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role === "CUSTOMER" && ctx.user.orgId !== input.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, input.orgId);
       return db.organization.update({
         where: { id: input.orgId },
         data: { name: input.name },
@@ -265,9 +265,7 @@ export const organizationsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       // Customer can only update their own org
-      if (ctx.user.role === "CUSTOMER" && ctx.user.orgId !== input.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, input.orgId);
       return db.organization.update({
         where: { id: input.orgId },
         data: { websiteUrl: input.websiteUrl },
@@ -316,7 +314,7 @@ export const organizationsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const org = await db.organization.findUnique({
-        where: { id: input.orgId, deletedAt: null },
+        where: { id: input.orgId, ...ACTIVE },
         select: { name: true },
       });
       if (!org) {

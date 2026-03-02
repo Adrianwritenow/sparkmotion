@@ -6,6 +6,8 @@ import { invalidateEventCache, invalidateBandCache } from "@sparkmotion/redis";
 import { evaluateEventSchedule } from "../services/evaluate-schedule";
 import { purgeEventFromKV } from "../services/redirect-map-generator";
 import { getEventEngagement } from "../lib/engagement";
+import { enforceOrgAccess } from "../lib/auth";
+import { ACTIVE, DELETED } from "../lib/soft-delete";
 
 export const eventsRouter = router({
   list: protectedProcedure
@@ -17,15 +19,15 @@ export const eventsRouter = router({
     .query(async ({ ctx, input }) => {
       const where =
         ctx.user.role === "ADMIN"
-          ? input?.orgId ? { orgId: input.orgId, deletedAt: null } : { deletedAt: null }
-          : { orgId: ctx.user.orgId ?? undefined, deletedAt: null };
+          ? input?.orgId ? { orgId: input.orgId, ...ACTIVE } : { ...ACTIVE }
+          : { orgId: ctx.user.orgId ?? undefined, ...ACTIVE };
       const events = await db.event.findMany({
         where,
         include: {
           org: true,
           windows: true,
           campaign: { select: { id: true, name: true } },
-          _count: { select: { bands: { where: { deletedAt: null } } } }
+          _count: { select: { bands: { where: { ...ACTIVE } } } }
         },
         orderBy: { [input?.sortBy ?? "createdAt"]: input?.sortDir ?? "desc" },
       });
@@ -47,13 +49,13 @@ export const eventsRouter = router({
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const event = await db.event.findUniqueOrThrow({
-        where: { id: input.id, deletedAt: null },
+        where: { id: input.id, ...ACTIVE },
         include: {
           org: true,
           windows: true,
-          bands: { where: { deletedAt: null }, take: 100 },
+          bands: { where: { ...ACTIVE }, take: 100 },
           campaign: { select: { id: true, name: true } },
-          _count: { select: { bands: { where: { deletedAt: null } } } }
+          _count: { select: { bands: { where: { ...ACTIVE } } } }
         },
       });
 
@@ -156,10 +158,8 @@ export const eventsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...rawData } = input;
-      const existing = await db.event.findUniqueOrThrow({ where: { id, deletedAt: null } });
-      if (ctx.user.role === "CUSTOMER" && existing.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      const existing = await db.event.findUniqueOrThrow({ where: { id, ...ACTIVE } });
+      enforceOrgAccess(ctx, existing.orgId);
       // Filter out undefined values for Prisma (null is valid for nullable fields)
       const data: Record<string, any> = {};
       for (const [key, value] of Object.entries(rawData)) {
@@ -191,13 +191,11 @@ export const eventsRouter = router({
     .input(z.object({ id: z.string(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       const event = await db.event.findUniqueOrThrow({
-        where: { id: input.id, deletedAt: null },
+        where: { id: input.id, ...ACTIVE },
         select: { id: true, orgId: true, timezone: true },
       });
 
-      if (ctx.user.role === "CUSTOMER" && event.orgId !== ctx.user.orgId) {
-        throw new Error("Access denied");
-      }
+      enforceOrgAccess(ctx, event.orgId);
 
       const updatedEvent = await db.$transaction(async (tx) => {
         const updated = await tx.event.update({
@@ -220,12 +218,10 @@ export const eventsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const event = await db.event.findUniqueOrThrow({ where: { id: input.id, deletedAt: null } });
-      if (ctx.user.role === "CUSTOMER" && event.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      const event = await db.event.findUniqueOrThrow({ where: { id: input.id, ...ACTIVE } });
+      enforceOrgAccess(ctx, event.orgId);
       const bands = await db.band.findMany({
-        where: { eventId: input.id, deletedAt: null },
+        where: { eventId: input.id, ...ACTIVE },
         select: { bandId: true },
       });
       const now = new Date();
@@ -239,7 +235,7 @@ export const eventsRouter = router({
           },
         }),
         db.band.updateMany({
-          where: { eventId: input.id, deletedAt: null },
+          where: { eventId: input.id, ...ACTIVE },
           data: { deletedAt: now, deletedBy: ctx.user.id },
         }),
       ]);
@@ -254,7 +250,7 @@ export const eventsRouter = router({
     .input(z.object({ ids: z.array(z.string()).min(1).max(50) }))
     .mutation(async ({ input, ctx }) => {
       const events = await db.event.findMany({
-        where: { id: { in: input.ids }, deletedAt: null },
+        where: { id: { in: input.ids }, ...ACTIVE },
       });
 
       if (events.length === 0) {
@@ -269,7 +265,7 @@ export const eventsRouter = router({
       }
 
       const bands = await db.band.findMany({
-        where: { eventId: { in: input.ids }, deletedAt: null },
+        where: { eventId: { in: input.ids }, ...ACTIVE },
         select: { bandId: true },
       });
 
@@ -290,7 +286,7 @@ export const eventsRouter = router({
           data: { deletedAt: now, deletedBy: ctx.user.id },
         });
         await tx.band.updateMany({
-          where: { eventId: { in: eventIds }, deletedAt: null },
+          where: { eventId: { in: eventIds }, ...ACTIVE },
           data: { deletedAt: now, deletedBy: ctx.user.id },
         });
       });
@@ -308,7 +304,7 @@ export const eventsRouter = router({
     .input(z.object({ ids: z.array(z.string()).min(1).max(50) }))
     .mutation(async ({ input, ctx }) => {
       const events = await db.event.findMany({
-        where: { id: { in: input.ids }, deletedAt: null },
+        where: { id: { in: input.ids }, ...ACTIVE },
         include: { windows: true },
       });
 
@@ -365,8 +361,8 @@ export const eventsRouter = router({
 
   trashCount: protectedProcedure.query(async ({ ctx }) => {
     const where = ctx.user.role === "ADMIN"
-      ? { deletedAt: { not: null } as const }
-      : { orgId: ctx.user.orgId ?? undefined, deletedAt: { not: null } as const };
+      ? { ...DELETED }
+      : { orgId: ctx.user.orgId ?? undefined, ...DELETED };
     return db.event.count({ where });
   }),
 
@@ -374,8 +370,8 @@ export const eventsRouter = router({
     .input(z.object({ orgId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       const where = ctx.user.role === "ADMIN"
-        ? { ...(input?.orgId ? { orgId: input.orgId } : {}), deletedAt: { not: null } as const }
-        : { orgId: ctx.user.orgId ?? undefined, deletedAt: { not: null } as const };
+        ? { ...(input?.orgId ? { orgId: input.orgId } : {}), ...DELETED }
+        : { orgId: ctx.user.orgId ?? undefined, ...DELETED };
       const events = await db.event.findMany({
         where,
         select: {
@@ -406,9 +402,7 @@ export const eventsRouter = router({
       if (!event.deletedAt) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Event is not deleted" });
       }
-      if (ctx.user.role === "CUSTOMER" && event.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, event.orgId);
       await db.$transaction([
         db.event.update({
           where: { id: input.id },
@@ -430,8 +424,8 @@ export const eventsRouter = router({
 
   restoreAll: protectedProcedure.mutation(async ({ ctx }) => {
     const where = ctx.user.role === "ADMIN"
-      ? { deletedAt: { not: null } as const }
-      : { orgId: ctx.user.orgId ?? undefined, deletedAt: { not: null } as const };
+      ? { ...DELETED }
+      : { orgId: ctx.user.orgId ?? undefined, ...DELETED };
     const deletedEvents = await db.event.findMany({ where, select: { id: true, deletedAt: true, deletedCampaignId: true } });
     if (deletedEvents.length === 0) return { restored: 0 };
 
@@ -450,7 +444,7 @@ export const eventsRouter = router({
         data: { deletedAt: null, deletedBy: null },
       });
       await tx.band.updateMany({
-        where: { eventId: { in: eventIds }, deletedAt: { not: null } },
+        where: { eventId: { in: eventIds }, ...DELETED },
         data: { deletedAt: null, deletedBy: null },
       });
     });
