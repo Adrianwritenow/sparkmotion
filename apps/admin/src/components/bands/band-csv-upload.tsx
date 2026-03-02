@@ -4,8 +4,8 @@ import { useState, useCallback } from "react";
 import Papa from "papaparse";
 import { z } from "zod";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@sparkmotion/ui/button";
+import { Badge } from "@sparkmotion/ui/badge";
 import { Upload } from "lucide-react";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 import {
   Table,
   TableBody,
@@ -21,7 +21,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@sparkmotion/ui/table";
 
 const bandIdSchema = z.string().min(1).regex(/^[A-Za-z0-9-]+$/);
 

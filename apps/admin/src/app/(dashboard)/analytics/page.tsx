@@ -17,7 +17,7 @@ import { ExportCsvButton } from "@/components/analytics/export-csv-button";
 import { CohortRetention } from "@/components/analytics/cohort-retention";
 import { EventComparison } from "@/components/analytics/event-comparison";
 import { useEventStream } from "@/hooks/use-event-stream";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@sparkmotion/ui/card";
 
 export default function AnalyticsPage() {
   // Default to all time for historical analytics

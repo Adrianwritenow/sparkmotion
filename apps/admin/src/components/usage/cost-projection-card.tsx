@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@sparkmotion/ui/card";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
+import { Button } from "@sparkmotion/ui/button";
 
 type TimeRange = "7" | "14" | "30";
 

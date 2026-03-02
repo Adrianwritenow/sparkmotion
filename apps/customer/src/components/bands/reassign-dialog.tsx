@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -10,14 +10,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 
 interface ReassignDialogProps {
   open: boolean;

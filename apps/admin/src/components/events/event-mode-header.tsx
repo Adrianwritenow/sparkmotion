@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@sparkmotion/ui/badge";
 import { ModeIndicator } from "./mode-indicator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { EventStatus } from "@sparkmotion/database";
 
 const statusVariants: Record<EventStatus, "default" | "secondary" | "destructive" | "outline"> = {

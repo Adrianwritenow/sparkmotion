@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@sparkmotion/ui/tabs";
+import { Button } from "@sparkmotion/ui/button";
 import { UserPlus } from "lucide-react";
 import { UsersTable } from "./users-table";
 import { CreateUserDialog } from "./create-user-dialog";

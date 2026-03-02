@@ -8,10 +8,10 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
-} from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@sparkmotion/ui/sheet";
+import { Button } from "@sparkmotion/ui/button";
+import { Badge } from "@sparkmotion/ui/badge";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { differenceInDays, format } from "date-fns";

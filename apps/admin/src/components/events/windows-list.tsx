@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@sparkmotion/ui/button";
+import { Input } from "@sparkmotion/ui/input";
+import { Switch } from "@sparkmotion/ui/switch";
 import { ModeIndicator } from "./mode-indicator";
 import { WindowFormDialog } from "./window-form";
 import { DateTimeDisplay } from "./datetime-display";

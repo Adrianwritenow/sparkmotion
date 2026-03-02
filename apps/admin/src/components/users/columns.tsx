@@ -1,7 +1,7 @@
 "use client";
 
 import { type ColumnDef } from "@tanstack/react-table";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@sparkmotion/ui/badge";
 import { UserActions } from "./user-actions";
 import type { UserRow, UserStatus } from "@/app/(dashboard)/users/page";
 

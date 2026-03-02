@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { CalendarDays, Building2, Megaphone, MapPin, TrendingUp, Users } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@sparkmotion/ui/checkbox";
 
 function formatCampaignLocations(locations: string[]): string {
   const [first] = locations;

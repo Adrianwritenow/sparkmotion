@@ -7,9 +7,9 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@sparkmotion/ui/sheet";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@sparkmotion/ui/badge";
 import type { ChangeRow } from "./change-logs-content";
 import { format } from "date-fns";
 import { getActionBadge } from "./change-table";

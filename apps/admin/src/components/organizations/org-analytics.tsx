@@ -11,17 +11,17 @@ import { TopEventsTable } from "@/components/analytics/top-events-table";
 import { ModeSplitChart } from "@/components/analytics/mode-split-chart";
 import { WindowSplitChart } from "@/components/analytics/window-split-chart";
 import { ExportCsvButton } from "@/components/analytics/export-csv-button";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { Button } from "@sparkmotion/ui/button";
+import { Calendar } from "@sparkmotion/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@sparkmotion/ui/popover";
+import { cn } from "@sparkmotion/ui";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 
 interface OrgAnalyticsProps {
   orgId: string;

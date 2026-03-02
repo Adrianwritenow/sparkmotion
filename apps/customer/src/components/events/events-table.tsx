@@ -16,8 +16,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
+} from "@sparkmotion/ui/table";
+import { Input } from "@sparkmotion/ui/input";
 import { columns } from "./columns";
 import { Event } from "@sparkmotion/database";
 import { useState } from "react";

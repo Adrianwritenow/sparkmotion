@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { MoreHorizontal, Mail, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@sparkmotion/ui/dropdown-menu";
 import { ContactOrgDialog } from "./contact-org-dialog";
 import { DeleteOrgDialog } from "./delete-org-dialog";
 

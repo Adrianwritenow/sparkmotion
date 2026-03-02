@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import { Check, ChevronsUpDown, Megaphone, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import {
   Command,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
-} from "@/components/ui/command";
+} from "@sparkmotion/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
+} from "@sparkmotion/ui/popover";
+import { Badge } from "@sparkmotion/ui/badge";
 
 interface EventMultiSelectProps {
   events: Array<{ id: string; name: string; campaign?: { name: string } | null }>;

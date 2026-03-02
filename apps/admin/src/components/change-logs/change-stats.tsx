@@ -2,7 +2,7 @@
 
 import { Activity, ShieldAlert, Trash2, UserCheck } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { StatCard } from "@/components/dashboard/stat-card";
 
 interface StatsData {

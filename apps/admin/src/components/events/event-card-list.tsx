@@ -11,7 +11,7 @@ import {
   MapPin,
   TrendingUp,
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@sparkmotion/ui/checkbox";
 
 interface EventCardListProps {
   events: Array<{

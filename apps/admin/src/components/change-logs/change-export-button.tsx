@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";

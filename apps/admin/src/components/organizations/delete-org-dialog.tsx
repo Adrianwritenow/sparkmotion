@@ -10,8 +10,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from "@sparkmotion/ui/dialog";
+import { Button } from "@sparkmotion/ui/button";
 
 interface DeleteOrgDialogProps {
   orgId: string;

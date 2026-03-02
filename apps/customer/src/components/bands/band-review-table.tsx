@@ -12,18 +12,18 @@ import {
   ColumnDef,
 } from "@tanstack/react-table";
 import { trpc } from "@/lib/trpc";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Input } from "@sparkmotion/ui/input";
+import { Button } from "@sparkmotion/ui/button";
 import { Check, Flag, Globe, ArrowRightLeft, X } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@sparkmotion/ui/checkbox";
+import { Switch } from "@sparkmotion/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@sparkmotion/ui/table";
 import { TagBadge } from "./tag-badge";
 import { ReassignDialog } from "./reassign-dialog";
 import { BandDetailDialog } from "./band-detail-dialog";

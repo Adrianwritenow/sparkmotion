@@ -1,9 +1,9 @@
 "use client";
 
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { Card, CardContent, CardHeader, CardTitle } from "@sparkmotion/ui/card";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
+import { ChartContainer, type ChartConfig } from "@sparkmotion/ui/chart";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 

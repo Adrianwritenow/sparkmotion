@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 
 interface AddOrgDialogProps {
   open: boolean;

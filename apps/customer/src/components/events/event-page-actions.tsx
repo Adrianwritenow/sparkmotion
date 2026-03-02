@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import { Plus } from "lucide-react";
 import { EventFormDialog } from "./event-form-dialog";
 import { EventTrashButton } from "./event-trash-button";

@@ -1,7 +1,7 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@sparkmotion/ui/badge";
 import { Event, EventStatus } from "@sparkmotion/database";
 
 // Type for event with band count (no org needed - all events belong to same org)
