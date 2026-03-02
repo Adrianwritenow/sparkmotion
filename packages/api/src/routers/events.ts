@@ -8,6 +8,7 @@ import { purgeEventFromKV } from "../services/redirect-map-generator";
 import { getEventEngagement } from "../lib/engagement";
 import { enforceOrgAccess } from "../lib/auth";
 import { ACTIVE, DELETED } from "../lib/soft-delete";
+import { createTrashProcedures } from "../lib/trash";
 
 export const eventsRouter = router({
   list: protectedProcedure
@@ -359,53 +360,21 @@ export const eventsRouter = router({
       );
     }),
 
-  trashCount: protectedProcedure.query(async ({ ctx }) => {
-    const where = ctx.user.role === "ADMIN"
-      ? { ...DELETED }
-      : { orgId: ctx.user.orgId ?? undefined, ...DELETED };
-    return db.event.count({ where });
-  }),
-
-  listDeleted: protectedProcedure
-    .input(z.object({ orgId: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
-      const where = ctx.user.role === "ADMIN"
-        ? { ...(input?.orgId ? { orgId: input.orgId } : {}), ...DELETED }
-        : { orgId: ctx.user.orgId ?? undefined, ...DELETED };
-      const events = await db.event.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          deletedAt: true,
-          deletedBy: true,
-          orgId: true,
-          org: { select: { name: true } },
-        },
-        orderBy: { deletedAt: "desc" },
-      });
-      const userIds = events.map((e) => e.deletedBy).filter((id): id is string => !!id);
-      const users = userIds.length > 0
-        ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
-        : [];
-      const userMap = new Map(users.map((u) => [u.id, u.name || u.email]));
-      return events.map((e) => ({
-        ...e,
-        deletedByName: e.deletedBy ? userMap.get(e.deletedBy) ?? null : null,
-      }));
-    }),
-
-  restore: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const event = await db.event.findUniqueOrThrow({ where: { id: input.id } });
-      if (!event.deletedAt) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Event is not deleted" });
-      }
-      enforceOrgAccess(ctx, event.orgId);
+  ...createTrashProcedures({
+    model: "event",
+    selectFields: {
+      id: true,
+      name: true,
+      deletedAt: true,
+      deletedBy: true,
+      orgId: true,
+      org: { select: { name: true } },
+    },
+    getOrgId: (event) => event.orgId,
+    onRestore: async (id, event, ctx) => {
       await db.$transaction([
         db.event.update({
-          where: { id: input.id },
+          where: { id },
           data: {
             deletedAt: null,
             deletedBy: null,
@@ -415,39 +384,33 @@ export const eventsRouter = router({
         }),
         // Restore bands that were cascade-deleted at the same time
         db.band.updateMany({
-          where: { eventId: input.id, deletedAt: { gte: event.deletedAt } },
+          where: { eventId: id, deletedAt: { gte: event.deletedAt } },
           data: { deletedAt: null, deletedBy: null },
         }),
       ]);
       return { success: true };
-    }),
-
-  restoreAll: protectedProcedure.mutation(async ({ ctx }) => {
-    const where = ctx.user.role === "ADMIN"
-      ? { ...DELETED }
-      : { orgId: ctx.user.orgId ?? undefined, ...DELETED };
-    const deletedEvents = await db.event.findMany({ where, select: { id: true, deletedAt: true, deletedCampaignId: true } });
-    if (deletedEvents.length === 0) return { restored: 0 };
-
-    const eventIds = deletedEvents.map((e) => e.id);
-    await db.$transaction(async (tx) => {
-      // Restore campaign associations
-      const eventsWithCampaign = deletedEvents.filter((e) => e.deletedCampaignId);
-      for (const e of eventsWithCampaign) {
-        await tx.event.update({
-          where: { id: e.id },
-          data: { campaignId: e.deletedCampaignId, deletedCampaignId: null },
+    },
+    onRestoreAll: async (events, ctx) => {
+      const eventIds = events.map((e: any) => e.id);
+      await db.$transaction(async (tx) => {
+        // Restore campaign associations
+        const eventsWithCampaign = events.filter((e: any) => e.deletedCampaignId);
+        for (const e of eventsWithCampaign) {
+          await tx.event.update({
+            where: { id: e.id },
+            data: { campaignId: e.deletedCampaignId, deletedCampaignId: null },
+          });
+        }
+        await tx.event.updateMany({
+          where: { id: { in: eventIds } },
+          data: { deletedAt: null, deletedBy: null },
         });
-      }
-      await tx.event.updateMany({
-        where: { id: { in: eventIds } },
-        data: { deletedAt: null, deletedBy: null },
+        await tx.band.updateMany({
+          where: { eventId: { in: eventIds }, ...DELETED },
+          data: { deletedAt: null, deletedBy: null },
+        });
       });
-      await tx.band.updateMany({
-        where: { eventId: { in: eventIds }, ...DELETED },
-        data: { deletedAt: null, deletedBy: null },
-      });
-    });
-    return { restored: deletedEvents.length };
+      return { restored: events.length };
+    },
   }),
 });

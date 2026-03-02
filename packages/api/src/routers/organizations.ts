@@ -4,7 +4,8 @@ import { TRPCError } from "@trpc/server";
 import { db } from "@sparkmotion/database";
 import { sendContactEmail } from "@sparkmotion/email";
 import { enforceOrgAccess } from "../lib/auth";
-import { ACTIVE, DELETED } from "../lib/soft-delete";
+import { ACTIVE } from "../lib/soft-delete";
+import { createTrashProcedures } from "../lib/trash";
 
 export const organizationsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -156,93 +157,61 @@ export const organizationsRouter = router({
       return { success: true };
     }),
 
-  trashCount: adminProcedure.query(async () => {
-    return db.organization.count({ where: { ...DELETED } });
-  }),
-
-  listDeleted: adminProcedure.query(async () => {
-    const orgs = await db.organization.findMany({
-      where: { ...DELETED },
-      select: {
-        id: true,
-        name: true,
-        deletedAt: true,
-        deletedBy: true,
-      },
-      orderBy: { deletedAt: "desc" },
-    });
-    // Resolve deletedBy to user name/email
-    const userIds = orgs.map((o) => o.deletedBy).filter((id): id is string => !!id);
-    const users = userIds.length > 0
-      ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
-      : [];
-    const userMap = new Map(users.map((u) => [u.id, u.name || u.email]));
-    return orgs.map((o) => ({
-      ...o,
-      deletedByName: o.deletedBy ? userMap.get(o.deletedBy) ?? null : null,
-    }));
-  }),
-
-  restore: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const org = await db.organization.findUniqueOrThrow({
-        where: { id: input.id },
-      });
-      if (!org.deletedAt) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Organization is not deleted" });
-      }
+  ...createTrashProcedures({
+    model: "organization",
+    adminOnly: true,
+    selectFields: {
+      id: true,
+      name: true,
+      deletedAt: true,
+      deletedBy: true,
+    },
+    onRestore: async (id, org, ctx) => {
       await db.$transaction([
         db.organization.update({
-          where: { id: input.id },
+          where: { id },
           data: { deletedAt: null, deletedBy: null },
         }),
         // Restore cascade-deleted children (deleted at same time or after org)
         db.event.updateMany({
-          where: { orgId: input.id, deletedAt: { gte: org.deletedAt } },
+          where: { orgId: id, deletedAt: { gte: org.deletedAt } },
           data: { deletedAt: null, deletedBy: null },
         }),
         db.campaign.updateMany({
-          where: { orgId: input.id, deletedAt: { gte: org.deletedAt } },
+          where: { orgId: id, deletedAt: { gte: org.deletedAt } },
           data: { deletedAt: null, deletedBy: null },
         }),
         db.band.updateMany({
-          where: { event: { orgId: input.id }, deletedAt: { gte: org.deletedAt } },
+          where: { event: { orgId: id }, deletedAt: { gte: org.deletedAt } },
           data: { deletedAt: null, deletedBy: null },
         }),
       ]);
       return { success: true };
-    }),
-
-  restoreAll: adminProcedure.mutation(async () => {
-    const deletedOrgs = await db.organization.findMany({
-      where: { ...DELETED },
-      select: { id: true, deletedAt: true },
-    });
-    if (deletedOrgs.length === 0) return { restored: 0 };
-
-    await db.$transaction(async (tx) => {
-      for (const org of deletedOrgs) {
-        await tx.organization.update({
-          where: { id: org.id },
-          data: { deletedAt: null, deletedBy: null },
-        });
-        // Restore cascade-deleted children (deleted at same time or after org)
-        await tx.event.updateMany({
-          where: { orgId: org.id, deletedAt: { gte: org.deletedAt! } },
-          data: { deletedAt: null, deletedBy: null },
-        });
-        await tx.campaign.updateMany({
-          where: { orgId: org.id, deletedAt: { gte: org.deletedAt! } },
-          data: { deletedAt: null, deletedBy: null },
-        });
-        await tx.band.updateMany({
-          where: { event: { orgId: org.id }, deletedAt: { gte: org.deletedAt! } },
-          data: { deletedAt: null, deletedBy: null },
-        });
-      }
-    });
-    return { restored: deletedOrgs.length };
+    },
+    onRestoreAll: async (orgs, ctx) => {
+      await db.$transaction(async (tx) => {
+        for (const org of orgs) {
+          await tx.organization.update({
+            where: { id: org.id },
+            data: { deletedAt: null, deletedBy: null },
+          });
+          // Restore cascade-deleted children (deleted at same time or after org)
+          await tx.event.updateMany({
+            where: { orgId: org.id, deletedAt: { gte: org.deletedAt! } },
+            data: { deletedAt: null, deletedBy: null },
+          });
+          await tx.campaign.updateMany({
+            where: { orgId: org.id, deletedAt: { gte: org.deletedAt! } },
+            data: { deletedAt: null, deletedBy: null },
+          });
+          await tx.band.updateMany({
+            where: { event: { orgId: org.id }, deletedAt: { gte: org.deletedAt! } },
+            data: { deletedAt: null, deletedBy: null },
+          });
+        }
+      });
+      return { restored: orgs.length };
+    },
   }),
 
   updateName: protectedProcedure

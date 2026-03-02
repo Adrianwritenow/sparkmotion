@@ -3,7 +3,8 @@ import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db, Prisma } from "@sparkmotion/database";
 import { getEventEngagement } from "../lib/engagement";
-import { ACTIVE, DELETED } from "../lib/soft-delete";
+import { ACTIVE } from "../lib/soft-delete";
+import { createTrashProcedures } from "../lib/trash";
 
 export const campaignsRouter = router({
   list: protectedProcedure
@@ -363,87 +364,47 @@ export const campaignsRouter = router({
       });
     }),
 
-  trashCount: protectedProcedure.query(async ({ ctx }) => {
-    const where = ctx.user.role === "ADMIN"
-      ? { ...DELETED }
-      : { orgId: ctx.user.orgId!, ...DELETED };
-    return db.campaign.count({ where });
-  }),
-
-  listDeleted: protectedProcedure
-    .input(z.object({ orgId: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
-      const where = ctx.user.role === "ADMIN"
-        ? { ...(input?.orgId ? { orgId: input.orgId } : {}), ...DELETED }
-        : { orgId: ctx.user.orgId!, ...DELETED };
-      const campaigns = await db.campaign.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          deletedAt: true,
-          deletedBy: true,
-          orgId: true,
-          org: { select: { name: true } },
-        },
-        orderBy: { deletedAt: "desc" },
-      });
-      const userIds = campaigns.map((c) => c.deletedBy).filter((id): id is string => !!id);
-      const users = userIds.length > 0
-        ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
-        : [];
-      const userMap = new Map(users.map((u) => [u.id, u.name || u.email]));
-      return campaigns.map((c) => ({
-        ...c,
-        deletedByName: c.deletedBy ? userMap.get(c.deletedBy) ?? null : null,
-      }));
-    }),
-
-  restore: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const campaign = await db.campaign.findUniqueOrThrow({ where: { id: input.id } });
-      if (!campaign.deletedAt) {
-        throw new Error("Campaign is not deleted");
-      }
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new Error("Forbidden");
-      }
+  ...createTrashProcedures({
+    model: "campaign",
+    selectFields: {
+      id: true,
+      name: true,
+      deletedAt: true,
+      deletedBy: true,
+      orgId: true,
+      org: { select: { name: true } },
+    },
+    getOrgId: (campaign) => campaign.orgId,
+    onRestore: async (id, campaign, ctx) => {
       await db.$transaction([
         db.campaign.update({
-          where: { id: input.id },
+          where: { id },
           data: { deletedAt: null, deletedBy: null },
         }),
         // Re-associate events that had this campaignId before deletion
         db.event.updateMany({
-          where: { deletedCampaignId: input.id, ...ACTIVE },
-          data: { campaignId: input.id, deletedCampaignId: null },
+          where: { deletedCampaignId: id, ...ACTIVE },
+          data: { campaignId: id, deletedCampaignId: null },
         }),
       ]);
       return { success: true };
-    }),
-
-  restoreAll: protectedProcedure.mutation(async ({ ctx }) => {
-    const where = ctx.user.role === "ADMIN"
-      ? { ...DELETED }
-      : { orgId: ctx.user.orgId!, ...DELETED };
-    const deletedCampaigns = await db.campaign.findMany({ where, select: { id: true } });
-    if (deletedCampaigns.length === 0) return { restored: 0 };
-
-    const campaignIds = deletedCampaigns.map((c) => c.id);
-    await db.$transaction(async (tx) => {
-      await tx.campaign.updateMany({
-        where: { id: { in: campaignIds } },
-        data: { deletedAt: null, deletedBy: null },
-      });
-      // Re-associate events for each campaign
-      for (const id of campaignIds) {
-        await tx.event.updateMany({
-          where: { deletedCampaignId: id, ...ACTIVE },
-          data: { campaignId: id, deletedCampaignId: null },
+    },
+    onRestoreAll: async (campaigns, ctx) => {
+      const campaignIds = campaigns.map((c: any) => c.id);
+      await db.$transaction(async (tx) => {
+        await tx.campaign.updateMany({
+          where: { id: { in: campaignIds } },
+          data: { deletedAt: null, deletedBy: null },
         });
-      }
-    });
-    return { restored: deletedCampaigns.length };
+        // Re-associate events for each campaign
+        for (const id of campaignIds) {
+          await tx.event.updateMany({
+            where: { deletedCampaignId: id, ...ACTIVE },
+            data: { campaignId: id, deletedCampaignId: null },
+          });
+        }
+      });
+      return { restored: campaigns.length };
+    },
   }),
 });
