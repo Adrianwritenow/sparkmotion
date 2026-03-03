@@ -29,7 +29,7 @@ interface EventCardListProps {
     state?: string | null;
     org?: { name: string } | null;
     campaign?: { id: string; name: string } | null;
-    windows?: Array<{ isActive: boolean }>;
+    windows?: Array<{ isActive: boolean; startTime?: Date | null }>;
     _count: { bands: number };
     tapCount?: number;
     engagementPercent?: number;
@@ -134,9 +134,12 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
                   `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
                 ) : event.startDate ? (
                   `Starts ${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                ) : (
-                  new Date(event.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                )}
+                ) : (() => {
+                  const firstWindow = event.windows?.find((w) => w.startTime);
+                  return firstWindow?.startTime
+                    ? new Date(firstWindow.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                    : "-";
+                })()}
               </span>
             </div>
             {showOrg && event.org && (
