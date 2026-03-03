@@ -35,6 +35,7 @@ Customer-specific (set in `.env.local`):
 | `/campaigns` | Org campaigns list |
 | `/campaigns/[id]` | Campaign detail |
 | `/analytics` | Org analytics |
+| `/activity` | Band activity log (org-scoped) |
 | `/settings` | Org settings |
 | `/profile` | User profile |
 | `/auth/signin` | Login page |
@@ -56,3 +57,13 @@ Customer-specific (set in `.env.local`):
 This app **delegates** authentication to the admin app via `AUTH_REMOTE_URL`.
 
 **Cross-login flow:** When an ADMIN user signs into this app, the sign-in page detects the ADMIN role and redirects to `/api/auth/transfer-token`, which generates a 30-second JWT, deletes the local session cookies, and redirects to the admin app's `/api/auth/cross-login?token=...`.
+
+## Differences from Admin
+
+This app mirrors the admin dashboard structure but is **org-scoped** — customers only see data belonging to their organization. Key differences:
+
+- No `/organizations` route (customers belong to a single org)
+- No `/users` route (user management is admin-only)
+- No `/change-log` route (admin-only)
+- No `/usage` route (infrastructure is admin-only)
+- Auth is delegated to the admin app via `AUTH_REMOTE_URL`
