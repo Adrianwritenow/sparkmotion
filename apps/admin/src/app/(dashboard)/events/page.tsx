@@ -57,6 +57,7 @@ export default async function EventsPage({
         org: { select: { name: true } },
         campaign: { select: { id: true, name: true } },
         _count: { select: { bands: { where: { deletedAt: null } } } },
+        windows: { select: { startTime: true, isActive: true }, orderBy: { startTime: "asc" } },
       },
     }),
     db.event.count({ where }),

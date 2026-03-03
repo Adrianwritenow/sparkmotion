@@ -103,24 +103,19 @@ export default async function EventDetailPage({
                 </span>
               </div>
             )}
-            {event.startDate && (
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4" />
-                <span>
-                  {new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  {event.endDate && ` - ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
-                </span>
-              </div>
-            )}
             <div className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
               <span>
-                Created{" "}
-                {new Date(event.createdAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {event.startDate && event.endDate ? (
+                  `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                ) : event.startDate ? (
+                  new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                ) : (() => {
+                  const firstWindow = event.windows.find((w) => w.startTime);
+                  return firstWindow?.startTime
+                    ? new Date(firstWindow.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                    : "-";
+                })()}
               </span>
             </div>
           </div>

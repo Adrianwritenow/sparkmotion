@@ -33,6 +33,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
         include: {
           campaign: { select: { id: true, name: true } },
           _count: { select: { bands: { where: { deletedAt: null } } } },
+          windows: { select: { startTime: true, isActive: true }, orderBy: { startTime: "asc" } },
         },
       },
     },

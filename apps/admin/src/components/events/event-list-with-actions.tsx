@@ -29,7 +29,7 @@ type EventItem = {
   state?: string | null;
   org?: { name: string } | null;
   campaign?: { id: string; name: string } | null;
-  windows?: Array<{ isActive: boolean }>;
+  windows?: Array<{ isActive: boolean; startTime?: Date | null }>;
   _count: { bands: number };
   tapCount?: number;
   engagementPercent?: number;
