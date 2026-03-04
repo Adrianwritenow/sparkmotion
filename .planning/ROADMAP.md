@@ -262,6 +262,16 @@ Plans:
 - [ ] 36-02-PLAN.md — Move business components/hooks/utils to packages/ui, unify near-duplicates, create generic TrashSheet
 - [ ] 36-03-PLAN.md — Extract tRPC patterns (enforceOrgAccess, ACTIVE/DELETED, createTrashProcedures factory), delete dead costProjection code
 
+### Phase 37: Update event and campaign analytics UI and KPI calculations to match reference designs
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 36
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 37 to break down)
+
 ---
 
 _For project context, see .planning/PROJECT.md_

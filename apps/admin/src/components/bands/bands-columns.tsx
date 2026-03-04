@@ -45,7 +45,9 @@ export function getColumns(opts: {
           <span className="font-mono text-sm">{row.original.bandId}</span>
           {row.original.autoAssigned && (
             row.original.flagged ? (
-              <Flag className="w-4 h-4 fill-red-500 text-red-500" />
+              <span title={(row.original as any).flagReason || "Flagged"}>
+                <Flag className="w-4 h-4 fill-red-500 text-red-500" />
+              </span>
             ) : (
               <Globe className="w-3.5 h-3.5 text-muted-foreground" />
             )

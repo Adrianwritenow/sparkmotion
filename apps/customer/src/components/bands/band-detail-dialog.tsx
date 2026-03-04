@@ -42,6 +42,7 @@ interface BandRow {
   autoAssigned: boolean;
   autoAssignDistance?: number | null;
   flagged: boolean;
+  flagReason?: string | null;
   event: { id: string; name: string; status: string };
   tag?: { id: string; title: string } | null;
   tagId?: string | null;
@@ -149,9 +150,17 @@ export function BandDetailDialog({ band, onClose, onReassign }: BandDetailDialog
                         : "Unknown"}
                     </span>
                     {band.flagged && (
-                      <Flag className="w-4 h-4 fill-red-500 text-red-500" />
+                      <span title={band.flagReason || "Flagged"}>
+                        <Flag className="w-4 h-4 fill-red-500 text-red-500" />
+                      </span>
                     )}
                   </div>
+                </div>
+              )}
+              {band.flagged && band.flagReason && (
+                <div>
+                  <span className="text-muted-foreground">Flag Reason</span>
+                  <p className="font-medium mt-0.5 text-red-600 dark:text-red-400">{band.flagReason}</p>
                 </div>
               )}
               <div>
