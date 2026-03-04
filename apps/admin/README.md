@@ -22,6 +22,7 @@ Admin-specific (set in `.env.local`):
 | `AUTH_URL` | This app's public URL (`http://localhost:3000` locally) |
 | `AUTH_COOKIE_PREFIX` | Session cookie prefix (`admin-auth`) |
 | `NEXT_PUBLIC_NFC_BASE_URL` | Hub URL for NFC test links (`localhost:3002`) |
+| `NEXT_PUBLIC_SPARK_MOTION_URL` | Domain for sample NFC redirect links (defaults to `sparkmotion.net`) |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps API key for venue autocomplete |
 
 ## Routes
@@ -39,6 +40,8 @@ Admin-specific (set in `.env.local`):
 | `/analytics` | Cross-org analytics |
 | `/users` | User management |
 | `/usage` | Infrastructure/cost usage |
+| `/activity` | Band activity log (all orgs) |
+| `/change-log` | System change log (admin only) |
 | `/settings` | App settings |
 | `/profile` | User profile |
 | `/auth/signin` | Login page |
