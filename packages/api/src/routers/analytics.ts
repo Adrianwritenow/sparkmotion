@@ -527,7 +527,7 @@ export const analyticsRouter = router({
         }
       }
 
-      const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
+      const { fromDate, toDate } = buildDateFilter(input);
 
       // Bound generate_series with filter dates when available
       const seriesStart = fromDate
@@ -537,6 +537,15 @@ export const analyticsRouter = router({
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`CURRENT_DATE`;
 
+      // Date filter on first_tap_at (not tappedAt) — windowFilter dropped intentionally:
+      // first tap should span all windows to correctly identify when a band first appeared.
+      const firstTapDateFilter = (() => {
+        const parts: Prisma.Sql[] = [];
+        if (input.from) parts.push(Prisma.sql`AND first_tap_at >= ${new Date(input.from)}`);
+        if (input.to) parts.push(Prisma.sql`AND first_tap_at <= ${new Date(input.to)}`);
+        return parts.length > 0 ? Prisma.sql`${Prisma.join(parts, " ")}` : Prisma.sql``;
+      })();
+
       const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
           SELECT generate_series(
@@ -545,15 +554,20 @@ export const analyticsRouter = router({
             '1 day'::interval
           )::date AS date
         ),
-        daily_counts AS (
-          SELECT
-            DATE_TRUNC('day', "tappedAt")::date AS date,
-            COUNT(*)::int AS count
+        first_taps AS (
+          SELECT "bandId", MIN("tappedAt") AS first_tap_at
           FROM "TapLog"
           WHERE "eventId" = ${eventId}
-            ${dateFilter}
-            ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt")
+          GROUP BY "bandId"
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', first_tap_at)::date AS date,
+            COUNT(*)::int AS count
+          FROM first_taps
+          WHERE 1=1
+            ${firstTapDateFilter}
+          GROUP BY DATE_TRUNC('day', first_tap_at)
         )
         SELECT
           ds.date,
@@ -667,7 +681,7 @@ export const analyticsRouter = router({
         return [];
       }
 
-      const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
+      const { fromDate, toDate } = buildDateFilter(input);
 
       const eventFilter = eventIds.length === 1
         ? Prisma.sql`"eventId" = ${eventIds[0]}`
@@ -684,6 +698,15 @@ export const analyticsRouter = router({
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`CURRENT_DATE`;
 
+      // Date filter on first_tap_at (not tappedAt) — windowFilter dropped intentionally:
+      // first tap should span all windows to correctly identify when a band first appeared.
+      const firstTapDateFilter = (() => {
+        const parts: Prisma.Sql[] = [];
+        if (input.from) parts.push(Prisma.sql`AND first_tap_at >= ${new Date(input.from)}`);
+        if (input.to) parts.push(Prisma.sql`AND first_tap_at <= ${new Date(input.to)}`);
+        return parts.length > 0 ? Prisma.sql`${Prisma.join(parts, " ")}` : Prisma.sql``;
+      })();
+
       const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
           SELECT generate_series(
@@ -692,15 +715,20 @@ export const analyticsRouter = router({
             '1 day'::interval
           )::date AS date
         ),
-        daily_counts AS (
-          SELECT
-            DATE_TRUNC('day', "tappedAt")::date AS date,
-            COUNT(*)::int AS count
+        first_taps AS (
+          SELECT "bandId", MIN("tappedAt") AS first_tap_at
           FROM "TapLog"
           WHERE ${eventFilter}
-            ${dateFilter}
-            ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt")
+          GROUP BY "bandId"
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', first_tap_at)::date AS date,
+            COUNT(*)::int AS count
+          FROM first_taps
+          WHERE 1=1
+            ${firstTapDateFilter}
+          GROUP BY DATE_TRUNC('day', first_tap_at)
         )
         SELECT
           ds.date,
