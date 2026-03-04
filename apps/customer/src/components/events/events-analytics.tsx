@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -62,6 +62,12 @@ const REDIRECT_COLORS: Record<string, string> = {
   DEFAULT: "hsl(215 10% 45%)",
 };
 
+/** Random HSL color — different on each page load */
+function getRandomColor(): string {
+  const hue = Math.floor(Math.random() * 360);
+  return `hsl(${hue}, 70%, 55%)`;
+}
+
 const windowTypeTapsConfig = {
   count: {
     label: "Taps",
@@ -86,6 +92,21 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
 
   const { data: windows } =
     trpc.windows.list.useQuery({ eventId });
+
+  // Random color map for windows: stable within session, randomized on refresh
+  const colorMapRef = useRef(new Map<string, string>());
+  const windowColorMap = useMemo(() => {
+    for (const w of windows ?? []) {
+      if (!colorMapRef.current.has(w.id)) {
+        colorMapRef.current.set(w.id, getRandomColor());
+      }
+    }
+    // Static grey colors for non-window categories
+    colorMapRef.current.set("__FALLBACK__", REDIRECT_COLORS.FALLBACK);
+    colorMapRef.current.set("__ORG__", REDIRECT_COLORS.ORG);
+    colorMapRef.current.set("__DEFAULT__", REDIRECT_COLORS.DEFAULT);
+    return colorMapRef.current;
+  }, [windows]);
 
   // Multi-select handler
   const handleWindowSelect = (id: string) => {
@@ -122,8 +143,10 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
 
   const { data: engagement, isLoading: engagementLoading } =
     trpc.analytics.engagementByHour.useQuery(filterParams);
-  const { data: summary, isLoading: summaryLoading } =
+  const { data: summary } =
     trpc.analytics.eventSummary.useQuery(filterParams);
+  const { data: overviewSummary, isLoading: overviewLoading } =
+    trpc.analytics.eventSummary.useQuery({ eventId });
   const { data: redirectTypeData, isLoading: redirectTypeLoading } =
     trpc.analytics.tapsByRedirectType.useQuery({ eventId, from: filterParams.from, to: filterParams.to });
   const { data: windowTaps, isLoading: windowTapsLoading } =
@@ -131,22 +154,77 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
   const { data: registrationData, isLoading: registrationLoading } =
     trpc.analytics.registrationGrowth.useQuery(filterParams);
 
+  // By-window queries — only when NOT filtering to a single window
+  const byWindowParams = { eventId, ...(derivedFrom && derivedTo ? { from: derivedFrom, to: derivedTo } : {}) };
+  const showByWindow = !singleWindowId;
+  const { data: engagementByWindow, isLoading: engagementByWindowLoading } =
+    trpc.analytics.engagementByWindow.useQuery(byWindowParams, { enabled: showByWindow });
+  const { data: registrationByWindow, isLoading: registrationByWindowLoading } =
+    trpc.analytics.registrationGrowthByWindow.useQuery(byWindowParams, { enabled: showByWindow });
+
+  // Pivot engagement-by-window into wide format: { date, [windowId]: count }
+  const engagementWide = useMemo(() => {
+    if (!engagementByWindow || engagementByWindow.length === 0) return [];
+    const byDate = new Map<string, Record<string, number>>();
+    for (const row of engagementByWindow) {
+      if (!byDate.has(row.date)) byDate.set(row.date, {});
+      byDate.get(row.date)![row.windowId] = row.interactions;
+    }
+    return Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+  }, [engagementByWindow]);
+
+  // Unique window list from by-window data
+  const windowList = useMemo(() => {
+    if (!engagementByWindow) return [];
+    const seen = new Map<string, string>();
+    for (const row of engagementByWindow) {
+      if (!seen.has(row.windowId)) seen.set(row.windowId, row.windowLabel);
+    }
+    return Array.from(seen.entries()).map(([id, label]) => ({ id, label }));
+  }, [engagementByWindow]);
+
+  // Dynamic chart configs for by-window charts
+  const engagementByWindowConfig = Object.fromEntries(
+    windowList.map((w) => [
+      w.id,
+      { label: w.label, color: windowColorMap.get(w.id) ?? "#FF6B35" },
+    ])
+  ) satisfies ChartConfig;
+
+  // Pivot registration-by-window into wide format
+  const registrationWide = useMemo(() => {
+    if (!registrationByWindow || registrationByWindow.length === 0) return [];
+    const byDate = new Map<string, Record<string, number>>();
+    for (const row of registrationByWindow) {
+      if (!byDate.has(row.date)) byDate.set(row.date, {});
+      byDate.get(row.date)![row.windowId] = row.count;
+    }
+    return Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+  }, [registrationByWindow]);
+
+  const registrationByWindowConfig = Object.fromEntries(
+    windowList.map((w) => [
+      w.id,
+      { label: w.label, color: windowColorMap.get(w.id) ?? "#FF6B35" },
+    ])
+  ) satisfies ChartConfig;
+
   // Sparkline: always full event history, no filters
   const { data: sparklineData } =
     trpc.analytics.engagementByHour.useQuery({ eventId });
 
-  // Derived KPI values
+  // Derived KPI values (from unfiltered overview)
   const avgTapsPerBand =
-    summary && summary.bandCount > 0
-      ? (summary.tapCount / summary.bandCount).toFixed(1)
+    overviewSummary && overviewSummary.bandCount > 0
+      ? (overviewSummary.tapCount / overviewSummary.bandCount).toFixed(1)
       : "0.0";
-  const engagementPct = summary?.engagementPercent?.toFixed(1) ?? "0.0";
-  const bandsTappedSubtitle = summary
-    ? `${summary.uniqueBands.toLocaleString()} of ${summary.bandCount.toLocaleString()} bands`
+  const engagementPct = overviewSummary?.engagementPercent?.toFixed(1) ?? "0.0";
+  const bandsTappedSubtitle = overviewSummary
+    ? `${overviewSummary.uniqueBands.toLocaleString()} of ${overviewSummary.bandCount.toLocaleString()} bands`
     : "";
   const activationPct =
-    summary && summary.bandCount > 0
-      ? Math.round((summary.uniqueBands / summary.bandCount) * 100)
+    overviewSummary && overviewSummary.bandCount > 0
+      ? Math.round((overviewSummary.uniqueBands / overviewSummary.bandCount) * 100)
       : 0;
 
   // Sparkline peak calculation
@@ -178,7 +256,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
     count: item.count,
   }));
 
-  // Pie chart data
+  // Pie chart data — use windowColorMap for consistent colors across all charts
   const NON_WINDOW_CATEGORIES = ["FALLBACK", "ORG", "DEFAULT"];
   const filteredWindowTaps = singleWindowId
     ? (windowTaps ?? []).filter((w) => w.windowId === singleWindowId)
@@ -186,16 +264,17 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
   const windowSlices = filteredWindowTaps.map((w) => ({
     name: `${w.windowType} - ${w.title || "Untitled"}`,
     value: w.count,
+    colorKey: w.windowId,
   }));
   const nonWindowSlices = !singleWindowId
     ? (redirectTypeData ?? [])
         .filter((item) => NON_WINDOW_CATEGORIES.includes(item.category) && item.count > 0)
-        .map((item) => ({ name: item.category, value: item.count }))
+        .map((item) => ({ name: item.category, value: item.count, colorKey: `__${item.category}__` }))
     : [];
   const pieSlices = [...windowSlices, ...nonWindowSlices];
   const pieTotal = pieSlices.reduce((s, d) => s + d.value, 0);
   const pieConfig = pieSlices.reduce<ChartConfig>((acc, item, i) => {
-    const color = REDIRECT_COLORS[item.name] ?? PIE_COLORS[i % PIE_COLORS.length];
+    const color = windowColorMap.get(item.colorKey) ?? PIE_COLORS[i % PIE_COLORS.length];
     acc[item.name] = { label: item.name, color };
     return acc;
   }, {});
@@ -210,80 +289,12 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
   };
 
   return (
-    <div className="space-y-6" ref={captureRef}>
+    <div className="space-y-8" ref={captureRef}>
 
-      {/* Filter bar + Export */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Multi-select checkbox dropdown */}
-        <Popover open={windowDropdownOpen} onOpenChange={setWindowDropdownOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="justify-start text-left font-normal min-w-[160px]">
-              <span className="flex-1 truncate">{selectionText}</span>
-              <ChevronDown className="ml-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-2" align="start">
-            {/* All Time row */}
-            <div
-              className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
-              onClick={() => handleWindowSelect("all")}
-            >
-              <Checkbox
-                id="window-all"
-                checked={selectedWindowIds.includes("all")}
-                onCheckedChange={() => handleWindowSelect("all")}
-              />
-              <label htmlFor="window-all" className="text-sm cursor-pointer flex-1">All Time</label>
-            </div>
-            {windows && windows.length > 0 && (
-              <>
-                <div className="my-1.5 border-t border-border" />
-                {windows.map((w) => (
-                  <div
-                    key={w.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleWindowSelect(w.id)}
-                  >
-                    <Checkbox
-                      id={`window-${w.id}`}
-                      checked={selectedWindowIds.includes(w.id)}
-                      onCheckedChange={() => handleWindowSelect(w.id)}
-                    />
-                    <label htmlFor={`window-${w.id}`} className="text-sm cursor-pointer flex-1 truncate">
-                      {w.title || w.windowType}
-                    </label>
-                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
-                      {w.windowType}
-                    </Badge>
-                  </div>
-                ))}
-              </>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        {/* Or Custom Time + datetime pickers */}
-        <span className="text-xs text-muted-foreground">Or Custom Time</span>
-        <input
-          type="datetime-local"
-          value={customFrom}
-          onChange={(e) => setCustomFrom(e.target.value)}
-          className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
-        />
-        <input
-          type="datetime-local"
-          value={customTo}
-          onChange={(e) => setCustomTo(e.target.value)}
-          className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
-        />
-        {hasCustomFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <X className="mr-1 h-4 w-4" />
-            Clear
-          </Button>
-        )}
-
-        <div className="ml-auto">
+      {/* ── ANALYTICS OVERVIEW ── */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Analytics Overview</h2>
           <ExportAnalyticsButton
             entityName={eventName}
             orgName={orgName}
@@ -293,9 +304,8 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
             captureRef={captureRef}
           />
         </div>
-      </div>
 
-      {/* Section 1: Top row — Engagement Overview (3/4) + Tap Activity sparkline (1/4) */}
+      {/* Top row — Engagement Overview (3/4) + Tap Activity sparkline (1/4) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
         {/* Engagement Overview card */}
@@ -317,11 +327,11 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                   Total Bands
                 </span>
               </div>
-              {summaryLoading ? (
+              {overviewLoading ? (
                 <Skeleton className="h-7 w-16" />
               ) : (
                 <p className="text-xl font-bold text-foreground">
-                  {summary?.bandCount.toLocaleString() ?? "0"}
+                  {overviewSummary?.bandCount.toLocaleString() ?? "0"}
                 </p>
               )}
               <span className="text-[10px] text-muted-foreground">Registered to event</span>
@@ -335,11 +345,11 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                   Total Taps
                 </span>
               </div>
-              {summaryLoading ? (
+              {overviewLoading ? (
                 <Skeleton className="h-7 w-16" />
               ) : (
                 <p className="text-xl font-bold text-foreground">
-                  {summary?.tapCount.toLocaleString() ?? "0"}
+                  {overviewSummary?.tapCount.toLocaleString() ?? "0"}
                 </p>
               )}
               <span className="text-[10px] text-muted-foreground">All interactions</span>
@@ -353,11 +363,11 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                   Bands Tapped
                 </span>
               </div>
-              {summaryLoading ? (
+              {overviewLoading ? (
                 <Skeleton className="h-7 w-16" />
               ) : (
                 <p className="text-xl font-bold text-foreground">
-                  {summary?.uniqueBands.toLocaleString() ?? "0"}
+                  {overviewSummary?.uniqueBands.toLocaleString() ?? "0"}
                 </p>
               )}
               <span className="text-[10px] text-muted-foreground">Of total bands</span>
@@ -371,7 +381,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                   Engagement
                 </span>
               </div>
-              {summaryLoading ? (
+              {overviewLoading ? (
                 <Skeleton className="h-7 w-16" />
               ) : (
                 <p className="text-xl font-bold text-foreground">{engagementPct}%</p>
@@ -387,7 +397,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                   Avg Taps/Band
                 </span>
               </div>
-              {summaryLoading ? (
+              {overviewLoading ? (
                 <Skeleton className="h-7 w-16" />
               ) : (
                 <p className="text-xl font-bold text-foreground">{avgTapsPerBand}</p>
@@ -401,7 +411,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[11px] font-medium text-muted-foreground">Band Activation Progress</span>
               <span className="text-[11px] font-semibold text-foreground">
-                {summary?.uniqueBands.toLocaleString() ?? "0"} / {summary?.bandCount.toLocaleString() ?? "0"} bands tapped
+                {overviewSummary?.uniqueBands.toLocaleString() ?? "0"} / {overviewSummary?.bandCount.toLocaleString() ?? "0"} bands tapped
               </span>
             </div>
             <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
@@ -459,6 +469,77 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
           )}
         </div>
       </div>
+      </section>
+
+      {/* ── DETAILED ANALYTICS ── */}
+      <section>
+        <div className="flex items-center gap-3 flex-wrap mb-4">
+          <h2 className="text-xl font-bold">Detailed Analytics</h2>
+          <Popover open={windowDropdownOpen} onOpenChange={setWindowDropdownOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="justify-start text-left font-normal min-w-[160px]">
+                <span className="flex-1 truncate">{selectionText}</span>
+                <ChevronDown className="ml-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-2" align="start">
+              <div
+                className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
+                onClick={() => handleWindowSelect("all")}
+              >
+                <Checkbox
+                  id="window-all"
+                  checked={selectedWindowIds.includes("all")}
+                  onCheckedChange={() => handleWindowSelect("all")}
+                />
+                <label htmlFor="window-all" className="text-sm cursor-pointer flex-1">All Time</label>
+              </div>
+              {windows && windows.length > 0 && (
+                <>
+                  <div className="my-1.5 border-t border-border" />
+                  {windows.map((w) => (
+                    <div
+                      key={w.id}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleWindowSelect(w.id)}
+                    >
+                      <Checkbox
+                        id={`window-${w.id}`}
+                        checked={selectedWindowIds.includes(w.id)}
+                        onCheckedChange={() => handleWindowSelect(w.id)}
+                      />
+                      <label htmlFor={`window-${w.id}`} className="text-sm cursor-pointer flex-1 truncate">
+                        {w.title || w.windowType}
+                      </label>
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                        {w.windowType}
+                      </Badge>
+                    </div>
+                  ))}
+                </>
+              )}
+            </PopoverContent>
+          </Popover>
+          <span className="text-xs text-muted-foreground">Or Custom Time</span>
+          <input
+            type="datetime-local"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
+          />
+          <input
+            type="datetime-local"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
+          />
+          {hasCustomFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="mr-1 h-4 w-4" />
+              Clear
+            </Button>
+          )}
+        </div>
 
       {/* Full-width engagement BarChart */}
       <div className="bg-card border border-border rounded-lg p-6">
@@ -466,8 +547,37 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
           <h3 className="text-lg font-semibold text-foreground">Event Engagement</h3>
           <p className="text-sm text-muted-foreground mt-1">{filterSubtitle}</p>
         </div>
-        {engagementLoading ? (
+        {(showByWindow ? engagementByWindowLoading : engagementLoading) ? (
           <Skeleton className="h-72 w-full" />
+        ) : showByWindow && engagementWide.length > 0 ? (
+          <ChartContainer config={engagementByWindowConfig} className="h-72 w-full">
+            <BarChart data={engagementWide}>
+              <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+              />
+              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+              {windowList.map((w) => (
+                <Bar
+                  key={w.id}
+                  dataKey={w.id}
+                  name={w.label}
+                  fill={windowColorMap.get(w.id) ?? "#FF6B35"}
+                  radius={[4, 4, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          </ChartContainer>
         ) : (
           <ChartContainer config={engagementConfig} className="h-72 w-full">
             <BarChart data={engagement ?? []}>
@@ -569,7 +679,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                     paddingAngle={2}
                   >
                     {pieSlices.map((item, i) => (
-                      <Cell key={i} fill={REDIRECT_COLORS[item.name] ?? PIE_COLORS[i % PIE_COLORS.length]} />
+                      <Cell key={i} fill={windowColorMap.get(item.colorKey) ?? PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
                 </PieChart>
@@ -581,7 +691,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
                     <div className="flex items-center gap-2">
                       <div
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: REDIRECT_COLORS[item.name] ?? PIE_COLORS[i % PIE_COLORS.length] }}
+                        style={{ backgroundColor: windowColorMap.get(item.colorKey) ?? PIE_COLORS[i % PIE_COLORS.length] }}
                       />
                       <span className="text-muted-foreground text-xs">{item.name}</span>
                     </div>
@@ -605,8 +715,40 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
             <h3 className="text-lg font-semibold text-foreground">Registration Growth</h3>
             <p className="text-sm text-muted-foreground mt-1">First tap per band over time</p>
           </div>
-          {registrationLoading ? (
+          {(showByWindow ? registrationByWindowLoading : registrationLoading) ? (
             <Skeleton className="h-56 w-full" />
+          ) : showByWindow && registrationWide.length > 0 ? (
+            <ChartContainer config={registrationByWindowConfig} className="h-56 w-full">
+              <LineChart data={registrationWide}>
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="date"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                {windowList.map((w) => (
+                  <Line
+                    key={w.id}
+                    type="monotone"
+                    dataKey={w.id}
+                    name={w.label}
+                    stroke={windowColorMap.get(w.id) ?? "#FF6B35"}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                ))}
+              </LineChart>
+            </ChartContainer>
           ) : registrationData && registrationData.length > 0 ? (
             <ChartContainer config={registrationConfig} className="h-56 w-full">
               <LineChart data={registrationData}>
@@ -642,6 +784,7 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
           )}
         </div>
       </div>
+      </section>
     </div>
   );
 }

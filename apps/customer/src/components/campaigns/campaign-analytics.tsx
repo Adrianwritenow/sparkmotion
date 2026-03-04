@@ -102,6 +102,8 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
     trpc.analytics.campaignEngagementByHour.useQuery(filterParams);
   const { data: summary, isLoading: summaryLoading } =
     trpc.analytics.campaignSummary.useQuery(filterParams);
+  const { data: overviewSummary, isLoading: overviewLoading } =
+    trpc.analytics.campaignSummary.useQuery({ campaignId });
   const { data: registrationData, isLoading: registrationLoading } =
     trpc.analytics.campaignRegistrationGrowth.useQuery(filterParams);
 
@@ -152,20 +154,20 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
     }));
   })();
 
-  // Derived KPI values
+  // Derived KPI values (from unfiltered overview)
   const engagementRate =
-    summary && summary.bandCount > 0
-      ? `${(summary.tapCount / summary.bandCount).toFixed(1)}x`
+    overviewSummary && overviewSummary.bandCount > 0
+      ? `${(overviewSummary.tapCount / overviewSummary.bandCount).toFixed(1)}x`
       : "0.0x";
 
   const bandsTappedPct =
-    summary && summary.bandCount > 0
-      ? Math.round((summary.uniqueBands / summary.bandCount) * 100)
+    overviewSummary && overviewSummary.bandCount > 0
+      ? Math.round((overviewSummary.uniqueBands / overviewSummary.bandCount) * 100)
       : 0;
 
   const activationPct =
-    summary && summary.bandCount > 0
-      ? Math.round((summary.uniqueBands / summary.bandCount) * 100)
+    overviewSummary && overviewSummary.bandCount > 0
+      ? Math.round((overviewSummary.uniqueBands / overviewSummary.bandCount) * 100)
       : 0;
 
   // Sparkline peak
@@ -222,44 +224,11 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
   ) satisfies ChartConfig;
 
   return (
-    <div className="space-y-6" ref={captureRef}>
-      {/* Top bar: Event filter + Export */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              {selectionText}
-              <ChevronDown className="h-4 w-4 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-2" align="start">
-            <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
-              <Checkbox
-                checked={selectedEventIds.includes("all")}
-                onCheckedChange={() => handleEventSelect("all")}
-              />
-              <span className="text-sm">All Events</span>
-            </label>
-            {eventNames.length > 0 && (
-              <div className="my-1 border-t border-border" />
-            )}
-            {eventNames.map((ev) => (
-              <label key={ev.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
-                <Checkbox
-                  checked={selectedEventIds.includes(ev.id)}
-                  onCheckedChange={() => handleEventSelect(ev.id)}
-                />
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: eventColorMap.get(ev.id) }}
-                />
-                <span className="text-sm truncate">{ev.name}</span>
-              </label>
-            ))}
-          </PopoverContent>
-        </Popover>
-
-        <div className="ml-auto">
+    <div className="space-y-8" ref={captureRef}>
+      {/* ── ANALYTICS OVERVIEW ── */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Analytics Overview</h2>
           <ExportAnalyticsButton
             entityName={campaignName}
             orgName={orgName}
@@ -269,9 +238,8 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
             captureRef={captureRef}
           />
         </div>
-      </div>
 
-      {/* Section 1: Top row — 3/4 Engagement Overview + 1/4 Tap Activity sparkline */}
+      {/* Top row — 3/4 Engagement Overview + 1/4 Tap Activity sparkline */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: Engagement Overview card (3/4) */}
         <div className="lg:col-span-3 bg-card border border-border rounded-lg p-6">
@@ -287,7 +255,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
           </div>
 
           {/* 4-cell KPI grid */}
-          {summaryLoading ? (
+          {overviewLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} className="h-20 w-full rounded-lg" />
@@ -304,7 +272,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                   </span>
                 </div>
                 <p className="text-xl font-bold text-foreground">
-                  {(summary?.bandCount ?? 0).toLocaleString()}
+                  {(overviewSummary?.bandCount ?? 0).toLocaleString()}
                 </p>
                 <span className="text-[10px] text-muted-foreground">Across all events</span>
               </div>
@@ -318,7 +286,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                   </span>
                 </div>
                 <p className="text-xl font-bold text-foreground">
-                  {(summary?.tapCount ?? 0).toLocaleString()}
+                  {(overviewSummary?.tapCount ?? 0).toLocaleString()}
                 </p>
                 <span className="text-[10px] text-muted-foreground">All interactions</span>
               </div>
@@ -333,7 +301,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                 </div>
                 <div className="flex items-baseline gap-1.5">
                   <p className="text-xl font-bold text-foreground">
-                    {(summary?.uniqueBands ?? 0).toLocaleString()}
+                    {(overviewSummary?.uniqueBands ?? 0).toLocaleString()}
                   </p>
                   <span className="text-[10px] font-medium text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400 px-1.5 py-0.5 rounded-full">
                     {bandsTappedPct}%
@@ -361,7 +329,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs text-muted-foreground">Band Activation Progress</span>
               <span className="text-xs font-medium text-foreground">
-                {(summary?.uniqueBands ?? 0).toLocaleString()} / {(summary?.bandCount ?? 0).toLocaleString()} bands tapped
+                {(overviewSummary?.uniqueBands ?? 0).toLocaleString()} / {(overviewSummary?.bandCount ?? 0).toLocaleString()} bands tapped
               </span>
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -428,6 +396,46 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
           )}
         </div>
       </div>
+      </section>
+
+      {/* ── DETAILED ANALYTICS ── */}
+      <section>
+        <div className="flex items-center gap-3 flex-wrap mb-4">
+          <h2 className="text-xl font-bold">Detailed Analytics</h2>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                {selectionText}
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-2" align="start">
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
+                <Checkbox
+                  checked={selectedEventIds.includes("all")}
+                  onCheckedChange={() => handleEventSelect("all")}
+                />
+                <span className="text-sm">All Events</span>
+              </label>
+              {eventNames.length > 0 && (
+                <div className="my-1 border-t border-border" />
+              )}
+              {eventNames.map((ev) => (
+                <label key={ev.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
+                  <Checkbox
+                    checked={selectedEventIds.includes(ev.id)}
+                    onCheckedChange={() => handleEventSelect(ev.id)}
+                  />
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: eventColorMap.get(ev.id) }}
+                  />
+                  <span className="text-sm truncate">{ev.name}</span>
+                </label>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </div>
 
       {/* Full-width Campaign Engagement BarChart */}
       <div className="bg-card border border-border rounded-lg p-6">
@@ -631,6 +639,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
           )}
         </div>
       </div>
+      </section>
     </div>
   );
 }
