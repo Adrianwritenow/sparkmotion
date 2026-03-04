@@ -102,9 +102,9 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
       }
     }
     // Static grey colors for non-window categories
-    colorMapRef.current.set("__FALLBACK__", REDIRECT_COLORS.FALLBACK);
-    colorMapRef.current.set("__ORG__", REDIRECT_COLORS.ORG);
-    colorMapRef.current.set("__DEFAULT__", REDIRECT_COLORS.DEFAULT);
+    colorMapRef.current.set("__FALLBACK__", REDIRECT_COLORS.FALLBACK!);
+    colorMapRef.current.set("__ORG__", REDIRECT_COLORS.ORG!);
+    colorMapRef.current.set("__DEFAULT__", REDIRECT_COLORS.DEFAULT!);
     return colorMapRef.current;
   }, [windows]);
 
