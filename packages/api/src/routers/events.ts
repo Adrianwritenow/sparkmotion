@@ -10,6 +10,13 @@ import { enforceOrgAccess } from "../lib/auth";
 import { ACTIVE, DELETED } from "../lib/soft-delete";
 import { createTrashProcedures } from "../lib/trash";
 
+const STATUS_PRIORITY: Record<string, number> = {
+  ACTIVE: 0,
+  COMPLETED: 1,
+  DRAFT: 2,
+  CANCELLED: 3,
+};
+
 export const eventsRouter = router({
   list: protectedProcedure
     .input(z.object({
@@ -22,6 +29,8 @@ export const eventsRouter = router({
         ctx.user.role === "ADMIN"
           ? input?.orgId ? { orgId: input.orgId, ...ACTIVE } : { ...ACTIVE }
           : { orgId: ctx.user.orgId ?? undefined, ...ACTIVE };
+      const sortBy = input?.sortBy ?? "createdAt";
+      const sortDir = input?.sortDir ?? "desc";
       const events = await db.event.findMany({
         where,
         include: {
@@ -30,7 +39,15 @@ export const eventsRouter = router({
           campaign: { select: { id: true, name: true } },
           _count: { select: { bands: { where: { ...ACTIVE } } } }
         },
-        orderBy: { [input?.sortBy ?? "createdAt"]: input?.sortDir ?? "desc" },
+      });
+
+      // Sort by status priority, then by user-selected field
+      events.sort((a, b) => {
+        const sp = (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99);
+        if (sp !== 0) return sp;
+        const aVal = a[sortBy]?.getTime() ?? 0;
+        const bVal = b[sortBy]?.getTime() ?? 0;
+        return sortDir === "asc" ? aVal - bVal : bVal - aVal;
       });
 
       // Batch engagement + tap stats via shared lib

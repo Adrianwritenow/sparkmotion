@@ -1,6 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
+
+const LocationPicker = dynamic(
+  () => import("./location-picker").then((mod) => mod.LocationPicker),
+  { ssr: false }
+);
 
 interface Band {
   id: string;
@@ -37,6 +43,9 @@ export function DevTestPanel() {
   const [bandInput, setBandInput] = useState<string>("");
   const [showBandList, setShowBandList] = useState(false);
   const bandInputRef = useRef<HTMLDivElement>(null);
+
+  const [scanLat, setScanLat] = useState<number | null>(null);
+  const [scanLng, setScanLng] = useState<number | null>(null);
 
   // Fetch data when panel opens
   useEffect(() => {
@@ -98,6 +107,10 @@ export function DevTestPanel() {
     });
     if (selectedEventId) {
       params.set("eventId", selectedEventId);
+    }
+    if (scanLat !== null && scanLng !== null) {
+      params.set("lat", scanLat.toFixed(6));
+      params.set("lng", scanLng.toFixed(6));
     }
     window.open(`${window.location.origin}/e?${params.toString()}`, "_blank");
   };
@@ -207,6 +220,18 @@ export function DevTestPanel() {
                   </ul>
                 )}
               </div>
+
+              {/* Location picker */}
+              <LocationPicker
+                onSelect={(lat: number, lng: number) => {
+                  setScanLat(lat);
+                  setScanLng(lng);
+                }}
+                onClear={() => {
+                  setScanLat(null);
+                  setScanLng(null);
+                }}
+              />
 
               {/* Scan button */}
               <button

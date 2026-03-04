@@ -344,6 +344,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 37 added: Update event and campaign analytics UI and KPI calculations to match reference designs
 - Phase 36 added: Code cleanup - dead code removal and reusable abstractions
 - Phase 34 added: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
 - Phase 33 added: Build audit logging UI page for SOC2 compliance

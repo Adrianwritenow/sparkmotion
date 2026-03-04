@@ -150,7 +150,7 @@ export const bandsRouter = router({
       const oldEventId = band.eventId;
       const updated = await db.band.update({
         where: { id: input.id },
-        data: { eventId: input.eventId, autoAssigned: false, autoAssignDistance: null, flagged: false },
+        data: { eventId: input.eventId, autoAssigned: false, autoAssignDistance: null, flagged: false, flagReason: null },
       });
       invalidateBandCache(band.bandId).catch(console.error);
       generateRedirectMap({ eventIds: [oldEventId, input.eventId] }).catch(console.error);
@@ -270,6 +270,7 @@ export const bandsRouter = router({
           autoAssigned: false,
           autoAssignDistance: null,
           flagged: false,
+          flagReason: null,
         },
       });
 
@@ -333,6 +334,7 @@ export const bandsRouter = router({
                 autoAssigned: true,
                 autoAssignDistance: true,
                 flagged: true,
+                flagReason: true,
                 tag: { select: { title: true } },
               },
             },
@@ -363,7 +365,7 @@ export const bandsRouter = router({
       }
       await db.band.updateMany({
         where: { id: { in: bands.map((b) => b.id) } },
-        data: { flagged: false },
+        data: { flagged: false, flagReason: null },
       });
       return { resolvedCount: bands.length };
     }),
