@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T22:18:30.034Z"
+last_updated: "2026-03-04T02:59:23.285Z"
 progress:
-  total_phases: 36
-  completed_phases: 30
-  total_plans: 80
-  completed_plans: 77
+  total_phases: 37
+  completed_phases: 31
+  total_plans: 83
+  completed_plans: 80
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 36 — Code cleanup, dead code removal, and reusable abstractions
-Plan: 03 COMPLETE — Extracted enforceOrgAccess, ACTIVE/DELETED constants, createTrashProcedures factory; deleted dead costProjection code
-Status: Phase 36 Plans 01-03 COMPLETE — 3 of 3 plans complete; Phase 36 done
-Last activity: 2026-03-02 — Phase 36-03 complete: enforceOrgAccess + ACTIVE/DELETED constants + trash factory + costProjection dead code deleted, 96 tests pass
+Phase: 37 — Update event and campaign analytics UI and KPI calculations to match reference designs
+Plan: 03 COMPLETE — CampaignAnalytics reference design refactor in admin and customer apps
+Status: Phase 37 Plan 03 COMPLETE — 3 of 3 plans complete; Phase 37 COMPLETE
+Last activity: 2026-03-04 — Phase 37-03 complete: CampaignAnalytics Engagement Overview (4 KPI cells, Nx multiplier, green % badge), progress bar, Tap Activity sparkline, BarChart, 3-col bottom row, multi-select event filter, Registration Growth chart
 
-Progress: (3 of 3 plans complete — Phase 36 COMPLETE)
+Progress: (3 of 3 plans complete — Phase 37 COMPLETE)
 
 ## Performance Metrics
 
@@ -337,6 +337,10 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 36-02]: velocity-sparkline threshold bug in customer: 5x red must be checked BEFORE 2x yellow to avoid yellow absorbing red case
 - [Phase 36]: createTrashProcedures factory covers events/campaigns/organizations — bands excluded due to unique eventId-scoped input signature (KISS)
 - [Phase 36]: enforceOrgAccess used for simple entity org-checks; analytics procedures retain pattern-level org-scoping
+- [Phase 37]: windowFilter dropped in registrationGrowth/campaignRegistrationGrowth — first tap must span all windows to correctly identify when a band first appeared
+- [Phase 37]: Multi-select checkbox dropdown replaces single-select for window filters; Sparkline uses bare ResponsiveContainer without ChartContainer; Manual pie legend rows replace ChartLegend component; Customer EventsAnalytics is exact copy of admin
+- [Phase 37]: Engagement Rate displayed as Nx multiplier (tapCount/bandCount) in campaign analytics replacing old percentage formula
+- [Phase 37]: Campaign analytics multi-select uses Popover+Checkbox pattern for event filtering; inline datetime-local inputs replace calendar popover
 
 ### Pending Todos
 
@@ -415,7 +419,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed 36-02-PLAN.md — shared business components + TrashSheet abstraction
-Resume file: N/A — Phase 36 Plan 02 fully executed; proceed to next plan
-Next step: Continue Phase 36 with next plan (36-03 or subsequent)
+Last session: 2026-03-04
+Stopped at: Completed 37-03-PLAN.md — CampaignAnalytics refactored to reference design in both admin and customer apps
+Resume file: N/A — Phase 37 all 3 plans complete
+Next step: Phase 37 complete — all plans done
