@@ -583,6 +583,226 @@ export const analyticsRouter = router({
       }));
     }),
 
+  engagementByWindow: protectedProcedure
+    .input(eventAnalyticsFilterInput.omit({ windowId: true }))
+    .query(async ({ ctx, input }) => {
+      const { eventId } = input;
+
+      // Org-scoping for CUSTOMER role
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: eventId, ...ACTIVE },
+          select: { orgId: true },
+        });
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
+      // Fetch event's windows for CROSS JOIN labels
+      const windows = await db.eventWindow.findMany({
+        where: { eventId },
+        select: { id: true, title: true, windowType: true },
+        orderBy: { startTime: "asc" },
+      });
+
+      if (windows.length === 0) return [];
+
+      const fromDate = input.from ? new Date(input.from) : undefined;
+      const toDate = input.to ? new Date(input.to) : undefined;
+
+      const dateFilter = fromDate && toDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate} AND tl."tappedAt" <= ${toDate}`
+        : fromDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate}`
+        : toDate
+        ? Prisma.sql`AND tl."tappedAt" <= ${toDate}`
+        : Prisma.sql``;
+
+      const seriesStart = fromDate
+        ? Prisma.sql`${fromDate}::date`
+        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}))::date`;
+      const seriesEnd = toDate
+        ? Prisma.sql`${toDate}::date`
+        : Prisma.sql`CURRENT_DATE`;
+
+      // Build window VALUES list with ::text casts, plus synthetic non-window categories
+      const windowEntries = [
+        ...windows.map((w) => Prisma.sql`(${w.id}::text, ${w.title || w.windowType}::text)`),
+        Prisma.sql`('__FALLBACK__'::text, 'Fallback'::text)`,
+        Prisma.sql`('__ORG__'::text, 'Org Default'::text)`,
+        Prisma.sql`('__DEFAULT__'::text, 'Default'::text)`,
+      ];
+      const windowNameValues = Prisma.join(windowEntries, ", ");
+
+      const results = await db.$queryRaw<Array<{ date: Date; windowId: string; windowLabel: string; count: bigint }>>(Prisma.sql`
+        WITH date_series AS (
+          SELECT generate_series(
+            ${seriesStart},
+            ${seriesEnd},
+            '1 day'::interval
+          )::date AS date
+        ),
+        event_windows(id, label) AS (
+          VALUES ${windowNameValues}
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', tl."tappedAt")::date AS date,
+            CASE
+              WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
+              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+              ELSE '__DEFAULT__'
+            END AS "windowId",
+            COUNT(*)::int AS count
+          FROM "TapLog" tl
+          INNER JOIN "Event" e ON tl."eventId" = e."id"
+          INNER JOIN "Organization" o ON e."orgId" = o."id"
+          WHERE tl."eventId" = ${eventId}
+            ${dateFilter}
+          GROUP BY DATE_TRUNC('day', tl."tappedAt"),
+            CASE
+              WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
+              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+              ELSE '__DEFAULT__'
+            END
+        )
+        SELECT
+          ds.date,
+          ew.id AS "windowId",
+          ew.label AS "windowLabel",
+          COALESCE(dc.count, 0)::int AS count
+        FROM date_series ds
+        CROSS JOIN event_windows ew
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."windowId" = ew.id
+        ORDER BY ds.date ASC, ew.label ASC
+      `);
+
+      return results.map((row) => ({
+        date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        windowId: row.windowId,
+        windowLabel: row.windowLabel,
+        interactions: Number(row.count),
+      }));
+    }),
+
+  registrationGrowthByWindow: protectedProcedure
+    .input(eventAnalyticsFilterInput.omit({ windowId: true }))
+    .query(async ({ ctx, input }) => {
+      const { eventId } = input;
+
+      // Org-scoping for CUSTOMER role
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: eventId, ...ACTIVE },
+          select: { orgId: true },
+        });
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
+      // Fetch event's windows for CROSS JOIN labels
+      const windows = await db.eventWindow.findMany({
+        where: { eventId },
+        select: { id: true, title: true, windowType: true },
+        orderBy: { startTime: "asc" },
+      });
+
+      if (windows.length === 0) return [];
+
+      const fromDate = input.from ? new Date(input.from) : undefined;
+      const toDate = input.to ? new Date(input.to) : undefined;
+
+      const seriesStart = fromDate
+        ? Prisma.sql`${fromDate}::date`
+        : Prisma.sql`DATE_TRUNC('day', (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}))::date`;
+      const seriesEnd = toDate
+        ? Prisma.sql`${toDate}::date`
+        : Prisma.sql`CURRENT_DATE`;
+
+      // Date filter on first_tap_at
+      const firstTapDateFilter = fromDate && toDate
+        ? Prisma.sql`AND first_tap_at >= ${fromDate} AND first_tap_at <= ${toDate}`
+        : fromDate
+        ? Prisma.sql`AND first_tap_at >= ${fromDate}`
+        : toDate
+        ? Prisma.sql`AND first_tap_at <= ${toDate}`
+        : Prisma.sql``;
+
+      // Build window VALUES list with ::text casts, plus synthetic non-window categories
+      const windowEntries = [
+        ...windows.map((w) => Prisma.sql`(${w.id}::text, ${w.title || w.windowType}::text)`),
+        Prisma.sql`('__FALLBACK__'::text, 'Fallback'::text)`,
+        Prisma.sql`('__ORG__'::text, 'Org Default'::text)`,
+        Prisma.sql`('__DEFAULT__'::text, 'Default'::text)`,
+      ];
+      const windowNameValues = Prisma.join(windowEntries, ", ");
+
+      const results = await db.$queryRaw<Array<{ date: Date; windowId: string; windowLabel: string; count: bigint }>>(Prisma.sql`
+        WITH date_series AS (
+          SELECT generate_series(
+            ${seriesStart},
+            ${seriesEnd},
+            '1 day'::interval
+          )::date AS date
+        ),
+        event_windows(id, label) AS (
+          VALUES ${windowNameValues}
+        ),
+        first_taps AS (
+          SELECT
+            tl."bandId",
+            MIN(tl."tappedAt") AS first_tap_at,
+            (
+              SELECT
+                CASE
+                  WHEN ft."windowId" IS NOT NULL THEN ft."windowId"
+                  WHEN e."fallbackUrl" IS NOT NULL AND ft."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+                  WHEN o."websiteUrl" IS NOT NULL AND ft."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+                  ELSE '__DEFAULT__'
+                END
+              FROM "TapLog" ft
+              INNER JOIN "Event" e ON ft."eventId" = e."id"
+              INNER JOIN "Organization" o ON e."orgId" = o."id"
+              WHERE ft."bandId" = tl."bandId" AND ft."eventId" = ${eventId}
+              ORDER BY ft."tappedAt" ASC LIMIT 1
+            ) AS "windowId"
+          FROM "TapLog" tl
+          WHERE tl."eventId" = ${eventId}
+          GROUP BY tl."bandId"
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', first_tap_at)::date AS date,
+            "windowId",
+            COUNT(*)::int AS count
+          FROM first_taps
+          WHERE 1=1
+            ${firstTapDateFilter}
+          GROUP BY DATE_TRUNC('day', first_tap_at), "windowId"
+        )
+        SELECT
+          ds.date,
+          ew.id AS "windowId",
+          ew.label AS "windowLabel",
+          COALESCE(dc.count, 0)::int AS count
+        FROM date_series ds
+        CROSS JOIN event_windows ew
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."windowId" = ew.id
+        ORDER BY ds.date ASC, ew.label ASC
+      `);
+
+      return results.map((row) => ({
+        date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        windowId: row.windowId,
+        windowLabel: row.windowLabel,
+        count: Number(row.count),
+      }));
+    }),
+
   campaignEngagementByHour: protectedProcedure
     .input(campaignAnalyticsFilterInput)
     .query(async ({ ctx, input }) => {

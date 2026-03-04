@@ -36,19 +36,17 @@ export const campaignsRouter = router({
       const engagementMap = await getEventEngagement(allEventIds, bandCountByEvent);
 
       return campaigns.map((campaign) => {
-        let totalPairs = 0;
-        let totalDenominator = 0;
+        let totalUniqueBands = 0;
         let totalBands = 0;
         for (const event of campaign.events) {
           const eng = engagementMap.get(event.id);
           totalBands += event._count.bands;
           if (eng) {
-            totalPairs += eng.engagedPairs;
-            totalDenominator += event._count.bands * eng.elapsedWindows;
+            totalUniqueBands += eng.uniqueBands;
           }
         }
-        const aggregateEngagement = totalDenominator > 0
-          ? Math.round((totalPairs / totalDenominator) * 100)
+        const aggregateEngagement = totalBands > 0
+          ? Math.round((totalUniqueBands / totalBands) * 100)
           : 0;
         const locations = campaign.events
           .map((e) => e.location)
@@ -85,19 +83,17 @@ export const campaignsRouter = router({
       );
       const engagementMap = await getEventEngagement(eventIds, bandCountByEvent);
 
-      let totalPairs = 0;
-      let totalDenominator = 0;
+      let totalUniqueBands = 0;
       let totalBands = 0;
       for (const event of campaign.events) {
         const eng = engagementMap.get(event.id);
         totalBands += event._count.bands;
         if (eng) {
-          totalPairs += eng.engagedPairs;
-          totalDenominator += event._count.bands * eng.elapsedWindows;
+          totalUniqueBands += eng.uniqueBands;
         }
       }
-      const aggregateEngagement = totalDenominator > 0
-        ? Math.round((totalPairs / totalDenominator) * 100)
+      const aggregateEngagement = totalBands > 0
+        ? Math.round((totalUniqueBands / totalBands) * 100)
         : 0;
       const locations = campaign.events
         .map((e) => e.location)

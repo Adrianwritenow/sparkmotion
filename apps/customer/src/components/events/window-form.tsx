@@ -144,7 +144,7 @@ export function WindowFormDialog({
       setEndTime("");
       form.reset({ windowType: "LIVE", title: "", url: "" });
     }
-  }, [editWindow, form, open]);
+  }, [editWindow, form, open, eventTimezone]);
 
   const createWindow = trpc.windows.create.useMutation({
     onSuccess: () => {
