@@ -24,6 +24,7 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
+  Tooltip,
 } from "recharts";
 import { Users, MousePointerClick, Activity, TrendingUp, ChevronDown, CalendarIcon, X } from "lucide-react";
 import { ExportAnalyticsButton } from "@/components/analytics/export-analytics-button";
@@ -211,6 +212,89 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
   return (
     <div className="space-y-6" ref={captureRef}>
 
+      {/* Filter bar + Export */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Multi-select checkbox dropdown */}
+        <Popover open={windowDropdownOpen} onOpenChange={setWindowDropdownOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="justify-start text-left font-normal min-w-[160px]">
+              <span className="flex-1 truncate">{selectionText}</span>
+              <ChevronDown className="ml-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-2" align="start">
+            {/* All Time row */}
+            <div
+              className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
+              onClick={() => handleWindowSelect("all")}
+            >
+              <Checkbox
+                id="window-all"
+                checked={selectedWindowIds.includes("all")}
+                onCheckedChange={() => handleWindowSelect("all")}
+              />
+              <label htmlFor="window-all" className="text-sm cursor-pointer flex-1">All Time</label>
+            </div>
+            {windows && windows.length > 0 && (
+              <>
+                <div className="my-1.5 border-t border-border" />
+                {windows.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleWindowSelect(w.id)}
+                  >
+                    <Checkbox
+                      id={`window-${w.id}`}
+                      checked={selectedWindowIds.includes(w.id)}
+                      onCheckedChange={() => handleWindowSelect(w.id)}
+                    />
+                    <label htmlFor={`window-${w.id}`} className="text-sm cursor-pointer flex-1 truncate">
+                      {w.title || w.windowType}
+                    </label>
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                      {w.windowType}
+                    </Badge>
+                  </div>
+                ))}
+              </>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        {/* Or Custom Time + datetime pickers */}
+        <span className="text-xs text-muted-foreground">Or Custom Time</span>
+        <input
+          type="datetime-local"
+          value={customFrom}
+          onChange={(e) => setCustomFrom(e.target.value)}
+          className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
+        />
+        <input
+          type="datetime-local"
+          value={customTo}
+          onChange={(e) => setCustomTo(e.target.value)}
+          className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
+        />
+        {hasCustomFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            <X className="mr-1 h-4 w-4" />
+            Clear
+          </Button>
+        )}
+
+        <div className="ml-auto">
+          <ExportAnalyticsButton
+            entityName={eventName}
+            orgName={orgName}
+            summary={summary}
+            engagement={engagement}
+            windowTaps={windowTaps?.map((w) => ({ name: w.title || w.windowType, count: w.count }))}
+            captureRef={captureRef}
+          />
+        </div>
+      </div>
+
       {/* Section 1: Top row — Engagement Overview (3/4) + Tap Activity sparkline (1/4) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
@@ -338,12 +422,24 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
             {sparklineData && sparklineData.length > 0 ? (
               <ResponsiveContainer width="100%" height={100}>
                 <LineChart data={sparklineData}>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]!.payload;
+                      return (
+                        <div className="rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+                          <p className="font-medium">{d.date}</p>
+                          <p className="text-muted-foreground">{d.interactions.toLocaleString()} taps</p>
+                        </div>
+                      );
+                    }}
+                  />
                   <Line
                     type="monotone"
                     dataKey="interactions"
                     stroke="#FF6B35"
                     strokeWidth={2}
-                    dot={false}
+                    dot={{ r: 3, fill: "#FF6B35", strokeWidth: 0 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -354,97 +450,13 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
             )}
           </div>
           {peak && (
-            <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Peak Time</p>
-              <p className="text-xs font-semibold text-foreground mt-0.5">{peak.date}</p>
-              <p className="text-[10px] text-muted-foreground">{peak.interactions.toLocaleString()} taps</p>
+            <div className="mt-3 pt-3 border-t border-border flex items-baseline justify-between">
+              <span className="text-[10px] text-muted-foreground">Peak Month</span>
+              <span className="text-xs font-medium text-foreground">
+                {peak.date} &middot; {peak.interactions.toLocaleString()} taps
+              </span>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Section 2: Detailed Analytics */}
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Multi-select checkbox dropdown */}
-        <Popover open={windowDropdownOpen} onOpenChange={setWindowDropdownOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="justify-start text-left font-normal min-w-[160px]">
-              <span className="flex-1 truncate">{selectionText}</span>
-              <ChevronDown className="ml-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-2" align="start">
-            {/* All Time row */}
-            <div
-              className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
-              onClick={() => handleWindowSelect("all")}
-            >
-              <Checkbox
-                id="window-all"
-                checked={selectedWindowIds.includes("all")}
-                onCheckedChange={() => handleWindowSelect("all")}
-              />
-              <label htmlFor="window-all" className="text-sm cursor-pointer flex-1">All Time</label>
-            </div>
-            {windows && windows.length > 0 && (
-              <>
-                <div className="my-1.5 border-t border-border" />
-                {windows.map((w) => (
-                  <div
-                    key={w.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleWindowSelect(w.id)}
-                  >
-                    <Checkbox
-                      id={`window-${w.id}`}
-                      checked={selectedWindowIds.includes(w.id)}
-                      onCheckedChange={() => handleWindowSelect(w.id)}
-                    />
-                    <label htmlFor={`window-${w.id}`} className="text-sm cursor-pointer flex-1 truncate">
-                      {w.title || w.windowType}
-                    </label>
-                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
-                      {w.windowType}
-                    </Badge>
-                  </div>
-                ))}
-              </>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        {/* Or Custom Time + datetime pickers */}
-        <span className="text-xs text-muted-foreground">Or Custom Time</span>
-        <input
-          type="datetime-local"
-          value={customFrom}
-          onChange={(e) => setCustomFrom(e.target.value)}
-          className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
-        />
-        <input
-          type="datetime-local"
-          value={customTo}
-          onChange={(e) => setCustomTo(e.target.value)}
-          className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
-        />
-        {hasCustomFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <X className="mr-1 h-4 w-4" />
-            Clear
-          </Button>
-        )}
-
-        <div className="ml-auto">
-          <ExportAnalyticsButton
-            entityName={eventName}
-            orgName={orgName}
-            summary={summary}
-            engagement={engagement}
-            windowTaps={windowTaps?.map((w) => ({ name: w.title || w.windowType, count: w.count }))}
-            captureRef={captureRef}
-          />
         </div>
       </div>
 

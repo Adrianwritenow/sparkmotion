@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { format } from "date-fns";
 import {
   ChartContainer,
   ChartTooltip,
@@ -13,7 +12,6 @@ import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@sparkmotion/ui/popover";
 import { Button } from "@sparkmotion/ui/button";
 import { Checkbox } from "@sparkmotion/ui/checkbox";
-import { cn } from "@sparkmotion/ui";
 import {
   PieChart,
   Pie,
@@ -26,6 +24,7 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
+  Tooltip,
 } from "recharts";
 import {
   Users,
@@ -33,23 +32,8 @@ import {
   Activity,
   TrendingUp,
   ChevronDown,
-  X,
 } from "lucide-react";
 import { ExportAnalyticsButton } from "@/components/analytics/export-analytics-button";
-
-const engagementConfig = {
-  interactions: {
-    label: "Interactions",
-    color: "#FF6B35",
-  },
-} satisfies ChartConfig;
-
-const registrationConfig = {
-  count: {
-    label: "Registrations",
-    color: "#FF6B35",
-  },
-} satisfies ChartConfig;
 
 const PIE_COLORS = [
   "hsl(var(--chart-1))",
@@ -59,21 +43,11 @@ const PIE_COLORS = [
   "hsl(var(--chart-5))",
 ];
 
-const REDIRECT_COLORS: Record<string, string> = {
-  PRE: "hsl(var(--chart-1))",
-  LIVE: "hsl(var(--chart-2))",
-  POST: "hsl(var(--chart-3))",
-  FALLBACK: "hsl(215 20% 65%)",
-  ORG: "hsl(215 15% 55%)",
-  DEFAULT: "hsl(215 10% 45%)",
-};
-
-const windowTypeTapsConfig = {
-  count: {
-    label: "Taps",
-    color: "hsl(var(--chart-1))",
-  },
-} satisfies ChartConfig;
+/** Random HSL color — different on each page load */
+function getRandomColor(): string {
+  const hue = Math.floor(Math.random() * 360);
+  return `hsl(${hue}, 70%, 55%)`;
+}
 
 interface CampaignAnalyticsProps {
   campaignId: string;
@@ -85,11 +59,19 @@ interface CampaignAnalyticsProps {
 export function CampaignAnalytics({ campaignId, campaignName, orgName, eventNames }: CampaignAnalyticsProps) {
   const captureRef = useRef<HTMLDivElement>(null);
 
+  // Random color map: stable within session, randomized on refresh
+  const colorMapRef = useRef(new Map<string, string>());
+  const eventColorMap = useMemo(() => {
+    for (const ev of eventNames) {
+      if (!colorMapRef.current.has(ev.id)) {
+        colorMapRef.current.set(ev.id, getRandomColor());
+      }
+    }
+    return colorMapRef.current;
+  }, [eventNames]);
+
   // Multi-select event filter — "all" means no event filter applied
   const [selectedEventIds, setSelectedEventIds] = useState<string[]>(["all"]);
-  // Inline datetime pickers
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
 
   const handleEventSelect = (id: string) => {
     if (id === "all") {
@@ -110,13 +92,9 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
   const activeEventIds = selectedEventIds.includes("all") ? [] : selectedEventIds;
   const singleEventId = activeEventIds.length === 1 ? activeEventIds[0] : undefined;
 
-  const derivedFrom = customFrom || undefined;
-  const derivedTo = customTo || undefined;
-
   const filterParams = {
     campaignId,
     eventId: singleEventId,
-    ...(derivedFrom && derivedTo ? { from: derivedFrom, to: derivedTo } : {}),
   };
 
   // tRPC queries
@@ -124,26 +102,55 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
     trpc.analytics.campaignEngagementByHour.useQuery(filterParams);
   const { data: summary, isLoading: summaryLoading } =
     trpc.analytics.campaignSummary.useQuery(filterParams);
-  const { data: redirectTypeData, isLoading: redirectTypeLoading } =
-    trpc.analytics.campaignTapsByRedirectType.useQuery({
-      campaignId,
-      eventId: singleEventId,
-      from: filterParams.from,
-      to: filterParams.to,
-    });
   const { data: registrationData, isLoading: registrationLoading } =
     trpc.analytics.campaignRegistrationGrowth.useQuery(filterParams);
 
   // Tap Distribution pie: single event = window-level; all/multi = event-level
   const { data: windowTaps, isLoading: windowTapsLoading } =
     trpc.analytics.tapsByWindow.useQuery(
-      { eventId: singleEventId!, from: filterParams.from, to: filterParams.to },
+      { eventId: singleEventId! },
       { enabled: !!singleEventId }
     );
 
   // Sparkline: always full campaign history, no filters
-  const { data: sparklineData } =
+  const { data: sparklineRaw } =
     trpc.analytics.campaignEngagementByHour.useQuery({ campaignId });
+
+  // Pivot engagement data into wide format: { date, [eventId]: count }
+  const engagementWide = (() => {
+    if (!engagement || engagement.length === 0) return [];
+    const byDate = new Map<string, Record<string, number>>();
+    for (const row of engagement) {
+      if (!byDate.has(row.date)) byDate.set(row.date, {});
+      const entry = byDate.get(row.date)!;
+      entry[row.eventId] = row.interactions;
+    }
+    return Array.from(byDate.entries()).map(([date, counts]) => ({
+      date,
+      ...counts,
+    }));
+  })();
+
+  // Dynamic engagement chart config from eventNames
+  const engagementBarConfig = Object.fromEntries(
+    eventNames.map((ev) => [
+      ev.id,
+      { label: ev.name, color: eventColorMap.get(ev.id) ?? "#FF6B35" },
+    ])
+  ) satisfies ChartConfig;
+
+  // Aggregate sparkline data: sum interactions across events per date
+  const sparklineData = (() => {
+    if (!sparklineRaw || sparklineRaw.length === 0) return undefined;
+    const byDate = new Map<string, number>();
+    for (const row of sparklineRaw) {
+      byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.interactions);
+    }
+    return Array.from(byDate.entries()).map(([date, interactions]) => ({
+      date,
+      interactions,
+    }));
+  })();
 
   // Derived KPI values
   const engagementRate =
@@ -172,38 +179,98 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
     ? "All Events"
     : `${activeEventIds.length} event${activeEventIds.length > 1 ? "s" : ""} selected`;
 
-  const hasCustomTime = !!customFrom && !!customTo;
-
-  const clearCustomTime = () => {
-    setCustomFrom("");
-    setCustomTo("");
-  };
-
   // Pie chart data
   const pieSource = singleEventId
     ? (windowTaps ?? []).map((w) => ({
         name: `${w.windowType} - ${w.title || "Untitled"}`,
         value: w.count,
+        eventId: undefined as string | undefined,
       }))
-    : (summary?.breakdown ?? []).map((e) => ({ name: e.name, value: e.tapCount }));
+    : (summary?.breakdown ?? []).map((e) => ({ name: e.name, value: e.tapCount, eventId: e.eventId }));
   const pieTotal = pieSource.reduce((s, d) => s + d.value, 0);
   const pieLoading = singleEventId ? windowTapsLoading : summaryLoading;
 
-  // Bar chart data
-  const barChartData = (redirectTypeData ?? []).map((item) => ({
-    type: item.category,
-    count: item.count,
+  // Taps by Event bar data — derived from summary breakdown
+  const tapsByEventData = (summary?.breakdown ?? []).map((e) => ({
+    name: e.name,
+    count: e.tapCount,
+    eventId: e.eventId,
   }));
+  const tapsByEventTotal = tapsByEventData.reduce((s, d) => s + d.count, 0);
 
-  // Filter subtitle
-  const filterLabel = selectedEventIds.includes("all")
-    ? "All Events"
-    : activeEventIds.length === 1
-    ? eventNames.find((e) => e.id === activeEventIds[0])?.name ?? "Selected Event"
-    : `${activeEventIds.length} events`;
+  // Registration Growth — pivot per-event data into wide format
+  const registrationWide = (() => {
+    if (!registrationData || registrationData.length === 0) return [];
+    const byDate = new Map<string, Record<string, number>>();
+    for (const row of registrationData) {
+      if (!byDate.has(row.date)) byDate.set(row.date, {});
+      const entry = byDate.get(row.date)!;
+      entry[row.eventId] = row.count;
+    }
+    return Array.from(byDate.entries()).map(([date, counts]) => ({
+      date,
+      ...counts,
+    }));
+  })();
+
+  // Dynamic registration chart config from eventNames
+  const registrationConfig = Object.fromEntries(
+    eventNames.map((ev) => [
+      ev.id,
+      { label: ev.name, color: eventColorMap.get(ev.id) ?? "#FF6B35" },
+    ])
+  ) satisfies ChartConfig;
 
   return (
     <div className="space-y-6" ref={captureRef}>
+      {/* Top bar: Event filter + Export */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="gap-2">
+              {selectionText}
+              <ChevronDown className="h-4 w-4 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-2" align="start">
+            <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
+              <Checkbox
+                checked={selectedEventIds.includes("all")}
+                onCheckedChange={() => handleEventSelect("all")}
+              />
+              <span className="text-sm">All Events</span>
+            </label>
+            {eventNames.length > 0 && (
+              <div className="my-1 border-t border-border" />
+            )}
+            {eventNames.map((ev) => (
+              <label key={ev.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
+                <Checkbox
+                  checked={selectedEventIds.includes(ev.id)}
+                  onCheckedChange={() => handleEventSelect(ev.id)}
+                />
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: eventColorMap.get(ev.id) }}
+                />
+                <span className="text-sm truncate">{ev.name}</span>
+              </label>
+            ))}
+          </PopoverContent>
+        </Popover>
+
+        <div className="ml-auto">
+          <ExportAnalyticsButton
+            entityName={campaignName}
+            orgName={orgName}
+            summary={summary}
+            engagement={engagement}
+            windowTaps={windowTaps?.map((w) => ({ name: w.title || w.windowType, count: w.count }))}
+            captureRef={captureRef}
+          />
+        </div>
+      </div>
+
       {/* Section 1: Top row — 3/4 Engagement Overview + 1/4 Tap Activity sparkline */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: Engagement Overview card (3/4) */}
@@ -299,8 +366,8 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full bg-primary rounded-full transition-all"
-                style={{ width: `${activationPct}%` }}
+                className="h-full rounded-full transition-all"
+                style={{ width: `${activationPct}%`, background: "linear-gradient(90deg, #FF6B35 0%, #CC4A1A 100%)" }}
               />
             </div>
           </div>
@@ -322,12 +389,24 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
             {sparklineData && sparklineData.length > 0 ? (
               <ResponsiveContainer width="100%" height={100}>
                 <LineChart data={sparklineData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]!.payload;
+                      return (
+                        <div className="rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+                          <p className="font-medium">{d.date}</p>
+                          <p className="text-muted-foreground">{d.interactions.toLocaleString()} taps</p>
+                        </div>
+                      );
+                    }}
+                  />
                   <Line
                     type="monotone"
                     dataKey="interactions"
                     stroke="#FF6B35"
                     strokeWidth={1.5}
-                    dot={false}
+                    dot={{ r: 3, fill: "#FF6B35", strokeWidth: 0 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -338,95 +417,15 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
             )}
           </div>
 
-          {/* Peak month footer */}
+          {/* Peak month footer — single row */}
           {peak && (
-            <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-[10px] text-muted-foreground">Peak Month</p>
-              <p className="text-xs font-medium text-foreground">{peak.date}</p>
-              <p className="text-[10px] text-muted-foreground">
-                {peak.interactions.toLocaleString()} interactions
-              </p>
+            <div className="mt-3 pt-3 border-t border-border flex items-baseline justify-between">
+              <span className="text-[10px] text-muted-foreground">Peak Month</span>
+              <span className="text-xs font-medium text-foreground">
+                {peak.date} &middot; {peak.interactions.toLocaleString()} taps
+              </span>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Section 2: Detailed Analytics */}
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Multi-select checkbox dropdown for events */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              {selectionText}
-              <ChevronDown className="h-4 w-4 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-2" align="start">
-            {/* All Events option */}
-            <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
-              <Checkbox
-                checked={selectedEventIds.includes("all")}
-                onCheckedChange={() => handleEventSelect("all")}
-              />
-              <span className="text-sm">All Events</span>
-            </label>
-            {eventNames.length > 0 && (
-              <div className="my-1 border-t border-border" />
-            )}
-            {eventNames.map((ev, i) => (
-              <label key={ev.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer">
-                <Checkbox
-                  checked={selectedEventIds.includes(ev.id)}
-                  onCheckedChange={() => handleEventSelect(ev.id)}
-                />
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                />
-                <span className="text-sm truncate">{ev.name}</span>
-              </label>
-            ))}
-          </PopoverContent>
-        </Popover>
-
-        {/* Inline datetime pickers */}
-        <span className="text-xs text-muted-foreground">Or Custom Time</span>
-        <input
-          type="datetime-local"
-          value={customFrom}
-          onChange={(e) => setCustomFrom(e.target.value)}
-          className={cn(
-            "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          )}
-        />
-        <input
-          type="datetime-local"
-          value={customTo}
-          onChange={(e) => setCustomTo(e.target.value)}
-          className={cn(
-            "h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          )}
-        />
-        {hasCustomTime && (
-          <Button variant="ghost" size="sm" onClick={clearCustomTime}>
-            <X className="mr-1 h-4 w-4" />
-            Clear
-          </Button>
-        )}
-
-        <div className="ml-auto">
-          <ExportAnalyticsButton
-            entityName={campaignName}
-            orgName={orgName}
-            summary={summary}
-            engagement={engagement}
-            windowTaps={windowTaps?.map((w) => ({ name: w.title || w.windowType, count: w.count }))}
-            captureRef={captureRef}
-          />
         </div>
       </div>
 
@@ -435,14 +434,14 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-foreground">Campaign Engagement</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Daily interaction trend — {filterLabel}
+            Interactions across all campaign events
           </p>
         </div>
         {engagementLoading ? (
           <Skeleton className="h-72 w-full" />
         ) : (
-          <ChartContainer config={engagementConfig} className="h-72 w-full">
-            <BarChart data={engagement ?? []}>
+          <ChartContainer config={engagementBarConfig} className="h-72 w-full">
+            <BarChart data={engagementWide}>
               <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
               <XAxis
                 dataKey="date"
@@ -457,8 +456,16 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                 tickMargin={8}
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
               />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="interactions" fill="#FF6B35" radius={[4, 4, 0, 0]} />
+              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+              {eventNames.map((ev) => (
+                <Bar
+                  key={ev.id}
+                  dataKey={ev.id}
+                  name={ev.name}
+                  fill={eventColorMap.get(ev.id) ?? "#FF6B35"}
+                  radius={[4, 4, 0, 0]}
+                />
+              ))}
             </BarChart>
           </ChartContainer>
         )}
@@ -466,20 +473,22 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
 
       {/* 3-column bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Column 1: Taps by Redirect Type */}
+        {/* Column 1: Taps by Event */}
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="mb-6">
-            <h3 className="text-base font-semibold text-foreground">Taps by Redirect Type</h3>
-            <p className="text-sm text-muted-foreground mt-1">Aggregated by redirect type</p>
+            <h3 className="text-base font-semibold text-foreground">Taps by Event</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {tapsByEventTotal.toLocaleString()} total taps
+            </p>
           </div>
-          {redirectTypeLoading ? (
+          {summaryLoading ? (
             <Skeleton className="h-64 w-full" />
-          ) : barChartData.length > 0 ? (
-            <ChartContainer config={windowTypeTapsConfig} className="h-64 w-full">
-              <BarChart data={barChartData}>
+          ) : tapsByEventData.length > 0 ? (
+            <ChartContainer config={{}} className="h-64 w-full">
+              <BarChart data={tapsByEventData}>
                 <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
                 <XAxis
-                  dataKey="type"
+                  dataKey="name"
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
@@ -499,15 +508,15 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                   }
                 />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                  {barChartData.map((item, i) => (
-                    <Cell key={i} fill={REDIRECT_COLORS[item.type] ?? "hsl(var(--muted-foreground))"} />
+                  {tapsByEventData.map((item) => (
+                    <Cell key={item.eventId} fill={eventColorMap.get(item.eventId) ?? "#FF6B35"} />
                   ))}
                 </Bar>
               </BarChart>
             </ChartContainer>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No redirect data available
+              No event data available
             </p>
           )}
         </div>
@@ -541,8 +550,11 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                     outerRadius={80}
                     paddingAngle={2}
                   >
-                    {pieSource.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    {pieSource.map((item, i) => (
+                      <Cell
+                        key={i}
+                        fill={item.eventId ? (eventColorMap.get(item.eventId) ?? PIE_COLORS[i % PIE_COLORS.length]) : PIE_COLORS[i % PIE_COLORS.length]}
+                      />
                     ))}
                   </Pie>
                 </PieChart>
@@ -554,7 +566,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                        style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                        style={{ backgroundColor: item.eventId ? (eventColorMap.get(item.eventId) ?? PIE_COLORS[i % PIE_COLORS.length]) : PIE_COLORS[i % PIE_COLORS.length] }}
                       />
                       <span className="text-muted-foreground truncate">{item.name}</span>
                     </div>
@@ -580,9 +592,9 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
           </div>
           {registrationLoading ? (
             <Skeleton className="h-64 w-full" />
-          ) : registrationData && registrationData.length > 0 ? (
+          ) : registrationWide.length > 0 ? (
             <ChartContainer config={registrationConfig} className="h-64 w-full">
-              <LineChart data={registrationData}>
+              <LineChart data={registrationWide}>
                 <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="date"
@@ -598,14 +610,18 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                   tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  stroke="#FF6B35"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
+                {eventNames.map((ev) => (
+                  <Line
+                    key={ev.id}
+                    type="monotone"
+                    dataKey={ev.id}
+                    name={ev.name}
+                    stroke={eventColorMap.get(ev.id) ?? "#FF6B35"}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                ))}
               </LineChart>
             </ChartContainer>
           ) : (

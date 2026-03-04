@@ -595,16 +595,18 @@ export const analyticsRouter = router({
           orgId: true,
           events: {
             where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
-            select: { id: true },
+            select: { id: true, name: true },
           },
         },
       });
 
       enforceOrgAccess(ctx, campaign.orgId);
 
-      const eventIds = eventId
-        ? [eventId]
-        : campaign.events.map((e) => e.id);
+      const campaignEvents = eventId
+        ? campaign.events.filter((e) => e.id === eventId)
+        : campaign.events;
+
+      const eventIds = campaignEvents.map((e) => e.id);
 
       if (eventIds.length === 0) {
         return [];
@@ -623,7 +625,12 @@ export const analyticsRouter = router({
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`CURRENT_DATE`;
 
-      const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
+      const eventNameValues = Prisma.join(
+        campaignEvents.map((e) => Prisma.sql`(${e.id}, ${e.name})`),
+        ", "
+      );
+
+      const results = await db.$queryRaw<Array<{ date: Date; eventId: string; eventName: string; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
           SELECT generate_series(
             ${seriesStart},
@@ -631,26 +638,35 @@ export const analyticsRouter = router({
             '1 day'::interval
           )::date AS date
         ),
+        campaign_events(id, name) AS (
+          VALUES ${eventNameValues}
+        ),
         daily_counts AS (
           SELECT
             DATE_TRUNC('day', "tappedAt")::date AS date,
+            "eventId",
             COUNT(*)::int AS count
           FROM "TapLog"
           WHERE ${eventFilter}
             ${dateFilter}
             ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt")
+          GROUP BY DATE_TRUNC('day', "tappedAt"), "eventId"
         )
         SELECT
           ds.date,
+          ce.id AS "eventId",
+          ce.name AS "eventName",
           COALESCE(dc.count, 0)::int AS count
         FROM date_series ds
-        LEFT JOIN daily_counts dc ON ds.date = dc.date
-        ORDER BY ds.date ASC
+        CROSS JOIN campaign_events ce
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."eventId" = ce.id
+        ORDER BY ds.date ASC, ce.name ASC
       `);
 
       return results.map((row) => ({
         date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        eventId: row.eventId,
+        eventName: row.eventName,
         interactions: Number(row.count),
       }));
     }),
@@ -666,16 +682,18 @@ export const analyticsRouter = router({
           orgId: true,
           events: {
             where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
-            select: { id: true },
+            select: { id: true, name: true },
           },
         },
       });
 
       enforceOrgAccess(ctx, campaign.orgId);
 
-      const eventIds = eventId
-        ? [eventId]
-        : campaign.events.map((e) => e.id);
+      const campaignEvents = eventId
+        ? campaign.events.filter((e) => e.id === eventId)
+        : campaign.events;
+
+      const eventIds = campaignEvents.map((e) => e.id);
 
       if (eventIds.length === 0) {
         return [];
@@ -707,7 +725,13 @@ export const analyticsRouter = router({
         return parts.length > 0 ? Prisma.sql`${Prisma.join(parts, " ")}` : Prisma.sql``;
       })();
 
-      const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
+      // Build event name lookup for SQL
+      const eventNameValues = Prisma.join(
+        campaignEvents.map((e) => Prisma.sql`(${e.id}, ${e.name})`),
+        ", "
+      );
+
+      const results = await db.$queryRaw<Array<{ date: Date; eventId: string; eventName: string; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
           SELECT generate_series(
             ${seriesStart},
@@ -715,31 +739,40 @@ export const analyticsRouter = router({
             '1 day'::interval
           )::date AS date
         ),
+        campaign_events(id, name) AS (
+          VALUES ${eventNameValues}
+        ),
         first_taps AS (
-          SELECT "bandId", MIN("tappedAt") AS first_tap_at
+          SELECT "bandId", "eventId", MIN("tappedAt") AS first_tap_at
           FROM "TapLog"
           WHERE ${eventFilter}
-          GROUP BY "bandId"
+          GROUP BY "bandId", "eventId"
         ),
         daily_counts AS (
           SELECT
             DATE_TRUNC('day', first_tap_at)::date AS date,
+            "eventId",
             COUNT(*)::int AS count
           FROM first_taps
           WHERE 1=1
             ${firstTapDateFilter}
-          GROUP BY DATE_TRUNC('day', first_tap_at)
+          GROUP BY DATE_TRUNC('day', first_tap_at), "eventId"
         )
         SELECT
           ds.date,
+          ce.id AS "eventId",
+          ce.name AS "eventName",
           COALESCE(dc.count, 0)::int AS count
         FROM date_series ds
-        LEFT JOIN daily_counts dc ON ds.date = dc.date
-        ORDER BY ds.date ASC
+        CROSS JOIN campaign_events ce
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."eventId" = ce.id
+        ORDER BY ds.date ASC, ce.name ASC
       `);
 
       return results.map((row) => ({
         date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        eventId: row.eventId,
+        eventName: row.eventName,
         count: Number(row.count),
       }));
     }),
