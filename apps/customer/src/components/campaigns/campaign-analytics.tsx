@@ -480,7 +480,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
       </div>
 
       {/* 3-column bottom row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Column 1: Taps by Event */}
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="mb-6">
