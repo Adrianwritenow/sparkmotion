@@ -28,6 +28,7 @@ export { TagBadge } from "./components/tag-badge";
 export { GooglePlacesAutocomplete } from "./components/google-places-autocomplete";
 export { ConnectionStatus } from "./components/connection-status";
 export { LiveKpiCards } from "./components/live-kpi-cards";
+export { CurrentDate } from "./components/current-date";
 export { TrashSheet, type TrashItem, type TrashSheetProps } from "./components/trash-sheet";
 
 // Hooks

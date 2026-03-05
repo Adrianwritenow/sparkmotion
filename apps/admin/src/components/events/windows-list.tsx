@@ -203,8 +203,10 @@ export function WindowsList({ eventId }: WindowsListProps) {
                   </div>
                 ) : event?.fallbackUrl ? (
                   <div className="flex items-center gap-1.5 text-xs text-foreground/80">
-                    <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="truncate">{event.fallbackUrl}</span>
+                    <a href={event.fallbackUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 min-w-0 hover:text-primary transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{event.fallbackUrl}</span>
+                    </a>
                     <button
                       onClick={() => {
                         setFallbackUrl(event.fallbackUrl || "");
@@ -307,8 +309,17 @@ export function WindowsList({ eventId }: WindowsListProps) {
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
-                          <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span className="truncate">{window.url || "No URL set"}</span>
+                          {window.url ? (
+                            <a href={window.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 min-w-0 hover:text-primary transition-colors">
+                              <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="truncate">{window.url}</span>
+                            </a>
+                          ) : (
+                            <>
+                              <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="truncate">No URL set</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
