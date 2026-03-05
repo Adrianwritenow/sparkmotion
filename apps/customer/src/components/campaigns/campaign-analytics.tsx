@@ -43,9 +43,9 @@ const PIE_COLORS = [
   "hsl(var(--chart-5))",
 ];
 
-/** Random HSL color — different on each page load */
-function getRandomColor(): string {
-  const hue = Math.floor(Math.random() * 360);
+/** Golden-angle HSL color — maximally distinct for any number of series */
+function getDistinctColor(index: number): string {
+  const hue = Math.round((index * 137.508) % 360);
   return `hsl(${hue}, 70%, 55%)`;
 }
 
@@ -62,11 +62,11 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
   // Random color map: stable within session, randomized on refresh
   const colorMapRef = useRef(new Map<string, string>());
   const eventColorMap = useMemo(() => {
-    for (const ev of eventNames) {
+    eventNames.forEach((ev, i) => {
       if (!colorMapRef.current.has(ev.id)) {
-        colorMapRef.current.set(ev.id, getRandomColor());
+        colorMapRef.current.set(ev.id, getDistinctColor(i));
       }
-    }
+    });
     return colorMapRef.current;
   }, [eventNames]);
 
@@ -480,7 +480,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
       </div>
 
       {/* 3-column bottom row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Column 1: Taps by Event */}
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="mb-6">
