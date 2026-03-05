@@ -10,8 +10,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from "@sparkmotion/ui/dialog";
+import { Button } from "@sparkmotion/ui/button";
 import { CampaignForm } from "./campaign-form";
 import { EventMultiSelect } from "./event-multi-select";
 import { EventForm } from "@/components/events/event-form";

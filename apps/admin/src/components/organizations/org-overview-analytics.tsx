@@ -11,23 +11,23 @@ import {
   ChartLegend,
   ChartLegendContent,
   type ChartConfig,
-} from "@/components/ui/chart";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar } from "@/components/ui/calendar";
+} from "@sparkmotion/ui/chart";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
+import { Calendar } from "@sparkmotion/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+} from "@sparkmotion/ui/popover";
+import { Button } from "@sparkmotion/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+} from "@sparkmotion/ui/select";
+import { cn } from "@sparkmotion/ui";
 import {
   PieChart,
   Pie,

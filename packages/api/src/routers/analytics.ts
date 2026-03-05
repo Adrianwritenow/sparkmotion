@@ -5,6 +5,8 @@ import { db } from "@sparkmotion/database";
 import { Prisma } from "@sparkmotion/database";
 import { TRPCError } from "@trpc/server";
 import { getEventEngagement, aggregateCampaignEngagement } from "../lib/engagement";
+import { enforceOrgAccess } from "../lib/auth";
+import { ACTIVE } from "../lib/soft-delete";
 
 // Shared input schema for date range queries
 const dateRangeInput = z.object({
@@ -84,7 +86,7 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: input.eventId, deletedAt: null },
+          where: { id: input.eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -119,7 +121,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: input.eventId, deletedAt: null },
+          where: { id: input.eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -150,7 +152,7 @@ export const analyticsRouter = router({
             ${dateFilter}
             ${windowFilter}
         `),
-        db.band.count({ where: { eventId: input.eventId, deletedAt: null } }),
+        db.band.count({ where: { eventId: input.eventId, ...ACTIVE } }),
       ]);
       const uniqueBands = Number(tapCounts[0]?.unique_bands ?? 0);
 
@@ -192,7 +194,7 @@ export const analyticsRouter = router({
       if (isLive) {
         const [redisAnalytics, totalBands] = await Promise.all([
           getAnalytics(eventId),
-          db.band.count({ where: { eventId, deletedAt: null } }),
+          db.band.count({ where: { eventId, ...ACTIVE } }),
         ]);
 
         const { totalTaps, uniqueTaps, byMode } = redisAnalytics;
@@ -244,7 +246,7 @@ export const analyticsRouter = router({
 
       // Get event IDs matching org scope
       const events = await db.event.findMany({
-        where: { ...eventWhere, deletedAt: null },
+        where: { ...eventWhere, ...ACTIVE },
         select: { id: true },
       });
       const eventIds = events.map(e => e.id);
@@ -308,10 +310,10 @@ export const analyticsRouter = router({
         // Total bands (for activity calculation)
         db.band.count({
           where: eventIds.length > 0
-            ? { eventId: { in: eventIds }, deletedAt: null }
+            ? { eventId: { in: eventIds }, ...ACTIVE }
             : eventId
-            ? { eventId, deletedAt: null }
-            : { deletedAt: null },
+            ? { eventId, ...ACTIVE }
+            : { ...ACTIVE },
         }),
 
         // Mode distribution
@@ -371,7 +373,7 @@ export const analyticsRouter = router({
 
       // Get event IDs matching org scope
       const events = await db.event.findMany({
-        where: { ...eventWhere, deletedAt: null },
+        where: { ...eventWhere, ...ACTIVE },
         select: { id: true },
       });
       const eventIds = events.map(e => e.id);
@@ -418,7 +420,7 @@ export const analyticsRouter = router({
 
       // Get event IDs matching org scope
       const events = await db.event.findMany({
-        where: { ...eventWhere, deletedAt: null },
+        where: { ...eventWhere, ...ACTIVE },
         select: { id: true },
       });
       const eventIds = events.map(e => e.id);
@@ -460,7 +462,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -517,7 +519,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -525,7 +527,7 @@ export const analyticsRouter = router({
         }
       }
 
-      const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
+      const { fromDate, toDate } = buildDateFilter(input);
 
       // Bound generate_series with filter dates when available
       const seriesStart = fromDate
@@ -535,6 +537,15 @@ export const analyticsRouter = router({
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`CURRENT_DATE`;
 
+      // Date filter on first_tap_at (not tappedAt) — windowFilter dropped intentionally:
+      // first tap should span all windows to correctly identify when a band first appeared.
+      const firstTapDateFilter = (() => {
+        const parts: Prisma.Sql[] = [];
+        if (input.from) parts.push(Prisma.sql`AND first_tap_at >= ${new Date(input.from)}`);
+        if (input.to) parts.push(Prisma.sql`AND first_tap_at <= ${new Date(input.to)}`);
+        return parts.length > 0 ? Prisma.sql`${Prisma.join(parts, " ")}` : Prisma.sql``;
+      })();
+
       const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
           SELECT generate_series(
@@ -543,15 +554,20 @@ export const analyticsRouter = router({
             '1 day'::interval
           )::date AS date
         ),
-        daily_counts AS (
-          SELECT
-            DATE_TRUNC('day', "tappedAt")::date AS date,
-            COUNT(*)::int AS count
+        first_taps AS (
+          SELECT "bandId", MIN("tappedAt") AS first_tap_at
           FROM "TapLog"
           WHERE "eventId" = ${eventId}
-            ${dateFilter}
-            ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt")
+          GROUP BY "bandId"
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', first_tap_at)::date AS date,
+            COUNT(*)::int AS count
+          FROM first_taps
+          WHERE 1=1
+            ${firstTapDateFilter}
+          GROUP BY DATE_TRUNC('day', first_tap_at)
         )
         SELECT
           ds.date,
@@ -567,6 +583,226 @@ export const analyticsRouter = router({
       }));
     }),
 
+  engagementByWindow: protectedProcedure
+    .input(eventAnalyticsFilterInput.omit({ windowId: true }))
+    .query(async ({ ctx, input }) => {
+      const { eventId } = input;
+
+      // Org-scoping for CUSTOMER role
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: eventId, ...ACTIVE },
+          select: { orgId: true },
+        });
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
+      // Fetch event's windows for CROSS JOIN labels
+      const windows = await db.eventWindow.findMany({
+        where: { eventId },
+        select: { id: true, title: true, windowType: true },
+        orderBy: { startTime: "asc" },
+      });
+
+      if (windows.length === 0) return [];
+
+      const fromDate = input.from ? new Date(input.from) : undefined;
+      const toDate = input.to ? new Date(input.to) : undefined;
+
+      const dateFilter = fromDate && toDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate} AND tl."tappedAt" <= ${toDate}`
+        : fromDate
+        ? Prisma.sql`AND tl."tappedAt" >= ${fromDate}`
+        : toDate
+        ? Prisma.sql`AND tl."tappedAt" <= ${toDate}`
+        : Prisma.sql``;
+
+      const seriesStart = fromDate
+        ? Prisma.sql`${fromDate}::date`
+        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}))::date`;
+      const seriesEnd = toDate
+        ? Prisma.sql`${toDate}::date`
+        : Prisma.sql`CURRENT_DATE`;
+
+      // Build window VALUES list with ::text casts, plus synthetic non-window categories
+      const windowEntries = [
+        ...windows.map((w) => Prisma.sql`(${w.id}::text, ${w.title || w.windowType}::text)`),
+        Prisma.sql`('__FALLBACK__'::text, 'Fallback'::text)`,
+        Prisma.sql`('__ORG__'::text, 'Org Default'::text)`,
+        Prisma.sql`('__DEFAULT__'::text, 'Default'::text)`,
+      ];
+      const windowNameValues = Prisma.join(windowEntries, ", ");
+
+      const results = await db.$queryRaw<Array<{ date: Date; windowId: string; windowLabel: string; count: bigint }>>(Prisma.sql`
+        WITH date_series AS (
+          SELECT generate_series(
+            ${seriesStart},
+            ${seriesEnd},
+            '1 day'::interval
+          )::date AS date
+        ),
+        event_windows(id, label) AS (
+          VALUES ${windowNameValues}
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', tl."tappedAt")::date AS date,
+            CASE
+              WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
+              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+              ELSE '__DEFAULT__'
+            END AS "windowId",
+            COUNT(*)::int AS count
+          FROM "TapLog" tl
+          INNER JOIN "Event" e ON tl."eventId" = e."id"
+          INNER JOIN "Organization" o ON e."orgId" = o."id"
+          WHERE tl."eventId" = ${eventId}
+            ${dateFilter}
+          GROUP BY DATE_TRUNC('day', tl."tappedAt"),
+            CASE
+              WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
+              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+              ELSE '__DEFAULT__'
+            END
+        )
+        SELECT
+          ds.date,
+          ew.id AS "windowId",
+          ew.label AS "windowLabel",
+          COALESCE(dc.count, 0)::int AS count
+        FROM date_series ds
+        CROSS JOIN event_windows ew
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."windowId" = ew.id
+        ORDER BY ds.date ASC, ew.label ASC
+      `);
+
+      return results.map((row) => ({
+        date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        windowId: row.windowId,
+        windowLabel: row.windowLabel,
+        interactions: Number(row.count),
+      }));
+    }),
+
+  registrationGrowthByWindow: protectedProcedure
+    .input(eventAnalyticsFilterInput.omit({ windowId: true }))
+    .query(async ({ ctx, input }) => {
+      const { eventId } = input;
+
+      // Org-scoping for CUSTOMER role
+      if (ctx.user.role === "CUSTOMER") {
+        const event = await db.event.findUnique({
+          where: { id: eventId, ...ACTIVE },
+          select: { orgId: true },
+        });
+        if (!event || event.orgId !== ctx.user.orgId) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
+      // Fetch event's windows for CROSS JOIN labels
+      const windows = await db.eventWindow.findMany({
+        where: { eventId },
+        select: { id: true, title: true, windowType: true },
+        orderBy: { startTime: "asc" },
+      });
+
+      if (windows.length === 0) return [];
+
+      const fromDate = input.from ? new Date(input.from) : undefined;
+      const toDate = input.to ? new Date(input.to) : undefined;
+
+      const seriesStart = fromDate
+        ? Prisma.sql`${fromDate}::date`
+        : Prisma.sql`DATE_TRUNC('day', (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}))::date`;
+      const seriesEnd = toDate
+        ? Prisma.sql`${toDate}::date`
+        : Prisma.sql`CURRENT_DATE`;
+
+      // Date filter on first_tap_at
+      const firstTapDateFilter = fromDate && toDate
+        ? Prisma.sql`AND first_tap_at >= ${fromDate} AND first_tap_at <= ${toDate}`
+        : fromDate
+        ? Prisma.sql`AND first_tap_at >= ${fromDate}`
+        : toDate
+        ? Prisma.sql`AND first_tap_at <= ${toDate}`
+        : Prisma.sql``;
+
+      // Build window VALUES list with ::text casts, plus synthetic non-window categories
+      const windowEntries = [
+        ...windows.map((w) => Prisma.sql`(${w.id}::text, ${w.title || w.windowType}::text)`),
+        Prisma.sql`('__FALLBACK__'::text, 'Fallback'::text)`,
+        Prisma.sql`('__ORG__'::text, 'Org Default'::text)`,
+        Prisma.sql`('__DEFAULT__'::text, 'Default'::text)`,
+      ];
+      const windowNameValues = Prisma.join(windowEntries, ", ");
+
+      const results = await db.$queryRaw<Array<{ date: Date; windowId: string; windowLabel: string; count: bigint }>>(Prisma.sql`
+        WITH date_series AS (
+          SELECT generate_series(
+            ${seriesStart},
+            ${seriesEnd},
+            '1 day'::interval
+          )::date AS date
+        ),
+        event_windows(id, label) AS (
+          VALUES ${windowNameValues}
+        ),
+        first_taps AS (
+          SELECT
+            tl."bandId",
+            MIN(tl."tappedAt") AS first_tap_at,
+            (
+              SELECT
+                CASE
+                  WHEN ft."windowId" IS NOT NULL THEN ft."windowId"
+                  WHEN e."fallbackUrl" IS NOT NULL AND ft."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+                  WHEN o."websiteUrl" IS NOT NULL AND ft."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+                  ELSE '__DEFAULT__'
+                END
+              FROM "TapLog" ft
+              INNER JOIN "Event" e ON ft."eventId" = e."id"
+              INNER JOIN "Organization" o ON e."orgId" = o."id"
+              WHERE ft."bandId" = tl."bandId" AND ft."eventId" = ${eventId}
+              ORDER BY ft."tappedAt" ASC LIMIT 1
+            ) AS "windowId"
+          FROM "TapLog" tl
+          WHERE tl."eventId" = ${eventId}
+          GROUP BY tl."bandId"
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', first_tap_at)::date AS date,
+            "windowId",
+            COUNT(*)::int AS count
+          FROM first_taps
+          WHERE 1=1
+            ${firstTapDateFilter}
+          GROUP BY DATE_TRUNC('day', first_tap_at), "windowId"
+        )
+        SELECT
+          ds.date,
+          ew.id AS "windowId",
+          ew.label AS "windowLabel",
+          COALESCE(dc.count, 0)::int AS count
+        FROM date_series ds
+        CROSS JOIN event_windows ew
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."windowId" = ew.id
+        ORDER BY ds.date ASC, ew.label ASC
+      `);
+
+      return results.map((row) => ({
+        date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        windowId: row.windowId,
+        windowLabel: row.windowLabel,
+        count: Number(row.count),
+      }));
+    }),
+
   campaignEngagementByHour: protectedProcedure
     .input(campaignAnalyticsFilterInput)
     .query(async ({ ctx, input }) => {
@@ -574,23 +810,23 @@ export const analyticsRouter = router({
 
       // Get campaign's ACTIVE/COMPLETED events (with org-scoping)
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
-            select: { id: true },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
+            select: { id: true, name: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
-      const eventIds = eventId
-        ? [eventId]
-        : campaign.events.map((e) => e.id);
+      const campaignEvents = eventId
+        ? campaign.events.filter((e) => e.id === eventId)
+        : campaign.events;
+
+      const eventIds = campaignEvents.map((e) => e.id);
 
       if (eventIds.length === 0) {
         return [];
@@ -609,7 +845,12 @@ export const analyticsRouter = router({
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`CURRENT_DATE`;
 
-      const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
+      const eventNameValues = Prisma.join(
+        campaignEvents.map((e) => Prisma.sql`(${e.id}, ${e.name})`),
+        ", "
+      );
+
+      const results = await db.$queryRaw<Array<{ date: Date; eventId: string; eventName: string; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
           SELECT generate_series(
             ${seriesStart},
@@ -617,26 +858,35 @@ export const analyticsRouter = router({
             '1 day'::interval
           )::date AS date
         ),
+        campaign_events(id, name) AS (
+          VALUES ${eventNameValues}
+        ),
         daily_counts AS (
           SELECT
             DATE_TRUNC('day', "tappedAt")::date AS date,
+            "eventId",
             COUNT(*)::int AS count
           FROM "TapLog"
           WHERE ${eventFilter}
             ${dateFilter}
             ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt")
+          GROUP BY DATE_TRUNC('day', "tappedAt"), "eventId"
         )
         SELECT
           ds.date,
+          ce.id AS "eventId",
+          ce.name AS "eventName",
           COALESCE(dc.count, 0)::int AS count
         FROM date_series ds
-        LEFT JOIN daily_counts dc ON ds.date = dc.date
-        ORDER BY ds.date ASC
+        CROSS JOIN campaign_events ce
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."eventId" = ce.id
+        ORDER BY ds.date ASC, ce.name ASC
       `);
 
       return results.map((row) => ({
         date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        eventId: row.eventId,
+        eventName: row.eventName,
         interactions: Number(row.count),
       }));
     }),
@@ -647,29 +897,29 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
-            select: { id: true },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
+            select: { id: true, name: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
-      const eventIds = eventId
-        ? [eventId]
-        : campaign.events.map((e) => e.id);
+      const campaignEvents = eventId
+        ? campaign.events.filter((e) => e.id === eventId)
+        : campaign.events;
+
+      const eventIds = campaignEvents.map((e) => e.id);
 
       if (eventIds.length === 0) {
         return [];
       }
 
-      const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
+      const { fromDate, toDate } = buildDateFilter(input);
 
       const eventFilter = eventIds.length === 1
         ? Prisma.sql`"eventId" = ${eventIds[0]}`
@@ -686,7 +936,22 @@ export const analyticsRouter = router({
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`CURRENT_DATE`;
 
-      const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
+      // Date filter on first_tap_at (not tappedAt) — windowFilter dropped intentionally:
+      // first tap should span all windows to correctly identify when a band first appeared.
+      const firstTapDateFilter = (() => {
+        const parts: Prisma.Sql[] = [];
+        if (input.from) parts.push(Prisma.sql`AND first_tap_at >= ${new Date(input.from)}`);
+        if (input.to) parts.push(Prisma.sql`AND first_tap_at <= ${new Date(input.to)}`);
+        return parts.length > 0 ? Prisma.sql`${Prisma.join(parts, " ")}` : Prisma.sql``;
+      })();
+
+      // Build event name lookup for SQL
+      const eventNameValues = Prisma.join(
+        campaignEvents.map((e) => Prisma.sql`(${e.id}, ${e.name})`),
+        ", "
+      );
+
+      const results = await db.$queryRaw<Array<{ date: Date; eventId: string; eventName: string; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
           SELECT generate_series(
             ${seriesStart},
@@ -694,26 +959,40 @@ export const analyticsRouter = router({
             '1 day'::interval
           )::date AS date
         ),
-        daily_counts AS (
-          SELECT
-            DATE_TRUNC('day', "tappedAt")::date AS date,
-            COUNT(*)::int AS count
+        campaign_events(id, name) AS (
+          VALUES ${eventNameValues}
+        ),
+        first_taps AS (
+          SELECT "bandId", "eventId", MIN("tappedAt") AS first_tap_at
           FROM "TapLog"
           WHERE ${eventFilter}
-            ${dateFilter}
-            ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt")
+          GROUP BY "bandId", "eventId"
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', first_tap_at)::date AS date,
+            "eventId",
+            COUNT(*)::int AS count
+          FROM first_taps
+          WHERE 1=1
+            ${firstTapDateFilter}
+          GROUP BY DATE_TRUNC('day', first_tap_at), "eventId"
         )
         SELECT
           ds.date,
+          ce.id AS "eventId",
+          ce.name AS "eventName",
           COALESCE(dc.count, 0)::int AS count
         FROM date_series ds
-        LEFT JOIN daily_counts dc ON ds.date = dc.date
-        ORDER BY ds.date ASC
+        CROSS JOIN campaign_events ce
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."eventId" = ce.id
+        ORDER BY ds.date ASC, ce.name ASC
       `);
 
       return results.map((row) => ({
         date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        eventId: row.eventId,
+        eventName: row.eventName,
         count: Number(row.count),
       }));
     }),
@@ -724,20 +1003,18 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
-            select: { id: true, name: true, location: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
+            select: { id: true, name: true, location: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
             orderBy: { createdAt: "desc" },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -760,7 +1037,7 @@ export const analyticsRouter = router({
             ${dateFilter}
             ${windowFilter}
         `),
-        db.band.count({ where: { eventId: { in: eventIds }, deletedAt: null } }),
+        db.band.count({ where: { eventId: { in: eventIds }, ...ACTIVE } }),
         db.$queryRaw<Array<{ eventId: string; total_taps: bigint; unique_bands: bigint }>>(Prisma.sql`
           SELECT
             "eventId",
@@ -858,7 +1135,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -956,19 +1233,17 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
             select: { id: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -1020,7 +1295,7 @@ export const analyticsRouter = router({
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
         const event = await db.event.findUnique({
-          where: { id: eventId, deletedAt: null },
+          where: { id: eventId, ...ACTIVE },
           select: { orgId: true },
         });
         if (!event || event.orgId !== ctx.user.orgId) {
@@ -1072,19 +1347,17 @@ export const analyticsRouter = router({
       const { campaignId, eventId } = input;
 
       const campaign = await db.campaign.findUniqueOrThrow({
-        where: { id: campaignId, deletedAt: null },
+        where: { id: campaignId, ...ACTIVE },
         select: {
           orgId: true,
           events: {
-            where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
             select: { id: true },
           },
         },
       });
 
-      if (ctx.user.role === "CUSTOMER" && campaign.orgId !== ctx.user.orgId) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      enforceOrgAccess(ctx, campaign.orgId);
 
       const eventIds = eventId
         ? [eventId]
@@ -1138,7 +1411,7 @@ export const analyticsRouter = router({
 
       // Org-scoping for CUSTOMER role
       if (ctx.user.role === "CUSTOMER") {
-        const event = await db.event.findUnique({ where: { id: eventId, deletedAt: null }, select: { orgId: true } });
+        const event = await db.event.findUnique({ where: { id: eventId, ...ACTIVE }, select: { orgId: true } });
         if (!event || event.orgId !== ctx.user.orgId) {
           throw new TRPCError({ code: "FORBIDDEN" });
         }
@@ -1172,7 +1445,7 @@ export const analyticsRouter = router({
 
       // Get total bands with first tap
       const totalBands = await db.band.count({
-        where: { eventId, firstTapAt: { not: null }, deletedAt: null },
+        where: { eventId, firstTapAt: { not: null }, ...ACTIVE },
       });
 
       const retention: Record<string, number> = {};
@@ -1215,7 +1488,7 @@ export const analyticsRouter = router({
 
       if (ctx.user.role === "CUSTOMER") {
         const events = await db.event.findMany({
-          where: { orgId: ctx.user.orgId!, deletedAt: null },
+          where: { orgId: ctx.user.orgId!, ...ACTIVE },
           select: { id: true },
         });
         where.eventId = { in: events.map(e => e.id) };
@@ -1258,7 +1531,7 @@ export const analyticsRouter = router({
       // Org-scoping: verify CUSTOMER has access to all requested events
       if (ctx.user.role === "CUSTOMER") {
         const accessibleEvents = await db.event.findMany({
-          where: { id: { in: eventIds }, orgId: ctx.user.orgId!, deletedAt: null },
+          where: { id: { in: eventIds }, orgId: ctx.user.orgId!, ...ACTIVE },
           select: { id: true },
         });
         if (accessibleEvents.length !== eventIds.length) {

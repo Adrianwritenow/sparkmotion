@@ -9,7 +9,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { TapTrendChart } from "@/components/analytics/tap-trend-chart";

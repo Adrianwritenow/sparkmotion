@@ -12,19 +12,19 @@ import {
   ColumnDef,
 } from "@tanstack/react-table";
 import { trpc } from "@/lib/trpc";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Input } from "@sparkmotion/ui/input";
+import { Button } from "@sparkmotion/ui/button";
 import { Check, Flag, Globe, ArrowRightLeft, X } from "lucide-react";
 import { BandTrashButton } from "./band-trash-button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@sparkmotion/ui/checkbox";
+import { Switch } from "@sparkmotion/ui/switch";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 import {
   Table,
   TableBody,
@@ -32,8 +32,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { TagBadge } from "./tag-badge";
+} from "@sparkmotion/ui/table";
+import { TagBadge } from "@sparkmotion/ui";
 import { ReassignDialog } from "./reassign-dialog";
 import { BandDetailDialog } from "./band-detail-dialog";
 
@@ -57,6 +57,7 @@ interface BandRow {
   autoAssigned: boolean;
   autoAssignDistance?: number | null;
   flagged: boolean;
+  flagReason?: string | null;
   event: { id: string; name: string; status: string };
   tag?: { id: string; title: string } | null;
   tagId?: string | null;
@@ -176,7 +177,9 @@ export function BandReviewTable({ orgs }: BandReviewTableProps) {
               <span className="font-mono text-sm">{row.original.bandId}</span>
               {row.original.autoAssigned && (
                 row.original.flagged ? (
-                  <Flag className="w-4 h-4 fill-red-500 text-red-500" />
+                  <span title={row.original.flagReason || "Flagged"}>
+                    <Flag className="w-4 h-4 fill-red-500 text-red-500" />
+                  </span>
                 ) : (
                   <Globe className="w-3.5 h-3.5 text-muted-foreground" />
                 )

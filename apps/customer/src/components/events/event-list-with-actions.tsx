@@ -3,15 +3,15 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Copy, X, Trash2, ArrowUp, ArrowDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@sparkmotion/ui/button";
+import { Checkbox } from "@sparkmotion/ui/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 import { trpc } from "@/lib/trpc";
 import { EventCardList } from "./event-card-list";
 import { DeleteEventsDialog } from "./delete-events-dialog";
@@ -26,7 +26,7 @@ type EventItem = {
   venueName?: string | null;
   formattedAddress?: string | null;
   org?: { name: string } | null;
-  windows?: Array<{ isActive: boolean }>;
+  windows?: Array<{ isActive: boolean; startTime?: Date | null }>;
   _count: { bands: number };
   tapCount?: number;
   engagementPercent?: number;

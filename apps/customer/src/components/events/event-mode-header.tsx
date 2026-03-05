@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Badge } from "@/components/ui/badge";
-import { ModeIndicator } from "./mode-indicator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@sparkmotion/ui/badge";
+import { ModeIndicator } from "@sparkmotion/ui";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { EventStatus } from "@sparkmotion/database";
 
 const statusVariants: Record<EventStatus, "default" | "secondary" | "destructive" | "outline"> = {
@@ -16,9 +16,10 @@ const statusVariants: Record<EventStatus, "default" | "secondary" | "destructive
 
 interface EventModeHeaderProps {
   eventId: string;
+  showOrgName?: boolean;
 }
 
-export function EventModeHeader({ eventId }: EventModeHeaderProps) {
+export function EventModeHeader({ eventId, showOrgName = false }: EventModeHeaderProps) {
   const { data: event, isLoading, refetch } = trpc.events.byId.useQuery({ id: eventId });
 
   useEffect(() => {
@@ -67,7 +68,7 @@ export function EventModeHeader({ eventId }: EventModeHeaderProps) {
           <Skeleton className="h-6 w-20" />
           <Skeleton className="h-6 w-24" />
         </div>
-        <Skeleton className="h-5 w-48 mt-2" />
+        {showOrgName && <Skeleton className="h-5 w-48 mt-2" />}
       </div>
     );
   }
@@ -79,6 +80,7 @@ export function EventModeHeader({ eventId }: EventModeHeaderProps) {
         <Badge variant={statusVariants[event.status]}>{event.status}</Badge>
         <ModeIndicator mode={event.currentMode.toLowerCase() as "pre" | "live" | "post"} />
       </div>
+      {showOrgName && <p className="text-muted-foreground mt-2">{event.org?.name}</p>}
     </div>
   );
 }

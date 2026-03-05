@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, type RefObject } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Download, FileSpreadsheet, FileImage, ChevronDown } from "lucide-react";
+} from "@sparkmotion/ui/dropdown-menu";
+import { Download, FileSpreadsheet, FileText, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 
 interface SummaryData {
@@ -164,7 +164,7 @@ export function ExportAnalyticsButton({
           Export as CSV
         </DropdownMenuItem>
         <DropdownMenuItem onClick={handleExportPdf} disabled={!captureRef}>
-          <FileImage className="mr-2 h-4 w-4" />
+          <FileText className="mr-2 h-4 w-4" />
           Export as PDF
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -47,20 +47,29 @@ export default async function EventsPage({
   const sortField = (["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "createdAt") as "createdAt" | "startDate" | "endDate";
   const sortDir = searchParams.dir === "asc" ? "asc" as const : "desc" as const;
 
-  const [events, totalCount] = await Promise.all([
-    db.event.findMany({
-      where,
-      orderBy: { [sortField]: sortDir },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        org: { select: { name: true } },
-        campaign: { select: { id: true, name: true } },
-        _count: { select: { bands: { where: { deletedAt: null } } } },
-      },
-    }),
-    db.event.count({ where }),
-  ]);
+  const STATUS_PRIORITY: Record<string, number> = { ACTIVE: 0, COMPLETED: 1, DRAFT: 2, CANCELLED: 3 };
+
+  const allEvents = await db.event.findMany({
+    where,
+    include: {
+      org: { select: { name: true } },
+      campaign: { select: { id: true, name: true } },
+      _count: { select: { bands: { where: { deletedAt: null } } } },
+      windows: { select: { startTime: true, isActive: true }, orderBy: { startTime: "asc" } },
+    },
+  });
+
+  // Sort by status priority, then by user-selected field
+  allEvents.sort((a, b) => {
+    const sp = (STATUS_PRIORITY[a.status] ?? 99) - (STATUS_PRIORITY[b.status] ?? 99);
+    if (sp !== 0) return sp;
+    const aVal = a[sortField]?.getTime() ?? 0;
+    const bVal = b[sortField]?.getTime() ?? 0;
+    return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+  });
+
+  const totalCount = allEvents.length;
+  const events = allEvents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // Batch engagement + tap stats via shared lib
   const eventIds = events.map((e) => e.id);

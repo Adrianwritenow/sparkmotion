@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, LinkIcon } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
+import { Button } from "@sparkmotion/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@sparkmotion/ui/dialog";
 import { EventMultiSelect } from "./event-multi-select";
 import { EventListWithActions } from "@/components/events/event-list-with-actions";
 import { EventFormDialog } from "@/components/events/event-form-dialog";

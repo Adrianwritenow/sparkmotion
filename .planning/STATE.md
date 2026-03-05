@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-28T22:35:33.266Z"
+last_updated: "2026-03-04T03:04:19.605Z"
 progress:
-  total_phases: 34
-  completed_phases: 29
-  total_plans: 77
-  completed_plans: 74
+  total_phases: 37
+  completed_phases: 31
+  total_plans: 83
+  completed_plans: 80
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 34 — Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
-Plan: 03 COMPLETE — Customer trash UI: 3 TrashButton Sheet components (events/campaigns/bands) integrated into customer page headers
-Status: Phase 34 COMPLETE — 3 of 3 plans complete; awaiting human-verify checkpoint before marking fully verified
-Last activity: 2026-02-28 — Phase 34-03 complete: customer trash UI built for events/campaigns/bands with org-scoped sheets, restore, undo, and restoreAll
+Phase: 37 — Update event and campaign analytics UI and KPI calculations to match reference designs
+Plan: 03 COMPLETE — CampaignAnalytics reference design refactor in admin and customer apps
+Status: Phase 37 Plan 03 COMPLETE — 3 of 3 plans complete; Phase 37 COMPLETE
+Last activity: 2026-03-04 — Phase 37-03 complete: CampaignAnalytics Engagement Overview (4 KPI cells, Nx multiplier, green % badge), progress bar, Tap Activity sparkline, BarChart, 3-col bottom row, multi-select event filter, Registration Growth chart
 
-Progress: (3 of 3 plans complete — Phase 34 done)
+Progress: (3 of 3 plans complete — Phase 37 COMPLETE)
 
 ## Performance Metrics
 
@@ -329,6 +329,18 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 34]: bands.restoreAll skipped is a count (number), not array — toast shows count only, not ID list
 - [Phase 34]: TrashButton pattern: trashCount always fetches for badge, listDeleted uses enabled:open guard
 - [Phase 34]: Customer TrashButton components omit deletedByName display — org-scoped context makes attribution less relevant; no orgId prop needed on customer BandTrashButton since backend auto-scopes
+- [Phase 36]: Used customer chart.tsx (380 lines) as canonical — superset API with labelFormatter/formatter props; backwards-compatible with admin usage
+- [Phase 36]: Import shadcn primitives from @sparkmotion/ui/component-name subpath exports; cn from @sparkmotion/ui; no local copies in apps
+- [Phase 36-02]: kpi-cards and velocity-sparkline kept in apps (trpc coupling); live-kpi-cards and connection-status moved (data passed as props only)
+- [Phase 36-02]: EventModeHeader unified with showOrgName optional prop rather than moved (trpc coupling); admin defaults true, customer false
+- [Phase 36-02]: TrashSheet uses controlled open/onOpenChange props; each trash button manages its own open state independently
+- [Phase 36-02]: velocity-sparkline threshold bug in customer: 5x red must be checked BEFORE 2x yellow to avoid yellow absorbing red case
+- [Phase 36]: createTrashProcedures factory covers events/campaigns/organizations — bands excluded due to unique eventId-scoped input signature (KISS)
+- [Phase 36]: enforceOrgAccess used for simple entity org-checks; analytics procedures retain pattern-level org-scoping
+- [Phase 37]: windowFilter dropped in registrationGrowth/campaignRegistrationGrowth — first tap must span all windows to correctly identify when a band first appeared
+- [Phase 37]: Multi-select checkbox dropdown replaces single-select for window filters; Sparkline uses bare ResponsiveContainer without ChartContainer; Manual pie legend rows replace ChartLegend component; Customer EventsAnalytics is exact copy of admin
+- [Phase 37]: Engagement Rate displayed as Nx multiplier (tapCount/bandCount) in campaign analytics replacing old percentage formula
+- [Phase 37]: Campaign analytics multi-select uses Popover+Checkbox pattern for event filtering; inline datetime-local inputs replace calendar popover
 
 ### Pending Todos
 
@@ -336,6 +348,8 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 37 added: Update event and campaign analytics UI and KPI calculations to match reference designs
+- Phase 36 added: Code cleanup - dead code removal and reusable abstractions
 - Phase 34 added: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
 - Phase 33 added: Build audit logging UI page for SOC2 compliance
 - Phase 32 added: SOC 2 backend compliance hardening
@@ -405,7 +419,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 34-03-PLAN.md — awaiting human-verify checkpoint for customer trash UI
-Resume file: N/A — Phase 34 fully executed; next steps depend on human verification outcome
-Next step: Verify customer trash UI in browser, then proceed to next phase
+Last session: 2026-03-04
+Stopped at: Completed 37-03-PLAN.md — CampaignAnalytics refactored to reference design in both admin and customer apps
+Resume file: N/A — Phase 37 all 3 plans complete
+Next step: Phase 37 complete — all plans done

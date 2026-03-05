@@ -60,7 +60,7 @@ async function autoAssignBand(
     }
 
     // 2. If explicit eventId provided (dev test panel), look up that specific event
-    let nearestEvent: { id: string; name: string; distanceMiles?: number } | null = null;
+    let nearestEvent: { id: string; name: string; distanceMiles?: number; inactive?: boolean } | null = null;
 
     if (eventId) {
       const explicitEvent = await db.event.findFirst({
@@ -128,7 +128,15 @@ async function autoAssignBand(
           AND e."deletedAt" IS NULL
           AND e.latitude IS NOT NULL
           AND e.longitude IS NOT NULL
-        ORDER BY "distanceMiles" ASC, "nextWindowStart" ASC NULLS LAST
+        ORDER BY
+          "distanceMiles" ASC,
+          ABS(
+            COALESCE(
+              e."startDate",
+              (SELECT MIN(w2."startTime") FROM "EventWindow" w2 WHERE w2."eventId" = e.id)
+            )::date - CURRENT_DATE
+          ) ASC NULLS LAST,
+          "nextWindowStart" ASC NULLS LAST
         LIMIT 1
       `);
 
@@ -140,20 +148,25 @@ async function autoAssignBand(
       }
     }
 
-    // 4. Fallback: find event with active window (time-based), then any event
+    // 4. Fallback: find event closest to today's date (no geolocation available)
     if (!nearestEvent) {
-      const fallbackEvent = await db.event.findFirst({
-        where: {
-          orgId: org.id,
-          status: { in: ["ACTIVE", "DRAFT"] },
-          deletedAt: null,
-        },
-        orderBy: [
-          { windows: { _count: "desc" } },
-          { createdAt: "asc" },
-        ],
-        select: { id: true, name: true },
-      });
+      const fallbackEvents = await db.$queryRaw<Array<{ id: string; name: string }>>(Prisma.sql`
+        SELECT e.id, e.name
+        FROM "Event" e
+        WHERE e."orgId" = ${org.id}
+          AND e.status IN ('ACTIVE', 'DRAFT')
+          AND e."deletedAt" IS NULL
+        ORDER BY
+          ABS(
+            COALESCE(
+              e."startDate",
+              (SELECT MIN(w."startTime") FROM "EventWindow" w WHERE w."eventId" = e.id)
+            )::date - CURRENT_DATE
+          ) ASC NULLS LAST,
+          e."createdAt" ASC
+        LIMIT 1
+      `);
+      const fallbackEvent = fallbackEvents[0] ?? null;
 
       if (fallbackEvent) {
         nearestEvent = { id: fallbackEvent.id, name: fallbackEvent.name };
@@ -161,13 +174,46 @@ async function autoAssignBand(
       }
     }
 
-    // 5. If org has no events, redirect to org website
+    // 5. Last resort: find closest inactive event (no status filter)
+    if (!nearestEvent) {
+      const inactiveEvents = await db.$queryRaw<Array<{ id: string; name: string }>>(Prisma.sql`
+        SELECT e.id, e.name
+        FROM "Event" e
+        WHERE e."orgId" = ${org.id}
+          AND e."deletedAt" IS NULL
+        ORDER BY
+          ABS(
+            COALESCE(
+              e."startDate",
+              (SELECT MIN(w."startTime") FROM "EventWindow" w WHERE w."eventId" = e.id)
+            )::date - CURRENT_DATE
+          ) ASC NULLS LAST,
+          e."createdAt" ASC
+        LIMIT 1
+      `);
+      const inactiveEvent = inactiveEvents[0] ?? null;
+
+      if (inactiveEvent) {
+        nearestEvent = { id: inactiveEvent.id, name: inactiveEvent.name, inactive: true };
+        console.log(`[AutoAssign] Using inactive fallback event: ${inactiveEvent.name}`);
+      }
+    }
+
+    // 6. If org has no events at all, redirect to org website
     if (!nearestEvent) {
       console.log(`[AutoAssign] No events found for org ${orgSlug}`);
       return null;
     }
 
-    // 6. Create the band (with race condition handling)
+    // 7. Create the band (with race condition handling)
+    const isDistanceFlagged = (nearestEvent.distanceMiles ?? 0) > FLAGGED_DISTANCE_MILES;
+    const isInactiveFlagged = nearestEvent.inactive === true;
+    const shouldFlag = isDistanceFlagged || isInactiveFlagged;
+    const reasons: string[] = [];
+    if (isInactiveFlagged) reasons.push("Inactive event");
+    if (isDistanceFlagged) reasons.push(`Distance: ${nearestEvent.distanceMiles!.toFixed(1)} mi`);
+    const flagReason = reasons.length > 0 ? reasons.join("; ") : null;
+
     let band;
     try {
       band = await db.band.create({
@@ -176,7 +222,8 @@ async function autoAssignBand(
           eventId: nearestEvent.id,
           autoAssigned: true,
           autoAssignDistance: nearestEvent.distanceMiles ?? null,
-          flagged: (nearestEvent.distanceMiles ?? 0) > FLAGGED_DISTANCE_MILES,
+          flagged: shouldFlag,
+          flagReason,
           firstTapAt: new Date(),
         },
         include: {
@@ -186,6 +233,7 @@ async function autoAssignBand(
                 where: { isActive: true },
                 take: 1,
               },
+              org: { select: { websiteUrl: true } },
             },
           },
         },
@@ -208,6 +256,7 @@ async function autoAssignBand(
                   where: { isActive: true },
                   take: 1,
                 },
+                org: { select: { websiteUrl: true } },
               },
             },
           },
@@ -249,6 +298,11 @@ function extractGeo(request: NextRequest): { latitude: number; longitude: number
     request.headers.get("x-real-longitude") || request.headers.get("x-vercel-ip-longitude") || ""
   );
   if (!isNaN(lat) && !isNaN(lng)) return { latitude: lat, longitude: lng };
+  // Dev fallback: US geographic center. Use the dev panel's location picker
+  // to pass ?lat=&lng= for realistic geo-routing instead.
+  if (process.env.NODE_ENV === "development") {
+    return { latitude: 39.8283, longitude: -98.5795 };
+  }
   return null;
 }
 
@@ -280,7 +334,8 @@ function logTapAsync(
         redirectUrl: params.redirectUrl,
         userAgent: request.headers.get("user-agent") ?? undefined,
         ipAddress:
-          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? undefined,
+          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+          ?? (process.env.NODE_ENV === "development" ? "127.0.0.1" : undefined),
         tappedAt: new Date().toISOString(),
         utmSource: params.utmSource,
         utmMedium: params.utmMedium,
@@ -289,8 +344,25 @@ function logTapAsync(
         utmContent: params.utmContent,
       })
     ),
-  ]).catch(console.error);
+  ]).then(() => {
+    // In dev, auto-flush on a throttled interval (like production cron)
+    if (process.env.NODE_ENV === "development") {
+      scheduleDevFlush(request.url);
+    }
+  }).catch(console.error);
   waitUntil(promise);
+}
+
+const DEV_FLUSH_INTERVAL_MS = 30_000; // flush at most every 30s
+let devFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDevFlush(requestUrl: string) {
+  if (devFlushTimer) return; // already scheduled
+  devFlushTimer = setTimeout(() => {
+    devFlushTimer = null;
+    const origin = new URL(requestUrl).origin;
+    fetch(`${origin}/api/cron/flush-taps`).catch(() => {});
+  }, DEV_FLUSH_INTERVAL_MS);
 }
 
 /** Redirect a flagged band to a safe URL (org website or fallback). */
@@ -390,10 +462,17 @@ export async function GET(request: NextRequest) {
             WHERE id = ANY(${eventIds})
               AND latitude IS NOT NULL
               AND longitude IS NOT NULL
-            ORDER BY earth_distance(
-              ll_to_earth(${multiGeo.latitude}, ${multiGeo.longitude}),
-              ll_to_earth(CAST(latitude AS float8), CAST(longitude AS float8))
-            ) ASC
+            ORDER BY
+              earth_distance(
+                ll_to_earth(${multiGeo.latitude}, ${multiGeo.longitude}),
+                ll_to_earth(CAST(latitude AS float8), CAST(longitude AS float8))
+              ) ASC,
+              ABS(
+                COALESCE(
+                  "startDate",
+                  (SELECT MIN(w."startTime") FROM "EventWindow" w WHERE w."eventId" = "Event".id)
+                )::date - CURRENT_DATE
+              ) ASC NULLS LAST
             LIMIT 1
           `
         );
@@ -460,16 +539,9 @@ export async function GET(request: NextRequest) {
             select: { websiteUrl: true },
           });
 
-          if (org?.websiteUrl) {
-            console.log(`[Hub] Redirecting to org website: ${org.websiteUrl}`);
-            return NextResponse.redirect(org.websiteUrl, 302);
-          } else {
-            console.log(`[Hub] No events and no websiteUrl for org ${orgSlug}`);
-            return NextResponse.json(
-              { error: "Organization has no active events" },
-              { status: 404 }
-            );
-          }
+          const dest = org?.websiteUrl || FALLBACK_URL;
+          console.log(`[Hub] No events for org ${orgSlug}, redirecting to: ${dest}`);
+          return NextResponse.redirect(dest, 302);
         }
       } else {
         // No org slug (localhost or invalid subdomain), redirect to fallback

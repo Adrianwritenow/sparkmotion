@@ -132,7 +132,7 @@ describe('events.byId', () => {
     };
     prismaMock.event.findUniqueOrThrow.mockResolvedValue(mockEvent as any);
     vi.mocked(getEventEngagement).mockResolvedValueOnce(
-      new Map([['event-1', { totalTaps: 10, engagementPercent: 0, elapsedWindows: 0, engagedPairs: 0 }]])
+      new Map([['event-1', { totalTaps: 10, engagementPercent: 0, uniqueBands: 0 }]])
     );
 
     const result = await caller.events.byId({ id: 'event-1' });

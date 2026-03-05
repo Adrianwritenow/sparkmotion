@@ -1,9 +1,10 @@
-import { db } from "@sparkmotion/database";
-import { auth } from "@sparkmotion/auth";
-import { Building2, Calendar, Activity, Users } from "lucide-react";
-import { StatCard } from "@/components/dashboard/stat-card";
+import { Activity, Building2, Calendar, Users } from "lucide-react";
+
 import { RecentEventsTable } from "@/components/dashboard/recent-events-table";
 import { RecentOrgs } from "@/components/dashboard/recent-orgs";
+import { CurrentDate, StatCard } from "@sparkmotion/ui";
+import { auth } from "@sparkmotion/auth";
+import { db } from "@sparkmotion/database";
 
 export const dynamic = "force-dynamic";
 
@@ -37,13 +38,6 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  const currentDate = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
   const statusLabel: Record<string, string> = {
     ACTIVE: "Active",
     DRAFT: "Draft",
@@ -67,8 +61,8 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <div className="flex-1 bg-background rounded-xl border border-border shadow-sm overflow-y-auto h-full">
-      <div className="max-w-[1600px] mx-auto min-h-full p-6 md:p-8">
+    <div className="flex-1 bg-background rounded-xl overflow-y-auto h-full">
+      <div className="mx-auto min-h-full p-6 md:p-8">
         {/* Welcome Header */}
         <div className="mb-6 md:mb-8">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
@@ -76,7 +70,7 @@ export default async function DashboardPage() {
           </h1>
           <p className="text-muted-foreground mt-1">
             Here&apos;s what&apos;s happening across your organizations today,{" "}
-            {currentDate}.
+            <CurrentDate />.
           </p>
         </div>
 

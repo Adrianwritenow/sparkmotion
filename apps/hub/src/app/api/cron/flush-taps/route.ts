@@ -5,7 +5,7 @@ import { db, Prisma } from "@sparkmotion/database";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const BATCH_SIZE = 50_000;
+const BATCH_SIZE = 5_000;
 const BACKLOG_WARN_THRESHOLD = 500_000;
 
 interface PendingTap {
@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "");
 
-  if (token !== process.env.CRON_SECRET) {
+  const isDev = process.env.NODE_ENV === "development";
+  if (!isDev && token !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

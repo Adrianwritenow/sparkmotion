@@ -2,13 +2,17 @@
 
 Cloudflare Worker handling edge NFC redirects. Target latency: <15ms on KV hit. This is the first hop for every NFC tap — the Worker either serves a cached redirect from KV or proxies to the Hub.
 
-- **Entry:** `src/worker.ts` (129 lines, single file)
+- **Entry:** `src/worker.ts` (~210 lines, single file)
 - **Production:** `*.sparkmotion.net` (Cloudflare route)
 
 ## Flow
 
 ```
 GET /e?bandId=XXX
+  |
+  +-- Check sm-scan-mode cookie
+  |     SET: return scan confirmation HTML page (no redirect)
+  |          Sets sm-scanned-band cookie with bandId for Scan Editor
   |
   +-- KV lookup: REDIRECT_MAP.get(bandId)
   |
@@ -68,6 +72,15 @@ On every KV hit, 7 Upstash Redis commands are sent as a single pipelined HTTP re
 | `src/worker.ts` | Entire worker — fetch handler + logTap() |
 | `wrangler.toml` | Worker config + KV binding |
 | `.dev.vars` | Local secrets for `wrangler dev` |
+
+## Routes
+
+| Environment | Route Pattern | Config |
+|-------------|---------------|--------|
+| Production | `*.sparkmotion.net/*` | `wrangler.toml` `[env.production]` |
+| Staging | `staging-redirect.sparkmotion.net/*` | `wrangler.toml` `[env.staging]` |
+
+Each environment has its own KV namespace binding for `REDIRECT_MAP`.
 
 ## Development
 

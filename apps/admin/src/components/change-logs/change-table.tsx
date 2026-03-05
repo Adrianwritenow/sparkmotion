@@ -16,17 +16,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@sparkmotion/ui/table";
+import { Badge } from "@sparkmotion/ui/badge";
+import { Button } from "@sparkmotion/ui/button";
+import { Skeleton } from "@sparkmotion/ui/skeleton";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@sparkmotion/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ChangeRow } from "./change-logs-content";
 

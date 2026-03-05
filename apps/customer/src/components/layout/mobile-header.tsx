@@ -7,7 +7,7 @@ import {
   Sheet,
   SheetContent,
   SheetTrigger,
-} from "@/components/ui/sheet";
+} from "@sparkmotion/ui/sheet";
 import { Sidebar } from "./sidebar";
 
 export function MobileHeader() {

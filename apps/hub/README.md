@@ -57,7 +57,7 @@ Hub-specific:
 
 ## Crons
 
-Both crons run every minute via `vercel.json` and require `CRON_SECRET` Bearer auth.
+All crons are configured in `vercel.json` and require `CRON_SECRET` Bearer auth.
 
 ### flush-taps (`/api/cron/flush-taps`)
 
@@ -81,6 +81,10 @@ Auto-activates/deactivates event windows based on schedule.
 - Invalidates Redis cache for changed events
 - Pushes updated band-to-URL mappings to Cloudflare KV
 
+### data-retention (`/api/cron/data-retention`)
+
+Runs daily at 3 AM UTC. Enforces data retention policies — cleans up expired or orphaned records.
+
 ## Important Files
 
 | File | Purpose |
@@ -88,6 +92,7 @@ Auto-activates/deactivates event windows based on schedule.
 | `src/app/e/route.ts` | Main NFC redirect handler |
 | `src/app/api/cron/flush-taps/route.ts` | Tap log batch flush cron |
 | `src/app/api/cron/update-windows/route.ts` | Window scheduler cron |
+| `src/app/api/cron/data-retention/route.ts` | Data retention cleanup cron |
 | `src/app/api/dev/test-data/route.ts` | Dev test panel data endpoint |
 | `src/components/dev-test-panel.tsx` | Floating test panel for simulating taps |
 | `vercel.json` | Cron schedule configuration |
