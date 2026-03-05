@@ -62,9 +62,9 @@ const REDIRECT_COLORS: Record<string, string> = {
   DEFAULT: "hsl(215 10% 45%)",
 };
 
-/** Random HSL color — different on each page load */
-function getRandomColor(): string {
-  const hue = Math.floor(Math.random() * 360);
+/** Golden-angle HSL color — maximally distinct for any number of series */
+function getDistinctColor(index: number): string {
+  const hue = Math.round((index * 137.508) % 360);
   return `hsl(${hue}, 70%, 55%)`;
 }
 
@@ -96,11 +96,11 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
   // Random color map for windows: stable within session, randomized on refresh
   const colorMapRef = useRef(new Map<string, string>());
   const windowColorMap = useMemo(() => {
-    for (const w of windows ?? []) {
+    (windows ?? []).forEach((w, i) => {
       if (!colorMapRef.current.has(w.id)) {
-        colorMapRef.current.set(w.id, getRandomColor());
+        colorMapRef.current.set(w.id, getDistinctColor(i));
       }
-    }
+    });
     // Static grey colors for non-window categories
     colorMapRef.current.set("__FALLBACK__", REDIRECT_COLORS.FALLBACK!);
     colorMapRef.current.set("__ORG__", REDIRECT_COLORS.ORG!);
