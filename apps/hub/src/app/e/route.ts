@@ -10,7 +10,7 @@ import {
 import { db, Prisma } from "@sparkmotion/database";
 
 const FALLBACK_URL = "https://sparkmotion.net";
-const FLAGGED_DISTANCE_MILES = 50;
+const FLAGGED_DISTANCE_MILES = 100;
 
 /**
  * Extract org slug from subdomain.
