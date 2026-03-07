@@ -9,15 +9,16 @@ import { EventTrashButton } from "./event-trash-button";
 interface EventPageActionsProps {
   orgId: string;
   campaigns: Array<{ id: string; name: string }>;
+  showTrash?: boolean;
 }
 
-export function EventPageActions({ orgId, campaigns }: EventPageActionsProps) {
+export function EventPageActions({ orgId, campaigns, showTrash = true }: EventPageActionsProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
     <>
       {/* Trash button */}
-      <EventTrashButton />
+      {showTrash && <EventTrashButton />}
 
       {/* Desktop/tablet button (768px+) */}
       <Button

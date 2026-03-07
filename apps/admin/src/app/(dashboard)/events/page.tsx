@@ -44,7 +44,7 @@ export default async function EventsPage({
     ...(status && status in EventStatus ? { status: status as EventStatus } : {}),
   };
 
-  const sortField = (["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "createdAt") as "createdAt" | "startDate" | "endDate";
+  const sortField = (["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "startDate") as "createdAt" | "startDate" | "endDate";
   const sortDir = searchParams.dir === "asc" ? "asc" as const : "desc" as const;
 
   const STATUS_PRIORITY: Record<string, number> = { ACTIVE: 0, COMPLETED: 1, DRAFT: 2, CANCELLED: 3 };
