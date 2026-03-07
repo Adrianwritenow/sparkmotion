@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Copy, X, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@sparkmotion/ui/button";
@@ -32,6 +32,7 @@ type CampaignItem = {
 interface CampaignListWithActionsProps {
   campaigns: CampaignItem[];
   showOrg?: boolean;
+  totalCount?: number;
 }
 
 const CAMPAIGN_SORT_OPTIONS = [
@@ -40,12 +41,30 @@ const CAMPAIGN_SORT_OPTIONS = [
   { value: "endDate", label: "End Date" },
 ];
 
-export function CampaignListWithActions({ campaigns, showOrg }: CampaignListWithActionsProps) {
+export function CampaignListWithActions({ campaigns, showOrg, totalCount }: CampaignListWithActionsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const utils = trpc.useUtils();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false);
+  const [shouldFetchAllIds, setShouldFetchAllIds] = useState(false);
+
+  const { data: allIdsData } = trpc.campaigns.listIds.useQuery(
+    {
+      search: searchParams.get("search") ?? undefined,
+      status: searchParams.get("status") ?? undefined,
+    },
+    { enabled: shouldFetchAllIds }
+  );
+
+  useEffect(() => {
+    if (allIdsData && shouldFetchAllIds) {
+      setSelectedIds(new Set(allIdsData.ids));
+      setSelectAllAcrossPages(true);
+      setShouldFetchAllIds(false);
+    }
+  }, [allIdsData, shouldFetchAllIds]);
 
   const duplicateCampaigns = trpc.campaigns.duplicate.useMutation({
     onSuccess: () => {
@@ -65,33 +84,45 @@ export function CampaignListWithActions({ campaigns, showOrg }: CampaignListWith
   });
 
   const handleSelectionChange = (id: string) => {
+    setSelectAllAcrossPages(false);
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.size === campaigns.length) {
+    if (selectedIds.size === campaigns.length && !selectAllAcrossPages) {
       setSelectedIds(new Set());
     } else {
+      setSelectAllAcrossPages(false);
       setSelectedIds(new Set(campaigns.map((c) => c.id)));
     }
   };
 
-  const handleDuplicate = () => {
+  const handleDuplicate = async () => {
     if (selectedIds.size === 0) return;
-    duplicateCampaigns.mutate({ ids: Array.from(selectedIds) });
+    const ids = Array.from(selectedIds);
+    for (let i = 0; i < ids.length; i += 50) {
+      await duplicateCampaigns.mutateAsync({ ids: ids.slice(i, i + 50) });
+    }
+    setSelectedIds(new Set());
+    setSelectAllAcrossPages(false);
+    router.refresh();
   };
 
-  const handleDeleteConfirm = (deleteEvents: boolean) => {
+  const handleDeleteConfirm = async (deleteEvents: boolean) => {
     if (selectedIds.size === 0) return;
-    deleteCampaigns.mutate({ ids: Array.from(selectedIds), deleteEvents });
+    const ids = Array.from(selectedIds);
+    for (let i = 0; i < ids.length; i += 50) {
+      await deleteCampaigns.mutateAsync({ ids: ids.slice(i, i + 50), deleteEvents });
+    }
+    setSelectedIds(new Set());
+    setSelectAllAcrossPages(false);
+    setDeleteDialogOpen(false);
+    router.refresh();
   };
 
   const buildUrl = (overrides: Record<string, string | undefined>) => {
@@ -108,8 +139,8 @@ export function CampaignListWithActions({ campaigns, showOrg }: CampaignListWith
   };
 
   const handleDirToggle = () => {
-    const currentDir = searchParams.get("dir") ?? "desc";
-    router.push(buildUrl({ dir: currentDir === "desc" ? "asc" : undefined, page: undefined }));
+    const currentDir = searchParams.get("dir") ?? "asc";
+    router.push(buildUrl({ dir: currentDir === "asc" ? "desc" : undefined, page: undefined }));
   };
 
   // Derive org name from selected campaigns
@@ -155,16 +186,42 @@ export function CampaignListWithActions({ campaigns, showOrg }: CampaignListWith
             size="icon"
             className="h-8 w-8"
             onClick={handleDirToggle}
-            title={searchParams.get("dir") === "asc" ? "Ascending" : "Descending"}
+            title={searchParams.get("dir") === "desc" ? "Descending" : "Ascending"}
           >
-            {searchParams.get("dir") === "asc" ? (
-              <ArrowUp className="w-3.5 h-3.5" />
-            ) : (
+            {searchParams.get("dir") === "desc" ? (
               <ArrowDown className="w-3.5 h-3.5" />
+            ) : (
+              <ArrowUp className="w-3.5 h-3.5" />
             )}
           </Button>
         </div>
       </div>
+
+      {selectedIds.size === campaigns.length && campaigns.length > 0 && totalCount && totalCount > campaigns.length && !selectAllAcrossPages && (
+        <div className="text-sm text-center py-2 bg-muted/50 rounded-md mb-4">
+          All {campaigns.length} on this page selected.{" "}
+          <button
+            className="text-primary underline hover:no-underline"
+            onClick={() => setShouldFetchAllIds(true)}
+          >
+            Select all {totalCount} matching this filter
+          </button>
+        </div>
+      )}
+      {selectAllAcrossPages && (
+        <div className="text-sm text-center py-2 bg-primary/10 rounded-md mb-4">
+          All {selectedIds.size} selected.{" "}
+          <button
+            className="text-primary underline hover:no-underline"
+            onClick={() => {
+              setSelectAllAcrossPages(false);
+              setSelectedIds(new Set());
+            }}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
 
       {/* Campaign List */}
       <CampaignCardList

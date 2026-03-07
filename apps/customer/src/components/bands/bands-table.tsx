@@ -7,7 +7,7 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import { trpc } from "@/lib/trpc";
-import { Check, Flag, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, Check, Flag, Trash2, X } from "lucide-react";
 import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@sparkmotion/ui/tabs";
 import { Input } from "@sparkmotion/ui/input";
@@ -36,6 +36,7 @@ import {
 } from "@sparkmotion/ui/select";
 import { getColumns, BandWithTag } from "./bands-columns";
 import { DeleteBandsDialog } from "./delete-bands-dialog";
+import { ReassignDialog } from "./reassign-dialog";
 
 const MODE_LABELS: Record<string, string> = {
   PRE: "Pre-Event",
@@ -66,7 +67,10 @@ export function BandsTable({ eventId }: { eventId: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false);
+  const [shouldFetchAllIds, setShouldFetchAllIds] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: tagsData } = trpc.tags.list.useQuery();
@@ -111,9 +115,24 @@ export function BandsTable({ eventId }: { eventId: string }) {
     setPage(1);
   }, [debouncedSearch]);
 
+  const { data: allIdsData } = trpc.bands.listIds.useQuery(
+    { eventId, search: debouncedSearch || undefined },
+    { enabled: shouldFetchAllIds }
+  );
+
+  useEffect(() => {
+    if (allIdsData && shouldFetchAllIds) {
+      setSelectedIds(new Set(allIdsData.ids));
+      setSelectAllAcrossPages(true);
+      setShouldFetchAllIds(false);
+    }
+  }, [allIdsData, shouldFetchAllIds]);
+
   // Clear selection on page/search change
   useEffect(() => {
-    setSelectedIds(new Set());
+    if (!selectAllAcrossPages) {
+      setSelectedIds(new Set());
+    }
   }, [page, debouncedSearch]);
 
   useEffect(() => {
@@ -134,10 +153,12 @@ export function BandsTable({ eventId }: { eventId: string }) {
 
   const bands = (data?.bands ?? []) as BandWithTag[];
   const totalPages = data?.totalPages ?? 1;
+  const totalCount = data?.totalCount ?? 0;
 
   const allSelected = bands.length > 0 && bands.every((b) => selectedIds.has(b.id));
 
   const toggleAll = () => {
+    setSelectAllAcrossPages(false);
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
@@ -146,6 +167,7 @@ export function BandsTable({ eventId }: { eventId: string }) {
   };
 
   const toggleOne = (id: string) => {
+    setSelectAllAcrossPages(false);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -191,9 +213,15 @@ export function BandsTable({ eventId }: { eventId: string }) {
     setConfirmDelete(false);
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    deleteManyBands.mutate({ ids: Array.from(selectedIds) });
+    const ids = Array.from(selectedIds);
+    for (let i = 0; i < ids.length; i += 500) {
+      await deleteManyBands.mutateAsync({ ids: ids.slice(i, i + 500) });
+    }
+    setSelectedIds(new Set());
+    setSelectAllAcrossPages(false);
+    setDeleteDialogOpen(false);
   };
 
   return (
@@ -204,6 +232,32 @@ export function BandsTable({ eventId }: { eventId: string }) {
         onChange={(e) => setSearch(e.target.value)}
         className="max-w-sm"
       />
+
+      {allSelected && totalCount > bands.length && !selectAllAcrossPages && (
+        <div className="text-sm text-center py-2 bg-muted/50 rounded-md">
+          All {bands.length} on this page selected.{" "}
+          <button
+            className="text-primary underline hover:no-underline"
+            onClick={() => setShouldFetchAllIds(true)}
+          >
+            Select all {totalCount.toLocaleString()} matching this filter
+          </button>
+        </div>
+      )}
+      {selectAllAcrossPages && (
+        <div className="text-sm text-center py-2 bg-primary/10 rounded-md">
+          All {selectedIds.size.toLocaleString()} selected.{" "}
+          <button
+            className="text-primary underline hover:no-underline"
+            onClick={() => {
+              setSelectAllAcrossPages(false);
+              setSelectedIds(new Set());
+            }}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <Table>
@@ -296,6 +350,14 @@ export function BandsTable({ eventId }: { eventId: string }) {
               </Button>
             )}
             <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setReassignOpen(true)}
+            >
+              <ArrowRightLeft className="w-4 h-4 mr-2" />
+              Reassign
+            </Button>
+            <Button
               variant="destructive"
               size="sm"
               onClick={() => setDeleteDialogOpen(true)}
@@ -321,6 +383,17 @@ export function BandsTable({ eventId }: { eventId: string }) {
         count={selectedIds.size}
         onConfirm={handleBulkDelete}
         isPending={deleteManyBands.isPending}
+      />
+
+      {/* Reassign dialog */}
+      <ReassignDialog
+        open={reassignOpen}
+        onOpenChange={setReassignOpen}
+        selectedBandIds={Array.from(selectedIds)}
+        onSuccess={() => {
+          setSelectedIds(new Set());
+          utils.bands.list.invalidate();
+        }}
       />
 
       {/* Band Detail Dialog */}
