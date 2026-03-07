@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@sparkmotion/ui/dialog";
+import { toast } from "sonner";
 
 interface EventSettingsProps {
   event: { id: string; name: string; assignOnFlag: boolean };
@@ -22,6 +23,7 @@ interface EventSettingsProps {
 export function EventSettings({ event }: EventSettingsProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const [assignOnFlag, setAssignOnFlag] = useState(event.assignOnFlag);
   const updateEvent = trpc.events.update.useMutation({
     onSuccess: () => router.refresh(),
@@ -31,6 +33,16 @@ export function EventSettings({ event }: EventSettingsProps) {
       setOpen(false);
       router.push("/events");
       router.refresh();
+    },
+  });
+  const cleanupTaps = trpc.events.cleanupOrphanedTaps.useMutation({
+    onSuccess: (data) => {
+      setCleanupOpen(false);
+      toast.success(`Removed ${data.deleted} orphaned tap log${data.deleted === 1 ? "" : "s"}`);
+      router.refresh();
+    },
+    onError: (err) => {
+      toast.error(err.message);
     },
   });
 
@@ -60,6 +72,18 @@ export function EventSettings({ event }: EventSettingsProps) {
         </div>
       </div>
 
+      <div className="border rounded-lg p-6">
+        <div className="space-y-1 mb-4">
+          <h3 className="text-base font-semibold">Clean Up Analytics</h3>
+          <p className="text-sm text-muted-foreground">
+            Remove tap logs from bands that have been reassigned to other events. This fixes inflated tap counts caused by past band reassignments.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => setCleanupOpen(true)}>
+          Clean Up Analytics
+        </Button>
+      </div>
+
       <div className="border border-destructive/50 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-destructive mb-2">Danger Zone</h3>
         <p className="text-sm text-muted-foreground mb-4">
@@ -69,6 +93,28 @@ export function EventSettings({ event }: EventSettingsProps) {
           Delete Event
         </Button>
       </div>
+
+      <Dialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clean Up Analytics</DialogTitle>
+            <DialogDescription>
+              This will permanently delete tap logs from bands no longer assigned to <strong>{event.name}</strong>. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCleanupOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => cleanupTaps.mutate({ eventId: event.id })}
+              disabled={cleanupTaps.isPending}
+            >
+              {cleanupTaps.isPending ? "Cleaning..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
