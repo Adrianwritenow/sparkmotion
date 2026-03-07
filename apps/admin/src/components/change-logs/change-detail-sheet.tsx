@@ -58,6 +58,7 @@ export function ChangeDetailSheet({
 }: ChangeDetailSheetProps) {
   const [techDetailsOpen, setTechDetailsOpen] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [bandListOpen, setBandListOpen] = useState(false);
   const bulkReassign = trpc.bands.bulkReassign.useMutation();
 
   if (!row) return null;
@@ -65,7 +66,6 @@ export function ChangeDetailSheet({
   const { label, className } = getActionBadge(row.action);
   const isAuthEvent = row.action.startsWith("auth.");
   const isReassign = row.action === "bands.bulkReassign";
-  const [bandListOpen, setBandListOpen] = useState(false);
 
   const oldRecord = isRecord(row.oldValue)
     ? row.oldValue

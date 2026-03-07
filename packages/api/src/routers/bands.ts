@@ -352,7 +352,7 @@ export const bandsRouter = router({
           oldValue: {
             bandCount: bandIds.length,
             bandIds,
-            sourceEvents: sourceEvents.map((e) => ({ id: e.id, name: e.name })),
+            sourceEvents: (sourceEvents ?? []).map((e) => ({ id: e.id, name: e.name })),
             bandsBySourceEvent,
           } as unknown as Prisma.InputJsonValue,
           newValue: {
