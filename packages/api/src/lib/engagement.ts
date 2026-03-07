@@ -27,12 +27,13 @@ export async function getEventEngagement(
     }>
   >(Prisma.sql`
     SELECT
-      "eventId",
+      tl."eventId",
       COUNT(*)::int AS total_taps,
-      COUNT(DISTINCT "bandId")::int AS unique_bands
-    FROM "TapLog"
-    WHERE "eventId" IN (${Prisma.join(eventIds)})
-    GROUP BY "eventId"
+      COUNT(DISTINCT tl."bandId")::int AS unique_bands
+    FROM "TapLog" tl
+    INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+    WHERE tl."eventId" IN (${Prisma.join(eventIds)})
+    GROUP BY tl."eventId"
   `);
 
   for (const row of rows) {
