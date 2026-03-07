@@ -553,7 +553,7 @@ export async function GET(request: NextRequest) {
 
           // Flagged auto-assignment: never redirect to event URL.
           // Record the tap for Activity page review, then send to org website or fallback.
-          if (assigned.band.flagged) {
+          if (assigned.band.flagged && !assigned.band.event.assignOnFlag) {
             return redirectFlaggedBand(request, {
               bandId,
               eventId: assigned.event.id,
@@ -607,7 +607,7 @@ export async function GET(request: NextRequest) {
 
     // Flagged existing band: never redirect to event URL.
     // Record the tap for Activity page review, then send to org website or fallback.
-    if (band.flagged) {
+    if (band.flagged && !band.event.assignOnFlag) {
       return redirectFlaggedBand(request, {
         bandId,
         eventId: band.eventId,

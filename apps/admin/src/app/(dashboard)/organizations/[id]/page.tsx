@@ -50,10 +50,11 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
   const [tapStats, engagementMap] = await Promise.all([
     eventIds.length > 0
       ? db.$queryRaw<Array<{ eventId: string; total_taps: bigint }>>(Prisma.sql`
-          SELECT "eventId", COUNT(*)::int AS total_taps
-          FROM "TapLog"
-          WHERE "eventId" IN (${Prisma.join(eventIds)})
-          GROUP BY "eventId"
+          SELECT tl."eventId", COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          WHERE tl."eventId" IN (${Prisma.join(eventIds)})
+          GROUP BY tl."eventId"
         `)
       : [],
     getEventEngagement(eventIds, bandCountByEvent),
