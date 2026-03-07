@@ -202,18 +202,28 @@ export const bandsRouter = router({
       if (band.eventId === input.eventId) return band;
 
       const oldEventId = band.eventId;
+      const now = new Date();
       await db.tapLog.deleteMany({ where: { bandId: input.id, eventId: oldEventId } });
       const updated = await db.band.update({
         where: { id: input.id },
         data: {
           eventId: input.eventId,
-          tapCount: 0,
-          firstTapAt: null,
-          lastTapAt: null,
+          tapCount: 1,
+          firstTapAt: now,
+          lastTapAt: now,
           autoAssigned: false,
           autoAssignDistance: null,
           flagged: false,
           flagReason: null,
+        },
+      });
+      await db.tapLog.create({
+        data: {
+          bandId: input.id,
+          eventId: input.eventId,
+          tappedAt: now,
+          modeServed: "pre",
+          redirectUrl: "org-fallback",
         },
       });
       invalidateBandCache(band.bandId).catch(console.error);
@@ -332,18 +342,30 @@ export const bandsRouter = router({
       await db.tapLog.deleteMany({ where: { bandId: { in: sourceBandPKs }, eventId: { in: originalEventIds } } });
 
       // Reset counters and reassign to target event
+      const now = new Date();
       const result = await db.band.updateMany({
         where: { id: { in: sourceBandPKs } },
         data: {
           eventId: targetEventId,
-          tapCount: 0,
-          firstTapAt: null,
-          lastTapAt: null,
+          tapCount: 1,
+          firstTapAt: now,
+          lastTapAt: now,
           autoAssigned: false,
           autoAssignDistance: null,
           flagged: false,
           flagReason: null,
         },
+      });
+
+      // Create seed TapLog for each reassigned band
+      await db.tapLog.createMany({
+        data: sourceBandPKs.map((id) => ({
+          bandId: id,
+          eventId: targetEventId,
+          tappedAt: now,
+          modeServed: "pre",
+          redirectUrl: "org-fallback",
+        })),
       });
 
       // Async Redis cache invalidation + KV regen — fire-and-forget
