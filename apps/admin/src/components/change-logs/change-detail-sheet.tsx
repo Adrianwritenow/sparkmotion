@@ -158,7 +158,7 @@ export function ChangeDetailSheet({
                     )}
                   </div>
                 )}
-                {oldVal?.bandsBySourceEvent && (
+                {!!oldVal?.bandsBySourceEvent && (
                   <div className="rounded-md border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950 p-4 space-y-3">
                     <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300">
                       Undo Reassignment
