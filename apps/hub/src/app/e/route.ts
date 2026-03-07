@@ -129,13 +129,13 @@ async function autoAssignBand(
           AND e.latitude IS NOT NULL
           AND e.longitude IS NOT NULL
         ORDER BY
-          "distanceMiles" ASC,
           ABS(
             COALESCE(
               e."startDate",
               (SELECT MIN(w2."startTime") FROM "EventWindow" w2 WHERE w2."eventId" = e.id)
             )::date - CURRENT_DATE
           ) ASC NULLS LAST,
+          "distanceMiles" ASC,
           "nextWindowStart" ASC NULLS LAST
         LIMIT 1
       `);
@@ -243,10 +243,9 @@ async function autoAssignBand(
         `[AutoAssign] Created band ${bandId} → event ${nearestEvent.name}`
       );
     } catch (error: any) {
-      // Race condition: another request created the band
+      // P2002: compound unique [bandId, eventId] conflict — either race condition or soft-deleted record
       if (error?.code === "P2002") {
-        console.log(`[AutoAssign] Band ${bandId} already exists (race condition)`);
-        // Use findFirst since bandId is no longer globally unique (compound unique with eventId)
+        // First try to find an active band (true race condition from concurrent requests)
         band = await db.band.findFirst({
           where: { bandId, deletedAt: null },
           include: {
@@ -262,9 +261,44 @@ async function autoAssignBand(
           },
         });
 
+        // If no active band, check for a soft-deleted record at this event and restore it
         if (!band) {
-          console.error(`[AutoAssign] Band ${bandId} exists but couldn't fetch it`);
-          return null;
+          const softDeleted = await db.band.findFirst({
+            where: { bandId, eventId: nearestEvent.id, deletedAt: { not: null } },
+          });
+
+          if (softDeleted) {
+            band = await db.band.update({
+              where: { id: softDeleted.id },
+              data: {
+                deletedAt: null,
+                deletedBy: null,
+                autoAssigned: true,
+                autoAssignDistance: nearestEvent.distanceMiles ?? null,
+                flagged: shouldFlag,
+                flagReason,
+                firstTapAt: new Date(),
+                tapCount: 0,
+              },
+              include: {
+                event: {
+                  include: {
+                    windows: {
+                      where: { isActive: true },
+                      take: 1,
+                    },
+                    org: { select: { websiteUrl: true } },
+                  },
+                },
+              },
+            });
+            console.log(`[AutoAssign] Restored soft-deleted band ${bandId} → event ${nearestEvent.name}`);
+          } else {
+            console.error(`[AutoAssign] Band ${bandId} P2002 conflict but no record found`);
+            return null;
+          }
+        } else {
+          console.log(`[AutoAssign] Band ${bandId} already exists (race condition)`);
         }
       } else {
         console.error(`[AutoAssign] Failed to create band ${bandId}:`, error);
@@ -463,16 +497,16 @@ export async function GET(request: NextRequest) {
               AND latitude IS NOT NULL
               AND longitude IS NOT NULL
             ORDER BY
-              earth_distance(
-                ll_to_earth(${multiGeo.latitude}, ${multiGeo.longitude}),
-                ll_to_earth(CAST(latitude AS float8), CAST(longitude AS float8))
-              ) ASC,
               ABS(
                 COALESCE(
                   "startDate",
                   (SELECT MIN(w."startTime") FROM "EventWindow" w WHERE w."eventId" = "Event".id)
                 )::date - CURRENT_DATE
-              ) ASC NULLS LAST
+              ) ASC NULLS LAST,
+              earth_distance(
+                ll_to_earth(${multiGeo.latitude}, ${multiGeo.longitude}),
+                ll_to_earth(CAST(latitude AS float8), CAST(longitude AS float8))
+              ) ASC
             LIMIT 1
           `
         );
