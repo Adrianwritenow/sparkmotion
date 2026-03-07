@@ -111,6 +111,7 @@ model Event {
   timezone           String      @default("UTC") // IANA timezone e.g. "America/New_York"
   scheduleMode       Boolean     @default(false) // When true, cron auto-activates windows based on datetime ranges
   fallbackUrl        String?     // Default redirect URL when no routing window is active
+  assignOnFlag       Boolean     @default(false) // When true, flagged bands behave like normal bands (use event windows)
   status             EventStatus @default(DRAFT)
   estimatedAttendees Int?
   startDate          DateTime?

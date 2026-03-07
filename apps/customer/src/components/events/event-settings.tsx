@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@sparkmotion/ui/button";
+import { Switch } from "@sparkmotion/ui/switch";
+import { Label } from "@sparkmotion/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -14,12 +16,16 @@ import {
 } from "@sparkmotion/ui/dialog";
 
 interface EventSettingsProps {
-  event: { id: string; name: string };
+  event: { id: string; name: string; assignOnFlag: boolean };
 }
 
 export function EventSettings({ event }: EventSettingsProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [assignOnFlag, setAssignOnFlag] = useState(event.assignOnFlag);
+  const updateEvent = trpc.events.update.useMutation({
+    onSuccess: () => router.refresh(),
+  });
   const deleteEvent = trpc.events.delete.useMutation({
     onSuccess: () => {
       setOpen(false);
@@ -28,8 +34,32 @@ export function EventSettings({ event }: EventSettingsProps) {
     },
   });
 
+  const handleAssignOnFlagChange = (checked: boolean) => {
+    setAssignOnFlag(checked);
+    updateEvent.mutate({ id: event.id, assignOnFlag: checked });
+  };
+
   return (
     <div className="space-y-6">
+      <div className="border rounded-lg p-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Label htmlFor="assign-on-flag" className="text-base font-semibold">
+              Assign on Flag
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              When enabled, flagged bands will use this event&apos;s windows and count toward analytics instead of redirecting to the organization website.
+            </p>
+          </div>
+          <Switch
+            id="assign-on-flag"
+            checked={assignOnFlag}
+            onCheckedChange={handleAssignOnFlagChange}
+            disabled={updateEvent.isPending}
+          />
+        </div>
+      </div>
+
       <div className="border border-destructive/50 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-destructive mb-2">Danger Zone</h3>
         <p className="text-sm text-muted-foreground mb-4">
