@@ -400,6 +400,26 @@ export const eventsRouter = router({
       );
     }),
 
+  cleanupOrphanedTaps: protectedProcedure
+    .input(z.object({ eventId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "ADMIN") {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      const event = await db.event.findFirst({ where: { id: input.eventId, ...ACTIVE } });
+      if (!event) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const result = await db.tapLog.deleteMany({
+        where: {
+          eventId: input.eventId,
+          band: { eventId: { not: input.eventId } },
+        },
+      });
+
+      invalidateEventCache(input.eventId).catch(console.error);
+      return { deleted: result.count };
+    }),
+
   ...createTrashProcedures({
     model: "event",
     selectFields: {

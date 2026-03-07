@@ -198,12 +198,37 @@ export const bandsRouter = router({
       if (targetEvent.orgId !== band.event.orgId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot reassign band to event in different organization" });
       }
+      // Skip if band is already assigned to the target event
+      if (band.eventId === input.eventId) return band;
+
       const oldEventId = band.eventId;
+      const now = new Date();
+      await db.tapLog.deleteMany({ where: { bandId: input.id, eventId: oldEventId } });
       const updated = await db.band.update({
         where: { id: input.id },
-        data: { eventId: input.eventId, autoAssigned: false, autoAssignDistance: null, flagged: false, flagReason: null },
+        data: {
+          eventId: input.eventId,
+          tapCount: 1,
+          firstTapAt: now,
+          lastTapAt: now,
+          autoAssigned: false,
+          autoAssignDistance: null,
+          flagged: false,
+          flagReason: null,
+        },
+      });
+      await db.tapLog.create({
+        data: {
+          bandId: input.id,
+          eventId: input.eventId,
+          tappedAt: now,
+          modeServed: "pre",
+          redirectUrl: "org-fallback",
+        },
       });
       invalidateBandCache(band.bandId).catch(console.error);
+      invalidateEventCache(oldEventId).catch(console.error);
+      invalidateEventCache(input.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [oldEventId, input.eventId] }).catch(console.error);
       return updated;
     }),
@@ -290,10 +315,16 @@ export const bandsRouter = router({
       }
 
       // Get original eventIds and bandId values for collision check and cache invalidation
-      const sourceBands = await db.band.findMany({
+      const allBands = await db.band.findMany({
         where: { id: { in: bandIds }, ...ACTIVE },
         select: { id: true, bandId: true, eventId: true },
       });
+
+      // Skip bands already assigned to the target event — no work needed
+      const sourceBands = allBands.filter((b) => b.eventId !== targetEventId);
+      if (sourceBands.length === 0) return { count: 0 };
+
+      const sourceBandPKs = sourceBands.map((b) => b.id);
       const originalEventIds = [...new Set(sourceBands.map((b) => b.eventId))];
       const sourceBandIds = sourceBands.map((b) => b.bandId);
 
@@ -303,26 +334,38 @@ export const bandsRouter = router({
         where: {
           bandId: { in: sourceBandIds },
           eventId: targetEventId,
-          id: { notIn: bandIds }, // Don't delete the bands we're reassigning
+          id: { notIn: sourceBandPKs }, // Don't delete the bands we're reassigning
         },
       });
 
       // Delete TapLogs for the selected bands (scoped to source events only)
-      await db.tapLog.deleteMany({ where: { bandId: { in: bandIds }, eventId: { in: originalEventIds } } });
+      await db.tapLog.deleteMany({ where: { bandId: { in: sourceBandPKs }, eventId: { in: originalEventIds } } });
 
       // Reset counters and reassign to target event
+      const now = new Date();
       const result = await db.band.updateMany({
-        where: { id: { in: bandIds } },
+        where: { id: { in: sourceBandPKs } },
         data: {
           eventId: targetEventId,
-          tapCount: 0,
-          firstTapAt: null,
-          lastTapAt: null,
+          tapCount: 1,
+          firstTapAt: now,
+          lastTapAt: now,
           autoAssigned: false,
           autoAssignDistance: null,
           flagged: false,
           flagReason: null,
         },
+      });
+
+      // Create seed TapLog for each reassigned band
+      await db.tapLog.createMany({
+        data: sourceBandPKs.map((id) => ({
+          bandId: id,
+          eventId: targetEventId,
+          tappedAt: now,
+          modeServed: "pre",
+          redirectUrl: "org-fallback",
+        })),
       });
 
       // Async Redis cache invalidation + KV regen — fire-and-forget
@@ -350,15 +393,15 @@ export const bandsRouter = router({
           resource: "Bands",
           resourceId: targetEventId,
           oldValue: {
-            bandCount: bandIds.length,
-            bandIds,
+            bandCount: sourceBandPKs.length,
+            bandIds: sourceBandPKs,
             sourceEvents: (sourceEvents ?? []).map((e) => ({ id: e.id, name: e.name })),
             bandsBySourceEvent,
           } as unknown as Prisma.InputJsonValue,
           newValue: {
             bandCount: result.count,
             targetEvent: { id: targetEventId, name: targetEvent!.name },
-            bandIds,
+            bandIds: sourceBandPKs,
           } as unknown as Prisma.InputJsonValue,
           ipAddress: ctx.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
           userAgent: ctx.headers?.get("user-agent") ?? null,
