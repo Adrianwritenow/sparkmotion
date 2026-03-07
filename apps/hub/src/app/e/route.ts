@@ -97,7 +97,7 @@ async function autoAssignBand(
     // 3. If Vercel geo headers available, find nearest event by coordinates
     if (!nearestEvent && geo) {
       console.log(
-        `[AutoAssign] Vercel geo: ${geo.latitude}, ${geo.longitude}`
+        `[AutoAssign] Geo: ${geo.latitude}, ${geo.longitude}`
       );
 
       // Find nearest event with coordinates
@@ -129,13 +129,13 @@ async function autoAssignBand(
           AND e.latitude IS NOT NULL
           AND e.longitude IS NOT NULL
         ORDER BY
+          "distanceMiles" ASC,
           ABS(
             COALESCE(
               e."startDate",
               (SELECT MIN(w2."startTime") FROM "EventWindow" w2 WHERE w2."eventId" = e.id)
             )::date - CURRENT_DATE
           ) ASC NULLS LAST,
-          "distanceMiles" ASC,
           "nextWindowStart" ASC NULLS LAST
         LIMIT 1
       `);
@@ -553,7 +553,7 @@ export async function GET(request: NextRequest) {
 
           // Flagged auto-assignment: never redirect to event URL.
           // Record the tap for Activity page review, then send to org website or fallback.
-          if (assigned.band.flagged) {
+          if (assigned.band.flagged && !assigned.band.event.assignOnFlag) {
             return redirectFlaggedBand(request, {
               bandId,
               eventId: assigned.event.id,
@@ -607,7 +607,7 @@ export async function GET(request: NextRequest) {
 
     // Flagged existing band: never redirect to event URL.
     // Record the tap for Activity page review, then send to org website or fallback.
-    if (band.flagged) {
+    if (band.flagged && !band.event.assignOnFlag) {
       return redirectFlaggedBand(request, {
         bandId,
         eventId: band.eventId,

@@ -28,7 +28,7 @@ export async function getEventEngagement(
   >(Prisma.sql`
     SELECT
       tl."eventId",
-      COUNT(*)::int AS total_taps,
+      COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
       COUNT(DISTINCT tl."bandId")::int AS unique_bands
     FROM "TapLog" tl
     INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL

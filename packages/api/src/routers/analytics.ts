@@ -145,7 +145,7 @@ export const analyticsRouter = router({
       const [tapCounts, totalBandCount] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
-            COUNT(*)::int AS total_taps,
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
             COUNT(DISTINCT tl."bandId")::int AS unique_bands
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
@@ -301,7 +301,7 @@ export const analyticsRouter = router({
       const [peakTpmResult, totalBands, modeDist] = await Promise.all([
         // Peak TPM: max taps in any single minute
         db.$queryRaw<Array<{ minute: Date; count: bigint }>>(Prisma.sql`
-          SELECT DATE_TRUNC('minute', "tappedAt") as minute, COUNT(*)::int as count
+          SELECT DATE_TRUNC('minute', "tappedAt") as minute, COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int as count
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE "tappedAt" >= ${fromDate} AND "tappedAt" <= ${toDate}
@@ -393,7 +393,7 @@ export const analyticsRouter = router({
       const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
         SELECT
           DATE_TRUNC('day', "tappedAt")::date as date,
-          COUNT(*)::int as count
+          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int as count
         FROM "TapLog" tl
         INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         WHERE "tappedAt" >= ${new Date(from)}
@@ -440,7 +440,7 @@ export const analyticsRouter = router({
         SELECT
           t."eventId",
           e."name" as "eventName",
-          COUNT(*)::int as "tapCount"
+          COUNT(DISTINCT (t."bandId", t."tappedAt"))::int as "tapCount"
         FROM "TapLog" t
         INNER JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
         INNER JOIN "Event" e ON t."eventId" = e."id"
@@ -496,7 +496,7 @@ export const analyticsRouter = router({
         daily_counts AS (
           SELECT
             DATE_TRUNC('day', "tappedAt")::date AS date,
-            COUNT(*)::int AS count
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE tl."eventId" = ${eventId}
@@ -663,7 +663,7 @@ export const analyticsRouter = router({
               WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
               ELSE '__DEFAULT__'
             END AS "windowId",
-            COUNT(*)::int AS count
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           INNER JOIN "Event" e ON tl."eventId" = e."id"
@@ -875,7 +875,7 @@ export const analyticsRouter = router({
           SELECT
             DATE_TRUNC('day', "tappedAt")::date AS date,
             tl."eventId",
-            COUNT(*)::int AS count
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE ${eventFilter}
@@ -1042,7 +1042,7 @@ export const analyticsRouter = router({
       const [tapCounts, totalBandCount, perEvent] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
-            COUNT(*)::int AS total_taps,
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
             COUNT(DISTINCT tl."bandId")::int AS unique_bands
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
@@ -1054,7 +1054,7 @@ export const analyticsRouter = router({
         db.$queryRaw<Array<{ eventId: string; total_taps: bigint; unique_bands: bigint }>>(Prisma.sql`
           SELECT
             tl."eventId",
-            COUNT(*)::int AS total_taps,
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
             COUNT(DISTINCT tl."bandId")::int AS unique_bands
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
@@ -1190,7 +1190,7 @@ export const analyticsRouter = router({
               ? Prisma.sql`AND "tappedAt" >= ${fromDate} AND "tappedAt" <= ${toDate}`
               : Prisma.sql``;
             const [row] = await db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
-              SELECT COUNT(*)::int AS count
+              SELECT COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
               FROM "TapLog" tl
               INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
               WHERE tl."eventId" = ${eventId}
@@ -1217,7 +1217,7 @@ export const analyticsRouter = router({
             : Prisma.sql``;
 
           const [row] = await db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
-            SELECT COUNT(*)::int AS count
+            SELECT COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
             FROM "TapLog" tl
             INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
             WHERE tl."eventId" = ${eventId}
@@ -1287,7 +1287,7 @@ export const analyticsRouter = router({
       const results = await db.$queryRaw<Array<{ type: string; count: number }>>(Prisma.sql`
         SELECT
           ew."windowType" AS type,
-          COUNT(*)::int AS count
+          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
         FROM "TapLog" tl
         INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         JOIN "EventWindow" ew ON tl."windowId" = ew."id"
@@ -1339,7 +1339,7 @@ export const analyticsRouter = router({
             WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
             ELSE 'DEFAULT'
           END AS category,
-          COUNT(*)::int AS count
+          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
         FROM "TapLog" tl
         INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         INNER JOIN "Event" e ON tl."eventId" = e."id"
@@ -1408,7 +1408,7 @@ export const analyticsRouter = router({
             WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
             ELSE 'DEFAULT'
           END AS category,
-          COUNT(*)::int AS count
+          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
         FROM "TapLog" tl
         INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         INNER JOIN "Event" e ON tl."eventId" = e."id"
@@ -1577,7 +1577,7 @@ export const analyticsRouter = router({
           COALESCE((
             SELECT MAX(sub.cnt)
             FROM (
-              SELECT COUNT(*)::int AS cnt
+              SELECT COUNT(DISTINCT (tl2."bandId", tl2."tappedAt"))::int AS cnt
               FROM "TapLog" tl2
               INNER JOIN "Band" _b2 ON _b2."id" = tl2."bandId" AND _b2."deletedAt" IS NULL
               WHERE tl2."eventId" = e."id"

@@ -106,10 +106,6 @@ export async function GET(request: NextRequest) {
           console.warn(`flush-taps: ${droppedCount} taps dropped (unknown bandIds)`);
         }
 
-        if (tapLogData.length > 0) {
-          await db.tapLog.createMany({ data: tapLogData });
-        }
-
         // Aggregate per-band updates
         const bandAggregates = new Map<
           string,
@@ -135,17 +131,22 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Batch update bands with two raw SQL queries instead of 2N individual updates
-        if (bandAggregates.size > 0) {
-          const updates = Array.from(bandAggregates.entries());
-          const ids = updates.map(([id]) => id);
-          const tapCounts = updates.map(([, agg]) => agg.tapCount);
-          const lastTapAts = updates.map(([, agg]) => agg.lastTapAt);
-          const firstTapAts = updates.map(([, agg]) => agg.firstTapAt);
+        // Atomic: create TapLog entries + update Band counters in one transaction.
+        // Prevents duplicate TapLog entries if Band update fails and items are re-queued.
+        await db.$transaction(async (tx) => {
+          if (tapLogData.length > 0) {
+            await tx.tapLog.createMany({ data: tapLogData });
+          }
 
-          await db.$transaction([
+          if (bandAggregates.size > 0) {
+            const updates = Array.from(bandAggregates.entries());
+            const ids = updates.map(([id]) => id);
+            const tapCounts = updates.map(([, agg]) => agg.tapCount);
+            const lastTapAts = updates.map(([, agg]) => agg.lastTapAt);
+            const firstTapAts = updates.map(([, agg]) => agg.firstTapAt);
+
             // Single UPDATE for tapCount + lastTapAt using unnest arrays
-            db.$executeRaw(Prisma.sql`
+            await tx.$executeRaw(Prisma.sql`
               UPDATE "Band" AS b SET
                 "tapCount" = b."tapCount" + v."inc",
                 "lastTapAt" = GREATEST(b."lastTapAt", v."last_tap")
@@ -155,9 +156,9 @@ export async function GET(request: NextRequest) {
                        unnest(${lastTapAts}::timestamptz[]) AS last_tap
               ) AS v
               WHERE b."id" = v."id"
-            `),
+            `);
             // Single UPDATE for firstTapAt (only where null)
-            db.$executeRaw(Prisma.sql`
+            await tx.$executeRaw(Prisma.sql`
               UPDATE "Band" AS b SET
                 "firstTapAt" = v."first_tap"
               FROM (
@@ -165,9 +166,9 @@ export async function GET(request: NextRequest) {
                        unnest(${firstTapAts}::timestamptz[]) AS first_tap
               ) AS v
               WHERE b."id" = v."id" AND b."firstTapAt" IS NULL
-            `),
-          ]);
-        }
+            `);
+          }
+        });
 
         totalFlushed += taps.length;
         batchCount++;

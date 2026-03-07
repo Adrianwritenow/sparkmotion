@@ -189,6 +189,7 @@ export const eventsRouter = router({
         longitude: z.number().nullable().optional(),
         timezone: z.string().nullable().optional(),
         scheduleMode: z.boolean().optional(),
+        assignOnFlag: z.boolean().optional(),
         status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
         estimatedAttendees: z.number().int().positive().nullable().optional(),
         startDate: z.date().nullable().optional(),
