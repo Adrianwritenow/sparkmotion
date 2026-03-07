@@ -146,9 +146,10 @@ export const analyticsRouter = router({
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
             COUNT(*)::int AS total_taps,
-            COUNT(DISTINCT "bandId")::int AS unique_bands
-          FROM "TapLog"
-          WHERE "eventId" = ${input.eventId}
+            COUNT(DISTINCT tl."bandId")::int AS unique_bands
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          WHERE tl."eventId" = ${input.eventId}
             ${dateFilter}
             ${windowFilter}
         `),
@@ -256,13 +257,14 @@ export const analyticsRouter = router({
         ...dateWhere,
         ...(eventIds.length > 0 && { eventId: { in: eventIds } }),
         ...(eventId && { eventId }),
+        band: { deletedAt: null },
       };
 
       // Build event filter for distinct counts query
       const distinctEventFilter = eventId
-        ? Prisma.sql`AND "eventId" = ${eventId}`
+        ? Prisma.sql`AND tl."eventId" = ${eventId}`
         : eventIds.length > 0
-        ? Prisma.sql`AND "eventId" IN (${Prisma.join(eventIds)})`
+        ? Prisma.sql`AND tl."eventId" IN (${Prisma.join(eventIds)})`
         : Prisma.sql``;
 
       // Execute queries in parallel — use COUNT(DISTINCT) instead of groupBy
@@ -273,9 +275,10 @@ export const analyticsRouter = router({
         // Unique bands + active events in a single query
         db.$queryRaw<[{ unique_bands: bigint; active_events: bigint }]>(Prisma.sql`
           SELECT
-            COUNT(DISTINCT "bandId")::int AS unique_bands,
-            COUNT(DISTINCT "eventId")::int AS active_events
-          FROM "TapLog"
+            COUNT(DISTINCT tl."bandId")::int AS unique_bands,
+            COUNT(DISTINCT tl."eventId")::int AS active_events
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE "tappedAt" >= ${fromDate} AND "tappedAt" <= ${toDate}
             ${distinctEventFilter}
         `),
@@ -289,9 +292,9 @@ export const analyticsRouter = router({
 
       // Build event filter for raw SQL query
       const eventFilter = eventId
-        ? Prisma.sql`AND "eventId" = ${eventId}`
+        ? Prisma.sql`AND tl."eventId" = ${eventId}`
         : eventIds.length > 0
-        ? Prisma.sql`AND "eventId" IN (${Prisma.join(eventIds)})`
+        ? Prisma.sql`AND tl."eventId" IN (${Prisma.join(eventIds)})`
         : Prisma.sql`AND 1=1`;
 
       // Execute additional queries in parallel
@@ -299,7 +302,8 @@ export const analyticsRouter = router({
         // Peak TPM: max taps in any single minute
         db.$queryRaw<Array<{ minute: Date; count: bigint }>>(Prisma.sql`
           SELECT DATE_TRUNC('minute', "tappedAt") as minute, COUNT(*)::int as count
-          FROM "TapLog"
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE "tappedAt" >= ${fromDate} AND "tappedAt" <= ${toDate}
             ${eventFilter}
           GROUP BY DATE_TRUNC('minute', "tappedAt")
@@ -380,9 +384,9 @@ export const analyticsRouter = router({
 
       // Build event filter for raw query
       const eventFilter = eventId
-        ? Prisma.sql`AND "eventId" = ${eventId}`
+        ? Prisma.sql`AND tl."eventId" = ${eventId}`
         : eventIds.length > 0
-        ? Prisma.sql`AND "eventId" IN (${Prisma.join(eventIds)})`
+        ? Prisma.sql`AND tl."eventId" IN (${Prisma.join(eventIds)})`
         : Prisma.sql`AND 1=1`;
 
       // Use raw SQL for date bucketing with PostgreSQL DATE_TRUNC
@@ -390,7 +394,8 @@ export const analyticsRouter = router({
         SELECT
           DATE_TRUNC('day', "tappedAt")::date as date,
           COUNT(*)::int as count
-        FROM "TapLog"
+        FROM "TapLog" tl
+        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         WHERE "tappedAt" >= ${new Date(from)}
           AND "tappedAt" <= ${new Date(to)}
           ${eventFilter}
@@ -437,6 +442,7 @@ export const analyticsRouter = router({
           e."name" as "eventName",
           COUNT(*)::int as "tapCount"
         FROM "TapLog" t
+        INNER JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
         INNER JOIN "Event" e ON t."eventId" = e."id"
         WHERE t."tappedAt" >= ${new Date(from)}
           AND t."tappedAt" <= ${new Date(to)}
@@ -491,8 +497,9 @@ export const analyticsRouter = router({
           SELECT
             DATE_TRUNC('day', "tappedAt")::date AS date,
             COUNT(*)::int AS count
-          FROM "TapLog"
-          WHERE "eventId" = ${eventId}
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          WHERE tl."eventId" = ${eventId}
             ${dateFilter}
             ${windowFilter}
           GROUP BY DATE_TRUNC('day', "tappedAt")
@@ -555,10 +562,11 @@ export const analyticsRouter = router({
           )::date AS date
         ),
         first_taps AS (
-          SELECT "bandId", MIN("tappedAt") AS first_tap_at
-          FROM "TapLog"
-          WHERE "eventId" = ${eventId}
-          GROUP BY "bandId"
+          SELECT tl."bandId", MIN("tappedAt") AS first_tap_at
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          WHERE tl."eventId" = ${eventId}
+          GROUP BY tl."bandId"
         ),
         daily_counts AS (
           SELECT
@@ -657,6 +665,7 @@ export const analyticsRouter = router({
             END AS "windowId",
             COUNT(*)::int AS count
           FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           INNER JOIN "Event" e ON tl."eventId" = e."id"
           INNER JOIN "Organization" o ON e."orgId" = o."id"
           WHERE tl."eventId" = ${eventId}
@@ -771,6 +780,7 @@ export const analyticsRouter = router({
               ORDER BY ft."tappedAt" ASC LIMIT 1
             ) AS "windowId"
           FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE tl."eventId" = ${eventId}
           GROUP BY tl."bandId"
         ),
@@ -835,12 +845,12 @@ export const analyticsRouter = router({
       const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
 
       const eventFilter = eventIds.length === 1
-        ? Prisma.sql`"eventId" = ${eventIds[0]}`
-        : Prisma.sql`"eventId" IN (${Prisma.join(eventIds)})`;
+        ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
+        : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
 
       const seriesStart = fromDate
         ? Prisma.sql`${fromDate}::date`
-        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" WHERE ${eventFilter}))::date`;
+        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter}))::date`;
       const seriesEnd = toDate
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`CURRENT_DATE`;
@@ -864,13 +874,14 @@ export const analyticsRouter = router({
         daily_counts AS (
           SELECT
             DATE_TRUNC('day', "tappedAt")::date AS date,
-            "eventId",
+            tl."eventId",
             COUNT(*)::int AS count
-          FROM "TapLog"
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE ${eventFilter}
             ${dateFilter}
             ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt"), "eventId"
+          GROUP BY DATE_TRUNC('day', "tappedAt"), tl."eventId"
         )
         SELECT
           ds.date,
@@ -922,8 +933,8 @@ export const analyticsRouter = router({
       const { fromDate, toDate } = buildDateFilter(input);
 
       const eventFilter = eventIds.length === 1
-        ? Prisma.sql`"eventId" = ${eventIds[0]}`
-        : Prisma.sql`"eventId" IN (${Prisma.join(eventIds)})`;
+        ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
+        : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
 
       const eventIdFilter = eventIds.length === 1
         ? Prisma.sql`"id" = ${eventIds[0]}`
@@ -963,10 +974,11 @@ export const analyticsRouter = router({
           VALUES ${eventNameValues}
         ),
         first_taps AS (
-          SELECT "bandId", "eventId", MIN("tappedAt") AS first_tap_at
-          FROM "TapLog"
+          SELECT tl."bandId", tl."eventId", MIN("tappedAt") AS first_tap_at
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
           WHERE ${eventFilter}
-          GROUP BY "bandId", "eventId"
+          GROUP BY tl."bandId", tl."eventId"
         ),
         daily_counts AS (
           SELECT
@@ -1031,23 +1043,25 @@ export const analyticsRouter = router({
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
             COUNT(*)::int AS total_taps,
-            COUNT(DISTINCT "bandId")::int AS unique_bands
-          FROM "TapLog"
-          WHERE "eventId" IN (${Prisma.join(eventIds)})
+            COUNT(DISTINCT tl."bandId")::int AS unique_bands
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          WHERE tl."eventId" IN (${Prisma.join(eventIds)})
             ${dateFilter}
             ${windowFilter}
         `),
         db.band.count({ where: { eventId: { in: eventIds }, ...ACTIVE } }),
         db.$queryRaw<Array<{ eventId: string; total_taps: bigint; unique_bands: bigint }>>(Prisma.sql`
           SELECT
-            "eventId",
+            tl."eventId",
             COUNT(*)::int AS total_taps,
-            COUNT(DISTINCT "bandId")::int AS unique_bands
-          FROM "TapLog"
-          WHERE "eventId" IN (${Prisma.join(eventIds)})
+            COUNT(DISTINCT tl."bandId")::int AS unique_bands
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          WHERE tl."eventId" IN (${Prisma.join(eventIds)})
             ${dateFilter}
             ${windowFilter}
-          GROUP BY "eventId"
+          GROUP BY tl."eventId"
         `),
       ]);
 
@@ -1177,8 +1191,9 @@ export const analyticsRouter = router({
               : Prisma.sql``;
             const [row] = await db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
               SELECT COUNT(*)::int AS count
-              FROM "TapLog"
-              WHERE "eventId" = ${eventId}
+              FROM "TapLog" tl
+              INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+              WHERE tl."eventId" = ${eventId}
                 AND "windowId" = ${w.id}
                 ${dateFilter}
             `);
@@ -1203,8 +1218,9 @@ export const analyticsRouter = router({
 
           const [row] = await db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
             SELECT COUNT(*)::int AS count
-            FROM "TapLog"
-            WHERE "eventId" = ${eventId}
+            FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            WHERE tl."eventId" = ${eventId}
               AND "windowId" = ${w.id}
               ${dateFilter}
           `);
@@ -1273,6 +1289,7 @@ export const analyticsRouter = router({
           ew."windowType" AS type,
           COUNT(*)::int AS count
         FROM "TapLog" tl
+        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         JOIN "EventWindow" ew ON tl."windowId" = ew."id"
         WHERE ${eventFilter}
           ${dateFilter}
@@ -1324,6 +1341,7 @@ export const analyticsRouter = router({
           END AS category,
           COUNT(*)::int AS count
         FROM "TapLog" tl
+        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         INNER JOIN "Event" e ON tl."eventId" = e."id"
         INNER JOIN "Organization" o ON e."orgId" = o."id"
         LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
@@ -1392,6 +1410,7 @@ export const analyticsRouter = router({
           END AS category,
           COUNT(*)::int AS count
         FROM "TapLog" tl
+        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
         INNER JOIN "Event" e ON tl."eventId" = e."id"
         INNER JOIN "Organization" o ON e."orgId" = o."id"
         LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
@@ -1423,7 +1442,7 @@ export const analyticsRouter = router({
         WITH band_first AS (
           SELECT b."id" AS band_id, b."firstTapAt" AS first_tap
           FROM "Band" b
-          WHERE b."eventId" = ${eventId} AND b."firstTapAt" IS NOT NULL
+          WHERE b."eventId" = ${eventId} AND b."firstTapAt" IS NOT NULL AND b."deletedAt" IS NULL
         ),
         return_days AS (
           SELECT
@@ -1494,6 +1513,7 @@ export const analyticsRouter = router({
         where.eventId = { in: events.map(e => e.id) };
       }
 
+      where.band = { deletedAt: null };
       const taps = await db.tapLog.findMany({
         where,
         include: {
@@ -1552,22 +1572,24 @@ export const analyticsRouter = router({
           e."id" AS "eventId",
           e."name" AS "eventName",
           e."city",
-          COUNT(t."id")::int AS "totalTaps",
-          COUNT(DISTINCT t."bandId")::int AS "uniqueBands",
+          COUNT(_b."id")::int AS "totalTaps",
+          COUNT(DISTINCT _b."id")::int AS "uniqueBands",
           COALESCE((
             SELECT MAX(sub.cnt)
             FROM (
               SELECT COUNT(*)::int AS cnt
-              FROM "TapLog"
-              WHERE "eventId" = e."id"
-                AND "tappedAt" >= ${fromDate} AND "tappedAt" <= ${toDate}
-              GROUP BY DATE_TRUNC('minute', "tappedAt")
+              FROM "TapLog" tl2
+              INNER JOIN "Band" _b2 ON _b2."id" = tl2."bandId" AND _b2."deletedAt" IS NULL
+              WHERE tl2."eventId" = e."id"
+                AND tl2."tappedAt" >= ${fromDate} AND tl2."tappedAt" <= ${toDate}
+              GROUP BY DATE_TRUNC('minute', tl2."tappedAt")
             ) sub
           ), 0)::int AS "peakTpm",
-          COUNT(CASE WHEN t."modeServed" = 'POST' THEN 1 END)::int AS "postEventTaps"
+          COUNT(CASE WHEN _b."id" IS NOT NULL AND t."modeServed" = 'POST' THEN 1 END)::int AS "postEventTaps"
         FROM "Event" e
         LEFT JOIN "TapLog" t ON t."eventId" = e."id"
           AND t."tappedAt" >= ${fromDate} AND t."tappedAt" <= ${toDate}
+        LEFT JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
         WHERE e."id" IN (${Prisma.join(eventIds)})
         GROUP BY e."id", e."name", e."city"
       `);
@@ -1604,12 +1626,13 @@ export const analyticsRouter = router({
           o."id" as "orgId",
           o."name" as "orgName",
           COUNT(DISTINCT e."id")::int as "eventCount",
-          COUNT(t."id")::int as "tapCount"
+          COUNT(_b."id")::int as "tapCount"
         FROM "Organization" o
         LEFT JOIN "Event" e ON e."orgId" = o."id"
         LEFT JOIN "TapLog" t ON t."eventId" = e."id"
           AND t."tappedAt" >= ${fromDate}
           AND t."tappedAt" <= ${toDate}
+        LEFT JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
         GROUP BY o."id", o."name"
         ORDER BY "tapCount" DESC
         LIMIT 20

@@ -213,6 +213,7 @@ describe('bands.bulkReassign', () => {
     prismaMock.band.deleteMany.mockResolvedValue({ count: 0 });
     prismaMock.tapLog.deleteMany.mockResolvedValue({ count: 0 });
     prismaMock.band.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.event.findMany.mockResolvedValue([{ id: 'event-1', name: 'Source Event' }] as any);
 
     const result = await caller.bands.bulkReassign({
       bandIds: ['band-1'],

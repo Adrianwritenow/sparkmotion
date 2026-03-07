@@ -60,6 +60,26 @@ export const campaignsRouter = router({
       });
     }),
 
+  listIds: protectedProcedure
+    .input(z.object({
+      orgId: z.string().optional(),
+      search: z.string().optional(),
+      status: z.string().optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const where: any = {
+        ...ACTIVE,
+        ...(ctx.user.role === "CUSTOMER" ? { orgId: ctx.user.orgId! } : input?.orgId ? { orgId: input.orgId } : {}),
+        ...(input?.search ? { name: { contains: input.search, mode: "insensitive" } } : {}),
+        ...(input?.status ? { status: input.status } : {}),
+      };
+      const campaigns = await db.campaign.findMany({
+        where,
+        select: { id: true },
+      });
+      return { ids: campaigns.map((c) => c.id) };
+    }),
+
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {

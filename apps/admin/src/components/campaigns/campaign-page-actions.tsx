@@ -9,17 +9,19 @@ import { CampaignTrashButton } from "./campaign-trash-button";
 interface CampaignPageActionsProps {
   orgs: Array<{ id: string; name: string }>;
   availableEvents: Array<{ id: string; name: string; campaign: { name: string } | null }>;
+  showTrash?: boolean;
 }
 
 export function CampaignPageActions({
   orgs,
   availableEvents,
+  showTrash = true,
 }: CampaignPageActionsProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
     <>
-      <CampaignTrashButton />
+      {showTrash && <CampaignTrashButton />}
 
       {/* Desktop/tablet button (768px+) */}
       <Button

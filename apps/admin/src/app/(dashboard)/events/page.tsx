@@ -44,8 +44,8 @@ export default async function EventsPage({
     ...(status && status in EventStatus ? { status: status as EventStatus } : {}),
   };
 
-  const sortField = (["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "createdAt") as "createdAt" | "startDate" | "endDate";
-  const sortDir = searchParams.dir === "asc" ? "asc" as const : "desc" as const;
+  const sortField = (["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "startDate") as "createdAt" | "startDate" | "endDate";
+  const sortDir = searchParams.dir === "desc" ? "desc" as const : "asc" as const;
 
   const STATUS_PRIORITY: Record<string, number> = { ACTIVE: 0, COMPLETED: 1, DRAFT: 2, CANCELLED: 3 };
 
@@ -120,7 +120,7 @@ export default async function EventsPage({
 
       {/* Events Card List */}
       {eventsWithStats.length > 0 ? (
-        <EventListWithActions events={eventsWithStats} showOrg={true} showCampaign={true} />
+        <EventListWithActions events={eventsWithStats} showOrg={true} showCampaign={true} totalCount={totalCount} />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
           <p className="text-muted-foreground">No events found</p>
