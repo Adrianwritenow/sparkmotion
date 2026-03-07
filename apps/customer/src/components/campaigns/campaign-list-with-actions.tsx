@@ -105,7 +105,7 @@ export function CampaignListWithActions({ campaigns, showOrg, orgName }: Campaig
   };
 
   const handleSortChange = (value: string) => {
-    router.push(buildUrl({ sort: value === "createdAt" ? undefined : value, page: undefined }));
+    router.push(buildUrl({ sort: value === "startDate" ? undefined : value, page: undefined }));
   };
 
   const handleDirToggle = () => {
@@ -133,7 +133,7 @@ export function CampaignListWithActions({ campaigns, showOrg, orgName }: Campaig
         </div>
         <div className="flex items-center gap-1">
           <Select
-            value={searchParams.get("sort") ?? "createdAt"}
+            value={searchParams.get("sort") ?? "startDate"}
             onValueChange={handleSortChange}
           >
             <SelectTrigger className="w-[160px] h-8 text-xs">

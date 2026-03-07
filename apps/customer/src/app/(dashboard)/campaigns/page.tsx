@@ -41,7 +41,7 @@ export default async function CampaignsPage({
   const [campaigns, totalCount] = await Promise.all([
     db.campaign.findMany({
       where,
-      orderBy: { [(["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "createdAt") as string]: searchParams.dir === "asc" ? "asc" as const : "desc" as const },
+      orderBy: { [(["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "startDate") as string]: searchParams.dir === "asc" ? "asc" as const : "desc" as const },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
@@ -124,7 +124,7 @@ export default async function CampaignsPage({
       ) : (
         <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
           <p className="text-muted-foreground mb-4">No campaigns found</p>
-          <CampaignPageActions orgId={session.user.orgId} availableEvents={events} />
+          <CampaignPageActions orgId={session.user.orgId} availableEvents={events} showTrash={false} />
         </div>
       )}
     </div>
