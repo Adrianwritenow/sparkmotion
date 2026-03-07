@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Info } from "lucide-react";
+import { ChevronDown, ChevronUp, Info, ArrowRight } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -10,10 +10,13 @@ import {
 } from "@sparkmotion/ui/sheet";
 
 import { Badge } from "@sparkmotion/ui/badge";
+import { Button } from "@sparkmotion/ui/button";
 import type { ChangeRow } from "./change-logs-content";
 import { format } from "date-fns";
 import { getActionBadge } from "./change-table";
 import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 interface ChangeDetailSheetProps {
   row: ChangeRow | null;
@@ -54,11 +57,15 @@ export function ChangeDetailSheet({
   onOpenChange,
 }: ChangeDetailSheetProps) {
   const [techDetailsOpen, setTechDetailsOpen] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const bulkReassign = trpc.bands.bulkReassign.useMutation();
 
   if (!row) return null;
 
   const { label, className } = getActionBadge(row.action);
   const isAuthEvent = row.action.startsWith("auth.");
+  const isReassign = row.action === "bands.bulkReassign";
+  const [bandListOpen, setBandListOpen] = useState(false);
 
   const oldRecord = isRecord(row.oldValue)
     ? row.oldValue
@@ -103,8 +110,96 @@ export function ChangeDetailSheet({
         </SheetHeader>
 
         <div className="py-4 space-y-4">
-          {/* Auth event view */}
-          {isAuthEvent ? (
+          {/* Reassign view */}
+          {isReassign ? (() => {
+            const oldVal = isRecord(row.oldValue) ? row.oldValue : null;
+            const newVal = isRecord(row.newValue) ? row.newValue : null;
+            const sourceEvts = (oldVal?.sourceEvents as Array<{ id: string; name: string }>) ?? [];
+            const targetEvt = newVal?.targetEvent as { id: string; name: string } | undefined;
+            const bandCount = (newVal?.bandCount as number) ?? (oldVal?.bandCount as number) ?? 0;
+            const bandIdList = (oldVal?.bandIds as string[]) ?? [];
+            return (
+              <div className="space-y-4">
+                <div className="rounded-md border p-4 space-y-3">
+                  <h3 className="text-sm font-semibold">
+                    {bandCount} band{bandCount !== 1 ? "s" : ""} reassigned
+                  </h3>
+                  <div className="space-y-2">
+                    {sourceEvts.map((src) => (
+                      <div key={src.id} className="flex items-center gap-2 text-sm">
+                        <span className="font-medium">{src.name}</span>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-medium">{targetEvt?.name ?? "Unknown"}</span>
+                      </div>
+                    ))}
+                    {sourceEvts.length === 0 && (
+                      <p className="text-sm text-muted-foreground">Source event info not available</p>
+                    )}
+                  </div>
+                </div>
+                {bandIdList.length > 0 && (
+                  <div className="border rounded-md">
+                    <button
+                      type="button"
+                      className="flex items-center justify-between w-full p-3 text-sm font-medium"
+                      onClick={() => setBandListOpen((prev) => !prev)}
+                    >
+                      Band IDs ({bandIdList.length})
+                      {bandListOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                    {bandListOpen && (
+                      <div className="border-t p-3 max-h-[200px] overflow-y-auto">
+                        <div className="space-y-0.5">
+                          {bandIdList.map((id) => (
+                            <p key={id} className="font-mono text-xs">{id}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {oldVal?.bandsBySourceEvent && (
+                  <div className="rounded-md border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950 p-4 space-y-3">
+                    <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                      Undo Reassignment
+                    </h4>
+                    <p className="text-xs text-orange-700 dark:text-orange-400">
+                      This will move bands back to their original event(s). Tap history and counts lost
+                      during the original reassignment cannot be recovered. Any new taps recorded since
+                      will also be deleted.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={undoing}
+                      onClick={async () => {
+                        setUndoing(true);
+                        try {
+                          const groupedBySource = oldVal.bandsBySourceEvent as Record<string, string[]>;
+                          for (const [sourceEventId, ids] of Object.entries(groupedBySource)) {
+                            await bulkReassign.mutateAsync({
+                              bandIds: ids,
+                              targetEventId: sourceEventId,
+                            });
+                          }
+                          toast.success("Reassignment undone successfully");
+                          onOpenChange(false);
+                        } catch (err: unknown) {
+                          toast.error(err instanceof Error ? err.message : "Failed to undo reassignment");
+                        } finally {
+                          setUndoing(false);
+                        }
+                      }}
+                    >
+                      {undoing ? "Undoing..." : "Undo Reassignment"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })()
+          : /* Auth event view */
+          isAuthEvent ? (
             <div className="rounded-md border p-4 space-y-2">
               <h3 className="text-sm font-semibold">Auth Event Details</h3>
               <div className="space-y-1 text-sm">

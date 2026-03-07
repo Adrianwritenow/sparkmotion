@@ -63,6 +63,28 @@ export const eventsRouter = router({
       });
     }),
 
+  listIds: protectedProcedure
+    .input(z.object({
+      orgId: z.string().optional(),
+      campaignId: z.string().optional(),
+      search: z.string().optional(),
+      status: z.string().optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const where: any = {
+        ...ACTIVE,
+        ...(ctx.user.role === "CUSTOMER" ? { orgId: ctx.user.orgId } : input?.orgId ? { orgId: input.orgId } : {}),
+        ...(input?.campaignId ? { campaignId: input.campaignId } : {}),
+        ...(input?.search ? { name: { contains: input.search, mode: "insensitive" } } : {}),
+        ...(input?.status ? { status: input.status } : {}),
+      };
+      const events = await db.event.findMany({
+        where,
+        select: { id: true },
+      });
+      return { ids: events.map((e) => e.id) };
+    }),
+
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {

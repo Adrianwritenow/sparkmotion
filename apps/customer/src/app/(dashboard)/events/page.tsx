@@ -56,7 +56,7 @@ export default async function EventsPage({
   };
 
   const sortField = (["createdAt", "startDate", "endDate"].includes(searchParams.sort ?? "") ? searchParams.sort : "startDate") as "createdAt" | "startDate" | "endDate";
-  const sortDir = searchParams.dir === "asc" ? "asc" as const : "desc" as const;
+  const sortDir = searchParams.dir === "desc" ? "desc" as const : "asc" as const;
 
   const STATUS_PRIORITY: Record<string, number> = { ACTIVE: 0, COMPLETED: 1, DRAFT: 2, CANCELLED: 3 };
 
@@ -130,7 +130,7 @@ export default async function EventsPage({
 
       {/* Events Card List */}
       {eventsWithStats.length > 0 ? (
-        <EventListWithActions events={eventsWithStats} showOrg={false} showCampaign={true} orgName={orgName} />
+        <EventListWithActions events={eventsWithStats} showOrg={false} showCampaign={true} orgName={orgName} totalCount={totalCount} />
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
           <div className="space-y-4">

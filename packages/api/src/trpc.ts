@@ -57,9 +57,17 @@ const prismaModelMap: Record<string, (id: string) => Promise<unknown>> = {
   bands: (id) => db.band.findUnique({ where: { id } }),
 };
 
+// Procedures that write their own changelog entries — skip middleware auto-logging
+const MANUAL_LOG_PATHS = ["bands.bulkReassign"];
+
 const changeLog = middleware(async ({ ctx, next, type, path, rawInput }) => {
   // Only change mutations
   if (type !== "mutation") {
+    return next();
+  }
+
+  // Skip auto-logging for procedures that create their own changelog entries
+  if (MANUAL_LOG_PATHS.includes(path)) {
     return next();
   }
 

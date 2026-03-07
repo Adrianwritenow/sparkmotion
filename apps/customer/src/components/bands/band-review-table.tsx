@@ -70,6 +70,8 @@ export function BandReviewTable() {
   const [tagId, setTagId] = useState<string>("");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false);
+  const [shouldFetchAllIds, setShouldFetchAllIds] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [detailBand, setDetailBand] = useState<BandRow | null>(null);
 
@@ -80,7 +82,9 @@ export function BandReviewTable() {
   }, [debouncedSearch, flaggedOnly, timePreset, tagId]);
 
   useEffect(() => {
-    setSelectedIds(new Set());
+    if (!selectAllAcrossPages) {
+      setSelectedIds(new Set());
+    }
   }, [page, debouncedSearch, flaggedOnly, timePreset, tagId]);
 
   // Tags dropdown
@@ -117,6 +121,25 @@ export function BandReviewTable() {
     },
   });
 
+  const { data: allIdsData } = trpc.bands.listAllIds.useQuery(
+    {
+      search: debouncedSearch || undefined,
+      flaggedOnly: flaggedOnly || undefined,
+      activityFrom,
+      activityTo,
+      tagId: tagId && tagId !== "all" ? tagId : undefined,
+    },
+    { enabled: shouldFetchAllIds }
+  );
+
+  useEffect(() => {
+    if (allIdsData && shouldFetchAllIds) {
+      setSelectedIds(new Set(allIdsData.ids));
+      setSelectAllAcrossPages(true);
+      setShouldFetchAllIds(false);
+    }
+  }, [allIdsData, shouldFetchAllIds]);
+
   const bands: BandRow[] = (data?.bands ?? []) as any;
   const totalCount = data?.totalCount ?? 0;
   const totalPages = data?.totalPages ?? 1;
@@ -124,6 +147,7 @@ export function BandReviewTable() {
   const allSelected = bands.length > 0 && bands.every((b) => selectedIds.has(b.id));
 
   const toggleAll = () => {
+    setSelectAllAcrossPages(false);
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
@@ -132,6 +156,7 @@ export function BandReviewTable() {
   };
 
   const toggleOne = (id: string) => {
+    setSelectAllAcrossPages(false);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -291,6 +316,33 @@ export function BandReviewTable() {
 
         <BandTrashButton />
       </div>
+
+      {/* Select all across pages banner */}
+      {allSelected && totalCount > bands.length && !selectAllAcrossPages && (
+        <div className="text-sm text-center py-2 bg-muted/50 rounded-md">
+          All {bands.length} on this page selected.{" "}
+          <button
+            className="text-primary underline hover:no-underline"
+            onClick={() => setShouldFetchAllIds(true)}
+          >
+            Select all {totalCount.toLocaleString()} matching this filter
+          </button>
+        </div>
+      )}
+      {selectAllAcrossPages && (
+        <div className="text-sm text-center py-2 bg-primary/10 rounded-md">
+          All {selectedIds.size.toLocaleString()} selected.{" "}
+          <button
+            className="text-primary underline hover:no-underline"
+            onClick={() => {
+              setSelectAllAcrossPages(false);
+              setSelectedIds(new Set());
+            }}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-md border">

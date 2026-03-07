@@ -30,6 +30,57 @@ export const bandsRouter = router({
       return { bands, totalCount, page: input.page, pageSize: input.pageSize, totalPages: Math.ceil(totalCount / input.pageSize) };
     }),
 
+  listIds: protectedProcedure
+    .input(z.object({ eventId: z.string(), search: z.string().nullish() }))
+    .query(async ({ input }) => {
+      const where: any = { eventId: input.eventId, ...ACTIVE };
+      if (input.search) {
+        where.bandId = { contains: input.search, mode: "insensitive" };
+      }
+      const bands = await db.band.findMany({
+        where,
+        select: { id: true },
+        take: 10000,
+      });
+      return { ids: bands.map((b) => b.id) };
+    }),
+
+  listAllIds: protectedProcedure
+    .input(
+      z.object({
+        orgId: z.string().optional(),
+        search: z.string().optional(),
+        flaggedOnly: z.boolean().optional(),
+        tagId: z.string().optional(),
+        activityFrom: z.date().optional(),
+        activityTo: z.date().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const orgId = ctx.user.role === "CUSTOMER" ? ctx.user.orgId! : input.orgId;
+      const where: Prisma.BandWhereInput = {
+        ...ACTIVE,
+        ...(orgId ? { event: { orgId, ...ACTIVE } } : { event: { ...ACTIVE } }),
+        ...(input.search ? { bandId: { contains: input.search, mode: "insensitive" } } : {}),
+        ...(input.flaggedOnly ? { flagged: true } : {}),
+        ...(input.tagId ? { tagId: input.tagId } : {}),
+        ...(input.activityFrom || input.activityTo
+          ? {
+              lastTapAt: {
+                ...(input.activityFrom ? { gte: input.activityFrom } : {}),
+                ...(input.activityTo ? { lte: input.activityTo } : {}),
+              },
+            }
+          : {}),
+      };
+      const bands = await db.band.findMany({
+        where,
+        select: { id: true },
+        take: 10000,
+      });
+      return { ids: bands.map((b) => b.id) };
+    }),
+
   uploadBatch: protectedProcedure
     .input(
       z.object({
@@ -223,7 +274,7 @@ export const bandsRouter = router({
       // Verify target event exists + auth
       const targetEvent = await db.event.findUnique({
         where: { id: targetEventId, ...ACTIVE },
-        select: { orgId: true },
+        select: { orgId: true, name: true },
       });
       if (!targetEvent) throw new TRPCError({ code: "NOT_FOUND", message: "Target event not found" });
       if (ctx.user.role === "CUSTOMER" && targetEvent.orgId !== ctx.user.orgId) {
@@ -281,6 +332,38 @@ export const bandsRouter = router({
         ...sourceBands.map((b) => invalidateBandCache(b.bandId)),
       ]).catch(console.error);
       generateRedirectMap({ eventIds: allEventIds }).catch(console.error);
+
+      // Rich changelog entry with source/target event names
+      const sourceEvents = await db.event.findMany({
+        where: { id: { in: originalEventIds } },
+        select: { id: true, name: true },
+      });
+      const bandsBySourceEvent: Record<string, string[]> = {};
+      for (const band of sourceBands) {
+        if (!bandsBySourceEvent[band.eventId]) bandsBySourceEvent[band.eventId] = [];
+        bandsBySourceEvent[band.eventId]!.push(band.id);
+      }
+      db.changeLog.create({
+        data: {
+          userId: ctx.user.id,
+          action: "bands.bulkReassign",
+          resource: "Bands",
+          resourceId: targetEventId,
+          oldValue: {
+            bandCount: bandIds.length,
+            bandIds,
+            sourceEvents: sourceEvents.map((e) => ({ id: e.id, name: e.name })),
+            bandsBySourceEvent,
+          } as unknown as Prisma.InputJsonValue,
+          newValue: {
+            bandCount: result.count,
+            targetEvent: { id: targetEventId, name: targetEvent!.name },
+            bandIds,
+          } as unknown as Prisma.InputJsonValue,
+          ipAddress: ctx.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+          userAgent: ctx.headers?.get("user-agent") ?? null,
+        },
+      }).catch(console.error);
 
       return { updated: result.count };
     }),
