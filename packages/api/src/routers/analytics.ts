@@ -511,7 +511,7 @@ export const analyticsRouter = router({
           WHERE tl."eventId" = ${eventId}
             ${dateFilter}
             ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt" AT TIME ZONE ${tz})
+          GROUP BY 1
         )
         SELECT
           ds.date,
@@ -585,7 +585,7 @@ export const analyticsRouter = router({
           FROM first_taps
           WHERE 1=1
             ${firstTapDateFilter}
-          GROUP BY DATE_TRUNC('day', first_tap_at AT TIME ZONE ${tz})
+          GROUP BY 1
         )
         SELECT
           ds.date,
@@ -682,7 +682,7 @@ export const analyticsRouter = router({
           INNER JOIN "Organization" o ON e."orgId" = o."id"
           WHERE tl."eventId" = ${eventId}
             ${dateFilter}
-          GROUP BY DATE_TRUNC('day', tl."tappedAt" AT TIME ZONE ${tz}),
+          GROUP BY 1,
             CASE
               WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
               WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
@@ -806,7 +806,7 @@ export const analyticsRouter = router({
           FROM first_taps
           WHERE 1=1
             ${firstTapDateFilter}
-          GROUP BY DATE_TRUNC('day', first_tap_at AT TIME ZONE ${tz}), "windowId"
+          GROUP BY 1, "windowId"
         )
         SELECT
           ds.date,
