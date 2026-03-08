@@ -26,10 +26,13 @@ export { StatCard } from "./components/stat-card";
 export { DateTimeDisplay } from "./components/datetime-display";
 export { TagBadge } from "./components/tag-badge";
 export { GooglePlacesAutocomplete } from "./components/google-places-autocomplete";
-export { ConnectionStatus } from "./components/connection-status";
-export { LiveKpiCards } from "./components/live-kpi-cards";
 export { CurrentDate } from "./components/current-date";
 export { TrashSheet, type TrashItem, type TrashSheetProps } from "./components/trash-sheet";
+export { BackButton } from "./components/back-button";
+export { SmLogotype } from "./components/sm-logotype";
+export { ListFilterBar } from "./components/list-filter-bar";
+export { DateRangeFilter } from "./components/date-range-filter";
+export { TimezoneSelector } from "./components/timezone-selector";
 
 // Hooks
 export { useDebounce } from "./hooks/use-debounce";

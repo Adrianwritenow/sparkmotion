@@ -53,8 +53,10 @@ export async function updateEventWindows() {
       lifecycleTransitions++;
       console.log(`[AutoLifecycle] ${event.id}: DRAFT → ACTIVE`);
     } else if (event.status === "ACTIVE") {
+      // endDate represents "through the end of that day", so add 1 day
+      // e.g. endDate Mar 8 → completes after midnight Mar 9 (full day used)
       const effectiveEndDate = event.endDate
-        ? new TZDate(event.endDate, event.timezone)
+        ? addDays(new TZDate(event.endDate, event.timezone), 1)
         : addDays(startDate, 1);
 
       if (now >= effectiveEndDate) {

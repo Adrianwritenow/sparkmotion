@@ -1,6 +1,6 @@
 import { Bell, Globe, Lock, Mail, Shield, User } from "lucide-react";
 
-import { TimezoneSelector } from "@/components/settings/timezone-selector";
+import { TimezoneSelectorConnected } from "@/components/settings/timezone-selector";
 import { auth } from "@sparkmotion/auth";
 
 export const dynamic = "force-dynamic";
@@ -127,7 +127,7 @@ export default async function SettingsPage() {
             </h2>
             <div className="space-y-6">
               {/* Working timezone preference */}
-              <TimezoneSelector />
+              <TimezoneSelectorConnected />
 
        
             </div>

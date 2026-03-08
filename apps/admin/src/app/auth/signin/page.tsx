@@ -11,7 +11,7 @@ import { Button } from "@sparkmotion/ui/button";
 import { Input } from "@sparkmotion/ui/input";
 import { Label } from "@sparkmotion/ui/label";
 import { toast } from "sonner";
-import { SmLogotype } from "@/components/sm-logotype";
+import { SmLogotype } from "@sparkmotion/ui";
 
 export default function SignInPage() {
   const router = useRouter();

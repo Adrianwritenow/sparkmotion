@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@sparkmotion/ui/button";
+import { Button } from "./ui/button";
 import { startOfDay, subDays, endOfDay, formatISO } from "date-fns";
 
 interface DateRangeFilterProps {

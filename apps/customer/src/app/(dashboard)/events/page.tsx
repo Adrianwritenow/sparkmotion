@@ -4,7 +4,7 @@ import { getEventEngagement } from "@sparkmotion/api";
 import { EventListWithActions } from "@/components/events/event-list-with-actions";
 import { CampaignFilter } from "@/components/events/campaign-filter";
 import { EventPageActions } from "@/components/events/event-page-actions";
-import { ListFilterBar } from "@/components/list-filter-bar";
+import { ListFilterBar } from "@sparkmotion/ui";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";

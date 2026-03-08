@@ -2,7 +2,7 @@ import { db, Prisma, CampaignStatus } from "@sparkmotion/database";
 import { getEventEngagement, aggregateCampaignEngagement } from "@sparkmotion/api";
 import { CampaignListWithActions } from "@/components/campaigns/campaign-list-with-actions";
 import { CampaignPageActions } from "@/components/campaigns/campaign-page-actions";
-import { ListFilterBar } from "@/components/list-filter-bar";
+import { ListFilterBar } from "@sparkmotion/ui";
 
 export const dynamic = "force-dynamic";
 
