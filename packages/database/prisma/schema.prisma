@@ -110,6 +110,7 @@ model Event {
   longitude          Decimal?    @db.Decimal(9, 6) // Geographic coordinate - 9 total digits, 6 after decimal
   timezone           String      @default("UTC") // IANA timezone e.g. "America/New_York"
   scheduleMode       Boolean     @default(false) // When true, cron auto-activates windows based on datetime ranges
+  autoLifecycle      Boolean     @default(false) // When true, cron auto-transitions DRAFT→ACTIVE→COMPLETED based on dates
   fallbackUrl        String?     // Default redirect URL when no routing window is active
   assignOnFlag       Boolean     @default(false) // When true, flagged bands behave like normal bands (use event windows)
   status             EventStatus @default(DRAFT)

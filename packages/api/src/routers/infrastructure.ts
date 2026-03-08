@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { router, adminProcedure } from "../trpc";
-import { redis } from "@sparkmotion/redis";
+import { redis, KEYS } from "@sparkmotion/redis";
 import { generateRedirectMap } from "../services/redirect-map-generator";
 
 // Redis key for redirect map metadata
@@ -89,6 +89,35 @@ export const infrastructureRouter = router({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to refresh redirect map",
       });
+    }
+  }),
+
+  /**
+   * Get tap pipeline health: received vs flushed vs dropped vs pending.
+   * lost = max(0, received - flushed - dropped - pending)
+   */
+  getTapPipelineHealth: adminProcedure.query(async () => {
+    try {
+      const pipeline = redis.pipeline();
+      pipeline.get(KEYS.tapsReceived());
+      pipeline.get(KEYS.tapsFlushed());
+      pipeline.get(KEYS.tapsDropped());
+      pipeline.llen(KEYS.tapLogPending());
+
+      const results = await pipeline.exec();
+      if (!results) throw new Error("Pipeline returned null");
+
+      // ioredis pipeline returns [error, result][] tuples
+      const received = parseInt(String(results[0]?.[1] ?? "0"), 10) || 0;
+      const flushed = parseInt(String(results[1]?.[1] ?? "0"), 10) || 0;
+      const dropped = parseInt(String(results[2]?.[1] ?? "0"), 10) || 0;
+      const pending = Number(results[3]?.[1] ?? 0) || 0;
+      const lost = Math.max(0, received - flushed - dropped - pending);
+
+      return { received, flushed, dropped, pending, lost };
+    } catch (error) {
+      console.error("Pipeline health check failed:", error);
+      return { received: 0, flushed: 0, dropped: 0, pending: 0, lost: -1 };
     }
   }),
 

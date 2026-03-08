@@ -359,6 +359,7 @@ function logTapAsync(
         utmContent: params.utmContent,
       })
     ),
+    redis.incr(KEYS.tapsReceived()),
   ]).then(() => {
     // In dev, auto-flush on a throttled interval (like production cron)
     if (process.env.NODE_ENV === "development") {

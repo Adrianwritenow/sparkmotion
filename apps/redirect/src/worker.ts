@@ -202,6 +202,7 @@ async function logTap(env: Env, bandId: string, entry: KVEntry, request: Request
         undefined,
       tappedAt: new Date().toISOString(),
     }));
+    pipeline.incr("monitoring:taps:received");
 
     await pipeline.exec();
   } catch (err) {

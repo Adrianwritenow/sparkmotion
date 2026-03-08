@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       success: true,
       eventsProcessed: result.eventsProcessed,
       eventsChanged: result.eventsChanged,
+      lifecycleTransitions: result.lifecycleTransitions,
     });
   } catch (error) {
     console.error("Cron execution failed:", error);
