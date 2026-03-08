@@ -117,7 +117,7 @@ export function CampaignEventsTab({
 
       {/* Event List */}
       {events.length > 0 ? (
-        <EventListWithActions events={events} showOrg={false} orgName={orgName} />
+        <EventListWithActions events={events} showOrg={false} orgName={orgName} campaignId={campaignId} />
       ) : (
         <div className="bg-card border border-border rounded-lg p-12 text-center">
           <p className="text-muted-foreground">

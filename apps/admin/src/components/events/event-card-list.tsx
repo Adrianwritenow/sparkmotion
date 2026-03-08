@@ -39,6 +39,7 @@ interface EventCardListProps {
   selectable?: boolean;
   selectedIds?: Set<string>;
   onSelectionChange?: (id: string) => void;
+  campaignId?: string;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -83,8 +84,9 @@ function formatCompact(n: number): string {
   return n.toLocaleString();
 }
 
-export function EventCardList({ events, showOrg = true, showCampaign = false, selectable = false, selectedIds, onSelectionChange }: EventCardListProps) {
+export function EventCardList({ events, showOrg = true, showCampaign = false, selectable = false, selectedIds, onSelectionChange, campaignId }: EventCardListProps) {
   const router = useRouter();
+  const campaignSuffix = campaignId ? `from=campaign&campaignId=${campaignId}` : "";
 
   return (
     <div className="space-y-4">
@@ -103,7 +105,7 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
             </div>
           )}
           <div
-            onClick={() => router.push(`/events/${event.id}`)}
+            onClick={() => router.push(`/events/${event.id}${campaignSuffix ? `?${campaignSuffix}` : ""}`)}
             className={`flex-1 bg-card border border-border rounded-lg p-5 hover:border-primary/30 transition-colors cursor-pointer ${isSelected ? "ring-2 ring-primary" : ""}`}
           >
           {/* Top Row */}
@@ -204,7 +206,7 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
               </div>
               <div className="w-px h-8 bg-border hidden md:block"></div>
               <Link
-                href={`/events/${event.id}?tab=analytics`}
+                href={`/events/${event.id}?tab=analytics${campaignSuffix ? `&${campaignSuffix}` : ""}`}
                 onClick={(e) => e.stopPropagation()}
                 className="hidden md:inline text-xs text-primary hover:underline font-medium"
               >
@@ -213,7 +215,7 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
             </div>
 
             <button
-              onClick={(e) => { e.stopPropagation(); router.push(`/events/${event.id}`); }}
+              onClick={(e) => { e.stopPropagation(); router.push(`/events/${event.id}${campaignSuffix ? `?${campaignSuffix}` : ""}`); }}
               className="hidden md:block px-3 py-1.5 text-xs font-medium text-primary border border-border rounded-md hover:bg-muted transition-colors"
             >
               View Event Details
