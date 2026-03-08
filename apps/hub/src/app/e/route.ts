@@ -11,6 +11,7 @@ import { db, Prisma } from "@sparkmotion/database";
 
 const FALLBACK_URL = "https://sparkmotion.net";
 const FLAGGED_DISTANCE_MILES = 100;
+const FLAGGED_DISTANCE_MILES_SAME_DAY = 500;
 
 /**
  * Extract org slug from subdomain.
@@ -60,7 +61,7 @@ async function autoAssignBand(
     }
 
     // 2. If explicit eventId provided (dev test panel), look up that specific event
-    let nearestEvent: { id: string; name: string; distanceMiles?: number } | null = null;
+    let nearestEvent: { id: string; name: string; distanceMiles?: number; dateDiffDays?: number | null } | null = null;
 
     if (eventId) {
       const explicitEvent = await db.event.findFirst({
@@ -106,6 +107,7 @@ async function autoAssignBand(
           id: string;
           name: string;
           distanceMiles: number;
+          dateDiffDays: number | null;
           nextWindowStart: Date | null;
         }>
       >(Prisma.sql`
@@ -116,6 +118,12 @@ async function autoAssignBand(
             ll_to_earth(${geo.latitude}, ${geo.longitude}),
             ll_to_earth(CAST(e.latitude AS float8), CAST(e.longitude AS float8))
           ) / 1609.34 AS "distanceMiles",
+          ABS(
+            COALESCE(
+              e."startDate",
+              (SELECT MIN(w2."startTime") FROM "EventWindow" w2 WHERE w2."eventId" = e.id)
+            )::date - CURRENT_DATE
+          ) AS "dateDiffDays",
           (
             SELECT MIN(w."startTime")
             FROM "EventWindow" w
@@ -129,13 +137,8 @@ async function autoAssignBand(
           AND e.latitude IS NOT NULL
           AND e.longitude IS NOT NULL
         ORDER BY
+          "dateDiffDays" ASC NULLS LAST,
           "distanceMiles" ASC,
-          ABS(
-            COALESCE(
-              e."startDate",
-              (SELECT MIN(w2."startTime") FROM "EventWindow" w2 WHERE w2."eventId" = e.id)
-            )::date - CURRENT_DATE
-          ) ASC NULLS LAST,
           "nextWindowStart" ASC NULLS LAST
         LIMIT 1
       `);
@@ -143,7 +146,8 @@ async function autoAssignBand(
       if (events.length > 0 && events[0]) {
         nearestEvent = events[0];
         console.log(
-          `[AutoAssign] Nearest event: ${nearestEvent.name} (${nearestEvent.distanceMiles?.toFixed(1)} miles away)`
+          `[AutoAssign] Nearest event: ${nearestEvent.name} ` +
+          `(${nearestEvent.distanceMiles?.toFixed(1)} mi, ${nearestEvent.dateDiffDays ?? "?"} days)`
         );
       }
     }
@@ -181,10 +185,14 @@ async function autoAssignBand(
     }
 
     // 6. Create the band (with race condition handling)
-    const isDistanceFlagged = (nearestEvent.distanceMiles ?? 0) > FLAGGED_DISTANCE_MILES;
+    // Use relaxed threshold when event date strongly matches today (±1 day)
+    const flagThreshold = nearestEvent.dateDiffDays != null && nearestEvent.dateDiffDays <= 1
+      ? FLAGGED_DISTANCE_MILES_SAME_DAY
+      : FLAGGED_DISTANCE_MILES;
+    const isDistanceFlagged = (nearestEvent.distanceMiles ?? 0) > flagThreshold;
     const shouldFlag = isDistanceFlagged;
     const reasons: string[] = [];
-    if (isDistanceFlagged) reasons.push(`Distance: ${nearestEvent.distanceMiles!.toFixed(1)} mi`);
+    if (isDistanceFlagged) reasons.push(`Distance: ${nearestEvent.distanceMiles!.toFixed(1)} mi (threshold: ${flagThreshold} mi)`);
     const flagReason = reasons.length > 0 ? reasons.join("; ") : null;
 
     let band;
