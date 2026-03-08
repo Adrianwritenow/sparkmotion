@@ -192,7 +192,12 @@ export const bandsRouter = router({
       // Verify target event exists and belongs to same org
       const targetEvent = await db.event.findUnique({
         where: { id: input.eventId, ...ACTIVE },
-        select: { orgId: true },
+        select: {
+          orgId: true,
+          fallbackUrl: true,
+          org: { select: { websiteUrl: true } },
+          windows: { where: { isActive: true }, take: 1, select: { id: true, url: true, windowType: true } },
+        },
       });
       if (!targetEvent) throw new TRPCError({ code: "NOT_FOUND", message: "Target event not found" });
       if (targetEvent.orgId !== band.event.orgId) {
@@ -200,6 +205,10 @@ export const bandsRouter = router({
       }
       // Skip if band is already assigned to the target event
       if (band.eventId === input.eventId) return band;
+
+      const activeWindow = targetEvent.windows[0];
+      const seedMode = activeWindow?.windowType.toLowerCase() ?? "pre";
+      const seedUrl = activeWindow?.url ?? targetEvent.fallbackUrl ?? targetEvent.org?.websiteUrl ?? "https://sparkmotion.net";
 
       const oldEventId = band.eventId;
       const now = new Date();
@@ -221,9 +230,10 @@ export const bandsRouter = router({
         data: {
           bandId: input.id,
           eventId: input.eventId,
+          windowId: activeWindow?.id ?? null,
           tappedAt: now,
-          modeServed: "pre",
-          redirectUrl: "org-fallback",
+          modeServed: seedMode,
+          redirectUrl: seedUrl,
         },
       });
       invalidateBandCache(band.bandId).catch(console.error);
@@ -299,7 +309,13 @@ export const bandsRouter = router({
       // Verify target event exists + auth
       const targetEvent = await db.event.findUnique({
         where: { id: targetEventId, ...ACTIVE },
-        select: { orgId: true, name: true },
+        select: {
+          orgId: true,
+          name: true,
+          fallbackUrl: true,
+          org: { select: { websiteUrl: true } },
+          windows: { where: { isActive: true }, take: 1, select: { id: true, url: true, windowType: true } },
+        },
       });
       if (!targetEvent) throw new TRPCError({ code: "NOT_FOUND", message: "Target event not found" });
       if (ctx.user.role === "CUSTOMER" && targetEvent.orgId !== ctx.user.orgId) {
@@ -358,13 +374,17 @@ export const bandsRouter = router({
       });
 
       // Create seed TapLog for each reassigned band
+      const activeWindow = targetEvent.windows[0];
+      const seedMode = activeWindow?.windowType.toLowerCase() ?? "pre";
+      const seedUrl = activeWindow?.url ?? targetEvent.fallbackUrl ?? targetEvent.org?.websiteUrl ?? "https://sparkmotion.net";
       await db.tapLog.createMany({
         data: sourceBandPKs.map((id) => ({
           bandId: id,
           eventId: targetEventId,
+          windowId: activeWindow?.id ?? null,
           tappedAt: now,
-          modeServed: "pre",
-          redirectUrl: "org-fallback",
+          modeServed: seedMode,
+          redirectUrl: seedUrl,
         })),
       });
 
