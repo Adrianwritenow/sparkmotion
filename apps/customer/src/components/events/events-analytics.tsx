@@ -129,10 +129,10 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
   const singleWindowId = activeWindowIds.length === 1 ? activeWindowIds[0] : undefined;
 
   const derivedFrom =
-    customFrom ||
+    (customFrom ? `${customFrom}:00.000Z` : undefined) ||
     (dateRange?.from ? format(dateRange.from, "yyyy-MM-dd'T'00:00:00.000'Z'") : undefined);
   const derivedTo =
-    customTo ||
+    (customTo ? `${customTo}:00.000Z` : undefined) ||
     (dateRange?.to ? format(dateRange.to, "yyyy-MM-dd'T'23:59:59.999'Z'") : undefined);
 
   const filterParams = {
