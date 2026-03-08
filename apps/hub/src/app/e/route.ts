@@ -60,14 +60,14 @@ async function autoAssignBand(
     }
 
     // 2. If explicit eventId provided (dev test panel), look up that specific event
-    let nearestEvent: { id: string; name: string; distanceMiles?: number; inactive?: boolean } | null = null;
+    let nearestEvent: { id: string; name: string; distanceMiles?: number } | null = null;
 
     if (eventId) {
       const explicitEvent = await db.event.findFirst({
         where: {
           id: eventId,
           orgId: org.id,
-          status: { in: ["ACTIVE", "DRAFT"] },
+          status: "ACTIVE",
           deletedAt: null,
         },
         select: { id: true, name: true, latitude: true, longitude: true },
@@ -124,7 +124,7 @@ async function autoAssignBand(
           ) AS "nextWindowStart"
         FROM "Event" e
         WHERE e."orgId" = ${org.id}
-          AND e.status IN ('ACTIVE', 'DRAFT')
+          AND e.status = 'ACTIVE'
           AND e."deletedAt" IS NULL
           AND e.latitude IS NOT NULL
           AND e.longitude IS NOT NULL
@@ -154,7 +154,7 @@ async function autoAssignBand(
         SELECT e.id, e.name
         FROM "Event" e
         WHERE e."orgId" = ${org.id}
-          AND e.status IN ('ACTIVE', 'DRAFT')
+          AND e.status = 'ACTIVE'
           AND e."deletedAt" IS NULL
         ORDER BY
           ABS(
@@ -174,43 +174,16 @@ async function autoAssignBand(
       }
     }
 
-    // 5. Last resort: find closest inactive event (no status filter)
-    if (!nearestEvent) {
-      const inactiveEvents = await db.$queryRaw<Array<{ id: string; name: string }>>(Prisma.sql`
-        SELECT e.id, e.name
-        FROM "Event" e
-        WHERE e."orgId" = ${org.id}
-          AND e."deletedAt" IS NULL
-        ORDER BY
-          ABS(
-            COALESCE(
-              e."startDate",
-              (SELECT MIN(w."startTime") FROM "EventWindow" w WHERE w."eventId" = e.id)
-            )::date - CURRENT_DATE
-          ) ASC NULLS LAST,
-          e."createdAt" ASC
-        LIMIT 1
-      `);
-      const inactiveEvent = inactiveEvents[0] ?? null;
-
-      if (inactiveEvent) {
-        nearestEvent = { id: inactiveEvent.id, name: inactiveEvent.name, inactive: true };
-        console.log(`[AutoAssign] Using inactive fallback event: ${inactiveEvent.name}`);
-      }
-    }
-
-    // 6. If org has no events at all, redirect to org website
+    // 5. If no ACTIVE events found, redirect to org website
     if (!nearestEvent) {
       console.log(`[AutoAssign] No events found for org ${orgSlug}`);
       return null;
     }
 
-    // 7. Create the band (with race condition handling)
+    // 6. Create the band (with race condition handling)
     const isDistanceFlagged = (nearestEvent.distanceMiles ?? 0) > FLAGGED_DISTANCE_MILES;
-    const isInactiveFlagged = nearestEvent.inactive === true;
-    const shouldFlag = isDistanceFlagged || isInactiveFlagged;
+    const shouldFlag = isDistanceFlagged;
     const reasons: string[] = [];
-    if (isInactiveFlagged) reasons.push("Inactive event");
     if (isDistanceFlagged) reasons.push(`Distance: ${nearestEvent.distanceMiles!.toFixed(1)} mi`);
     const flagReason = reasons.length > 0 ? reasons.join("; ") : null;
 
