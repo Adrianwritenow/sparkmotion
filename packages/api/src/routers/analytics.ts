@@ -489,7 +489,7 @@ export const analyticsRouter = router({
 
       const seriesStart = fromDate
         ? Prisma.sql`${fromDate}::date`
-        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE ${tz})::date`;
+        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`;
       const seriesEnd = toDate
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
@@ -504,7 +504,7 @@ export const analyticsRouter = router({
         ),
         daily_counts AS (
           SELECT
-            DATE_TRUNC('day', "tappedAt" AT TIME ZONE ${tz})::date AS date,
+            DATE_TRUNC('day', "tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date AS date,
             COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
           FROM "TapLog" tl
           INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
@@ -549,7 +549,7 @@ export const analyticsRouter = router({
       // Bound generate_series with filter dates when available
       const seriesStart = fromDate
         ? Prisma.sql`${fromDate}::date`
-        : Prisma.sql`DATE_TRUNC('day', (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}) AT TIME ZONE ${tz})::date`;
+        : Prisma.sql`DATE_TRUNC('day', (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`;
       const seriesEnd = toDate
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
@@ -580,7 +580,7 @@ export const analyticsRouter = router({
         ),
         daily_counts AS (
           SELECT
-            DATE_TRUNC('day', first_tap_at AT TIME ZONE ${tz})::date AS date,
+            DATE_TRUNC('day', first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date AS date,
             COUNT(*)::int AS count
           FROM first_taps
           WHERE 1=1
@@ -641,7 +641,7 @@ export const analyticsRouter = router({
 
       const seriesStart = fromDate
         ? Prisma.sql`${fromDate}::date`
-        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE ${tz})::date`;
+        : Prisma.sql`DATE_TRUNC('day', (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`;
       const seriesEnd = toDate
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
@@ -668,7 +668,7 @@ export const analyticsRouter = router({
         ),
         daily_counts AS (
           SELECT
-            DATE_TRUNC('day', tl."tappedAt" AT TIME ZONE ${tz})::date AS date,
+            DATE_TRUNC('day', tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date AS date,
             CASE
               WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
               WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
@@ -741,7 +741,7 @@ export const analyticsRouter = router({
 
       const seriesStart = fromDate
         ? Prisma.sql`${fromDate}::date`
-        : Prisma.sql`DATE_TRUNC('day', (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}) AT TIME ZONE ${tz})::date`;
+        : Prisma.sql`DATE_TRUNC('day', (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date`;
       const seriesEnd = toDate
         ? Prisma.sql`${toDate}::date`
         : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
@@ -800,7 +800,7 @@ export const analyticsRouter = router({
         ),
         daily_counts AS (
           SELECT
-            DATE_TRUNC('day', first_tap_at AT TIME ZONE ${tz})::date AS date,
+            DATE_TRUNC('day', first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date AS date,
             "windowId",
             COUNT(*)::int AS count
           FROM first_taps
@@ -887,7 +887,7 @@ export const analyticsRouter = router({
         ),
         daily_counts AS (
           SELECT
-            DATE_TRUNC('day', "tappedAt" AT TIME ZONE e."timezone")::date AS date,
+            DATE_TRUNC('day', "tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE e."timezone")::date AS date,
             tl."eventId",
             COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
           FROM "TapLog" tl
@@ -896,7 +896,7 @@ export const analyticsRouter = router({
           WHERE ${eventFilter}
             ${dateFilter}
             ${windowFilter}
-          GROUP BY DATE_TRUNC('day', "tappedAt" AT TIME ZONE e."timezone"), tl."eventId"
+          GROUP BY DATE_TRUNC('day', "tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE e."timezone"), tl."eventId"
         )
         SELECT
           ds.date,
@@ -997,14 +997,14 @@ export const analyticsRouter = router({
         ),
         daily_counts AS (
           SELECT
-            DATE_TRUNC('day', ft.first_tap_at AT TIME ZONE e."timezone")::date AS date,
+            DATE_TRUNC('day', ft.first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE e."timezone")::date AS date,
             ft."eventId",
             COUNT(*)::int AS count
           FROM first_taps ft
           INNER JOIN "Event" e ON ft."eventId" = e."id"
           WHERE 1=1
             ${firstTapDateFilter}
-          GROUP BY DATE_TRUNC('day', ft.first_tap_at AT TIME ZONE e."timezone"), ft."eventId"
+          GROUP BY DATE_TRUNC('day', ft.first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE e."timezone"), ft."eventId"
         )
         SELECT
           ds.date,
