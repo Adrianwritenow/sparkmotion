@@ -103,6 +103,12 @@ export const infrastructureRouter = router({
       pipeline.get(KEYS.tapsFlushed());
       pipeline.get(KEYS.tapsDropped());
       pipeline.llen(KEYS.tapLogPending());
+      // Error counters (5 types)
+      pipeline.get(KEYS.errorCounter("hub_db_fallback"));
+      pipeline.get(KEYS.errorCounter("auto_assign_failed"));
+      pipeline.get(KEYS.errorCounter("no_org_slug"));
+      pipeline.get(KEYS.errorCounter("worker_log_failed"));
+      pipeline.get(KEYS.errorCounter("cron_batch_failed"));
 
       const results = await pipeline.exec();
       if (!results) throw new Error("Pipeline returned null");
@@ -114,10 +120,86 @@ export const infrastructureRouter = router({
       const pending = Number(results[3]?.[1] ?? 0) || 0;
       const lost = Math.max(0, received - flushed - dropped - pending);
 
-      return { received, flushed, dropped, pending, lost };
+      const hubDbFallback = parseInt(String(results[4]?.[1] ?? "0"), 10) || 0;
+      const autoAssignFailed = parseInt(String(results[5]?.[1] ?? "0"), 10) || 0;
+      const noOrgSlug = parseInt(String(results[6]?.[1] ?? "0"), 10) || 0;
+      const workerLogFailed = parseInt(String(results[7]?.[1] ?? "0"), 10) || 0;
+      const cronBatchFailed = parseInt(String(results[8]?.[1] ?? "0"), 10) || 0;
+      const errorsTotal = hubDbFallback + autoAssignFailed + noOrgSlug + workerLogFailed + cronBatchFailed;
+
+      return {
+        received, flushed, dropped, pending, lost,
+        errors: {
+          hubDbFallback,
+          autoAssignFailed,
+          noOrgSlug,
+          workerLogFailed,
+          cronBatchFailed,
+          total: errorsTotal,
+        },
+      };
     } catch (error) {
       console.error("Pipeline health check failed:", error);
-      return { received: 0, flushed: 0, dropped: 0, pending: 0, lost: -1 };
+      return {
+        received: 0, flushed: 0, dropped: 0, pending: 0, lost: -1,
+        errors: { hubDbFallback: 0, autoAssignFailed: 0, noOrgSlug: 0, workerLogFailed: 0, cronBatchFailed: 0, total: 0 },
+      };
+    }
+  }),
+
+  /**
+   * Get recent error log entries (last 200).
+   */
+  getRecentErrors: adminProcedure.query(async () => {
+    try {
+      const raw = await redis.lrange(KEYS.errorLog(), 0, 199);
+      return (raw ?? []).map((entry: string) => {
+        try {
+          return JSON.parse(entry) as {
+            ts: string;
+            type: string;
+            bandId: string | null;
+            eventId: string | null;
+            reason: string;
+            redirectTo: string | null;
+          };
+        } catch {
+          return null;
+        }
+      }).filter(Boolean) as Array<{
+        ts: string;
+        type: string;
+        bandId: string | null;
+        eventId: string | null;
+        reason: string;
+        redirectTo: string | null;
+      }>;
+    } catch (error) {
+      console.error("getRecentErrors failed:", error);
+      return [];
+    }
+  }),
+
+  /**
+   * Reset all error counters and the error log.
+   */
+  resetErrorCounters: adminProcedure.mutation(async () => {
+    try {
+      await redis.del(
+        KEYS.errorCounter("hub_db_fallback"),
+        KEYS.errorCounter("auto_assign_failed"),
+        KEYS.errorCounter("no_org_slug"),
+        KEYS.errorCounter("worker_log_failed"),
+        KEYS.errorCounter("cron_batch_failed"),
+        KEYS.errorLog(),
+      );
+      return { success: true };
+    } catch (error) {
+      console.error("resetErrorCounters failed:", error);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to reset error counters",
+      });
     }
   }),
 

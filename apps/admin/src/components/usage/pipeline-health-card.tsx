@@ -4,12 +4,28 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@sparkmotion/ui/card";
 import { Skeleton } from "@sparkmotion/ui/skeleton";
 import { Badge } from "@sparkmotion/ui/badge";
+import { Button } from "@sparkmotion/ui/button";
+
+const ERROR_LABELS: Record<string, string> = {
+  hubDbFallback: "DB Fallback",
+  autoAssignFailed: "Auto-Assign",
+  noOrgSlug: "No Org Slug",
+  workerLogFailed: "Worker Log",
+  cronBatchFailed: "Cron Batch",
+};
 
 export function PipelineHealthCard() {
   const { data, isLoading } = trpc.infrastructure.getTapPipelineHealth.useQuery(
     undefined,
     { refetchInterval: 10_000 }
   );
+  const utils = trpc.useUtils();
+  const reset = trpc.infrastructure.resetErrorCounters.useMutation({
+    onSuccess: () => {
+      utils.infrastructure.getTapPipelineHealth.invalidate();
+      utils.infrastructure.getRecentErrors.invalidate();
+    },
+  });
 
   if (isLoading) {
     return (
@@ -26,6 +42,7 @@ export function PipelineHealthCard() {
 
   const unavailable = data?.lost === -1;
   const healthy = data?.lost === 0;
+  const hasErrors = (data?.errors?.total ?? 0) > 0;
 
   return (
     <Card>
@@ -50,6 +67,38 @@ export function PipelineHealthCard() {
           <p className="mt-3 text-xs text-muted-foreground">
             Lost = Received - Flushed - Dropped - Pending
           </p>
+        )}
+
+        {hasErrors && data?.errors && (
+          <>
+            <div className="mt-4 border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium">
+                  Redirect Errors{" "}
+                  <span className="text-muted-foreground">({data.errors.total.toLocaleString()})</span>
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => reset.mutate()}
+                  disabled={reset.isPending}
+                >
+                  {reset.isPending ? "Resetting..." : "Reset"}
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                {Object.entries(ERROR_LABELS).map(([key, label]) => {
+                  const value = data.errors[key as keyof typeof data.errors] as number;
+                  if (value === 0) return null;
+                  return <Stat key={key} label={label} value={value} />;
+                })}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground" title="Worker log failures may be undercounted if Upstash was fully unreachable.">
+                Worker errors may be undercounted if Upstash was fully down
+              </p>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>

@@ -187,6 +187,23 @@ export async function GET(request: NextRequest) {
           pipeline.rpush(key, item);
         }
         await pipeline.exec();
+
+        // Fire-and-forget: track the batch failure for monitoring
+        Promise.all([
+          redis.incr(KEYS.errorCounter("cron_batch_failed")),
+          redis.lpush(
+            KEYS.errorLog(),
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              type: "cron_batch_failed",
+              bandId: null,
+              eventId: null,
+              reason: `Batch ${batchCount + 1} failed, re-queued ${items.length} items: ${String(batchError)}`,
+              redirectTo: null,
+            }),
+          ),
+          redis.ltrim(KEYS.errorLog(), 0, 199),
+        ]).catch(console.error);
       }
     }
 

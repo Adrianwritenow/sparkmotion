@@ -207,5 +207,16 @@ async function logTap(env: Env, bandId: string, entry: KVEntry, request: Request
     await pipeline.exec();
   } catch (err) {
     console.error("Upstash analytics failed:", err);
+    // Best-effort error counter. If Upstash is fully unreachable, this also
+    // fails — accepted limitation (counter will undercount in that scenario).
+    try {
+      const upstash = getRedis(env);
+      const p = upstash.pipeline();
+      p.incr("monitoring:errors:worker_log_failed");
+      p.hincrby(`monitoring:errors:event:${eventId}`, "worker_log_failed", 1);
+      await p.exec();
+    } catch {
+      // Upstash fully down — nothing we can do
+    }
   }
 }
