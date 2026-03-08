@@ -10,6 +10,33 @@ import {
 import { db, Prisma } from "@sparkmotion/database";
 
 const FALLBACK_URL = "https://sparkmotion.net";
+const ERROR_LOG_MAX = 200;
+
+/** Fire-and-forget: increment error counter + push to error log list. */
+function trackError(
+  type: string,
+  bandId: string | null,
+  eventId: string | null,
+  reason: string,
+  redirectTo: string | null,
+) {
+  const promise = Promise.all([
+    redis.incr(KEYS.errorCounter(type)),
+    redis.lpush(
+      KEYS.errorLog(),
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        type,
+        bandId,
+        eventId,
+        reason,
+        redirectTo,
+      }),
+    ),
+    redis.ltrim(KEYS.errorLog(), 0, ERROR_LOG_MAX - 1),
+  ]).catch(console.error);
+  waitUntil(promise);
+}
 const FLAGGED_DISTANCE_MILES = 100;
 const FLAGGED_DISTANCE_MILES_SAME_DAY = 500;
 
@@ -359,6 +386,7 @@ function logTapAsync(
         utmContent: params.utmContent,
       })
     ),
+    redis.incr(KEYS.tapsReceived()),
   ]).then(() => {
     // In dev, auto-flush on a throttled interval (like production cron)
     if (process.env.NODE_ENV === "development") {
@@ -556,11 +584,13 @@ export async function GET(request: NextRequest) {
 
           const dest = org?.websiteUrl || FALLBACK_URL;
           console.log(`[Hub] No events for org ${orgSlug}, redirecting to: ${dest}`);
+          trackError("auto_assign_failed", bandId, null, `No ACTIVE events for org ${orgSlug}`, dest);
           return NextResponse.redirect(dest, 302);
         }
       } else {
         // No org slug (localhost or invalid subdomain), redirect to fallback
         console.log(`[Hub] No org slug found for hostname ${hostname}, redirecting to fallback`);
+        trackError("no_org_slug", bandId, null, `No org slug for hostname ${hostname}`, FALLBACK_URL);
         return NextResponse.redirect(FALLBACK_URL, 302);
       }
     }
@@ -640,16 +670,18 @@ export async function GET(request: NextRequest) {
     // Graceful fallback: redirect to org website or generic fallback
     const hostname = request.headers.get("host") || "";
     const orgSlug = extractOrgSlug(hostname);
+    let dest = FALLBACK_URL;
     if (orgSlug) {
       try {
         const org = await db.organization.findUnique({
           where: { slug: orgSlug, deletedAt: null },
           select: { websiteUrl: true },
         });
-        if (org?.websiteUrl) return NextResponse.redirect(org.websiteUrl, 302);
+        if (org?.websiteUrl) dest = org.websiteUrl;
       } catch { /* DB still down, use hardcoded fallback */ }
     }
-    return NextResponse.redirect(FALLBACK_URL, 302);
+    trackError("hub_db_fallback", bandId, null, String(dbError), dest);
+    return NextResponse.redirect(dest, 302);
    }
   }
 

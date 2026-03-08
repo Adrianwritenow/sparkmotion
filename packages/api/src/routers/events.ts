@@ -149,6 +149,7 @@ export const eventsRouter = router({
         startDate: z.date().optional(),
         endDate: z.date().optional(),
         campaignId: z.string().optional(),
+        autoLifecycle: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -190,6 +191,7 @@ export const eventsRouter = router({
         timezone: z.string().nullable().optional(),
         scheduleMode: z.boolean().optional(),
         assignOnFlag: z.boolean().optional(),
+        autoLifecycle: z.boolean().optional(),
         status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
         estimatedAttendees: z.number().int().positive().nullable().optional(),
         startDate: z.date().nullable().optional(),
@@ -379,6 +381,7 @@ export const eventsRouter = router({
               longitude: event.longitude,
               timezone: event.timezone,
               scheduleMode: event.scheduleMode,
+              autoLifecycle: event.autoLifecycle,
               fallbackUrl: event.fallbackUrl,
               estimatedAttendees: event.estimatedAttendees,
               startDate: event.startDate,
@@ -418,6 +421,23 @@ export const eventsRouter = router({
 
       invalidateEventCache(input.eventId).catch(console.error);
       return { deleted: result.count };
+    }),
+
+  toggleAutoLifecycleByCampaign: protectedProcedure
+    .input(z.object({ campaignId: z.string(), enabled: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const campaign = await db.campaign.findUniqueOrThrow({
+        where: { id: input.campaignId, ...ACTIVE },
+        select: { orgId: true },
+      });
+      enforceOrgAccess(ctx, campaign.orgId);
+
+      const result = await db.event.updateMany({
+        where: { campaignId: input.campaignId, ...ACTIVE },
+        data: { autoLifecycle: input.enabled },
+      });
+
+      return { updated: result.count };
     }),
 
   ...createTrashProcedures({

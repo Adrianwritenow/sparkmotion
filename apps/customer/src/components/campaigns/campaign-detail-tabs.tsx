@@ -21,6 +21,7 @@ interface CampaignDetailTabsProps {
       _count: { bands: number };
       tapCount?: number;
       engagementPercent?: number;
+      autoLifecycle?: boolean;
     }>;
     _count: { events: number };
     aggregateEngagement?: number;

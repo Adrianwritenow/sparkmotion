@@ -3,8 +3,10 @@
 export const dynamic = "force-dynamic";
 
 import { CurrentActivityCard } from "@/components/usage/current-activity-card";
+import { PipelineHealthCard } from "@/components/usage/pipeline-health-card";
 import { InfrastructureControlCard } from "@/components/usage/infrastructure-control-card";
 import { UpcomingEventsCard } from "@/components/usage/upcoming-events-card";
+import { RecentErrorsCard } from "@/components/usage/recent-errors-card";
 
 export default function UsagePage() {
   return (
@@ -17,12 +19,14 @@ export default function UsagePage() {
         {/* Left column */}
         <div className="space-y-6">
           <CurrentActivityCard />
+          <PipelineHealthCard />
           <InfrastructureControlCard />
         </div>
 
         {/* Right column */}
         <div className="space-y-6">
           <UpcomingEventsCard />
+          <RecentErrorsCard />
         </div>
       </div>
     </div>
