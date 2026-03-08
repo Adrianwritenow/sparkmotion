@@ -206,7 +206,7 @@ export const bandsRouter = router({
       // Skip if band is already assigned to the target event
       if (band.eventId === input.eventId) return band;
 
-      const activeWindow = targetEvent.windows[0];
+      const activeWindow = targetEvent.windows?.[0];
       const seedMode = activeWindow?.windowType.toLowerCase() ?? "pre";
       const seedUrl = activeWindow?.url ?? targetEvent.fallbackUrl ?? targetEvent.org?.websiteUrl ?? "https://sparkmotion.net";
 
@@ -374,7 +374,7 @@ export const bandsRouter = router({
       });
 
       // Create seed TapLog for each reassigned band
-      const activeWindow = targetEvent.windows[0];
+      const activeWindow = targetEvent.windows?.[0];
       const seedMode = activeWindow?.windowType.toLowerCase() ?? "pre";
       const seedUrl = activeWindow?.url ?? targetEvent.fallbackUrl ?? targetEvent.org?.websiteUrl ?? "https://sparkmotion.net";
       await db.tapLog.createMany({
