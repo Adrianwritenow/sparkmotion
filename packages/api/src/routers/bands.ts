@@ -414,14 +414,14 @@ export const bandsRouter = router({
           resourceId: targetEventId,
           oldValue: {
             bandCount: sourceBandPKs.length,
-            bandIds: sourceBandPKs,
+            bandIds: sourceBandIds,
             sourceEvents: (sourceEvents ?? []).map((e) => ({ id: e.id, name: e.name })),
             bandsBySourceEvent,
           } as unknown as Prisma.InputJsonValue,
           newValue: {
             bandCount: result.count,
             targetEvent: { id: targetEventId, name: targetEvent!.name },
-            bandIds: sourceBandPKs,
+            bandIds: sourceBandIds,
           } as unknown as Prisma.InputJsonValue,
           ipAddress: ctx.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
           userAgent: ctx.headers?.get("user-agent") ?? null,
