@@ -6,6 +6,7 @@ import { Plus, LinkIcon } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@sparkmotion/ui/button";
 import { Switch } from "@sparkmotion/ui/switch";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -60,10 +61,19 @@ export function CampaignEventsTab({
   const allAutoLifecycle = events.length > 0 && events.every(e => e.autoLifecycle);
 
   const toggleAutoLifecycle = trpc.events.toggleAutoLifecycleByCampaign.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.campaigns.byId.invalidate({ id: campaignId });
       utils.events.list.invalidate();
       router.refresh();
+      if (data.skipped && data.skipped.length > 0) {
+        const skippedList = data.skipped.map((s: { name: string; reason: string }) => `${s.name}: ${s.reason}`).join("\n");
+        toast.warning(`${data.updated} event${data.updated !== 1 ? "s" : ""} enabled. ${data.skipped.length} skipped:`, {
+          description: skippedList,
+          duration: 8000,
+        });
+      } else if (data.updated > 0) {
+        toast.success(`Auto-lifecycle ${data.updated > 0 ? "enabled" : "disabled"} for ${data.updated} event${data.updated !== 1 ? "s" : ""}`);
+      }
     },
   });
 
@@ -102,7 +112,7 @@ export function CampaignEventsTab({
           <div>
             <p className="text-sm font-medium">Auto-Lifecycle</p>
             <p className="text-xs text-muted-foreground">
-              Automatically activate on start date and complete on end date for all events
+              Automatically activate each event when its first window starts, and complete when the next event in the tour begins
             </p>
           </div>
           <Switch
