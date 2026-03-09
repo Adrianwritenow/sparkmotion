@@ -10,8 +10,15 @@ import {
   Megaphone,
   MapPin,
   TrendingUp,
+  Clock,
 } from "lucide-react";
 import { Checkbox } from "@sparkmotion/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@sparkmotion/ui/tooltip";
 
 interface EventCardListProps {
   events: Array<{
@@ -30,6 +37,7 @@ interface EventCardListProps {
     _count: { bands: number };
     tapCount?: number;
     engagementPercent?: number;
+    autoLifecycle?: boolean;
     campaign?: { id: string; name: string } | null;
   }>;
   showOrg?: boolean;
@@ -87,6 +95,7 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
   const campaignSuffix = campaignId ? `from=campaign&campaignId=${campaignId}` : "";
 
   return (
+    <TooltipProvider>
     <div className="space-y-4">
       {events.map((event) => {
         const isLive = event.windows?.some((w: any) => w.isActive) ?? false;
@@ -142,6 +151,29 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
                 })()}
               </span>
             </div>
+            {event.autoLifecycle && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 cursor-default">
+                    <Clock className="w-4 h-4 text-primary/70" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="font-medium">Auto-lifecycle enabled</p>
+                  {event.windows?.[0]?.startTime && (
+                    <p className="text-xs opacity-80">
+                      Activates{" "}
+                      {new Date(event.windows[0].startTime).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {showOrg && event.org && (
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4" />
@@ -226,5 +258,6 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
         );
       })}
     </div>
+    </TooltipProvider>
   );
 }
