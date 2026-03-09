@@ -10,7 +10,7 @@ import { EventsAnalytics } from "./events-analytics";
 import { BandsTable } from "../bands/bands-table";
 import { BandCsvUpload } from "../bands/band-csv-upload";
 import { BandTrashButton } from "../bands/band-trash-button";
-import { Megaphone, Copy, Check } from "lucide-react";
+import { Megaphone, Copy, Check, X } from "lucide-react";
 import type { Event } from "@sparkmotion/database";
 
 interface EventDetailTabsProps {
@@ -21,9 +21,11 @@ interface EventDetailTabsProps {
     campaign?: { id: string; name: string } | null;
     campaignId?: string | null;
     _count: { bands: number };
+    windows?: Array<{ startTime?: Date | null; endTime?: Date | null }>;
   };
   activeTab: string;
   campaigns: Array<{ id: string; name: string }>;
+  recentTransition?: { action: string; createdAt: Date } | null;
 }
 
 const tabs = [
@@ -34,9 +36,10 @@ const tabs = [
   { id: "settings", label: "Settings" },
 ];
 
-export function EventDetailTabs({ event, activeTab, campaigns }: EventDetailTabsProps) {
+export function EventDetailTabs({ event, activeTab, campaigns, recentTransition }: EventDetailTabsProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [transitionDismissed, setTransitionDismissed] = useState(false);
 
   const sampleRedirectUrl = `https://${process.env.NEXT_PUBLIC_SPARK_MOTION_URL || "sparkmotion.net"}/e?bandId=****&eventId=${event.id}&orgId=${event.orgId}`;
 
@@ -75,6 +78,29 @@ export function EventDetailTabs({ event, activeTab, campaigns }: EventDetailTabs
       <div className="min-h-[400px]">
         {activeTab === "overview" && (
           <div className="bg-card border border-border rounded-lg p-6">
+            {recentTransition && !transitionDismissed && (
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-3 mb-4">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Auto-lifecycle: Status changed to{" "}
+                  <strong>
+                    {recentTransition.action.includes("draft_to_active") ? "ACTIVE" : "COMPLETED"}
+                  </strong>{" "}
+                  at{" "}
+                  {new Date(recentTransition.createdAt).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+                <button
+                  onClick={() => setTransitionDismissed(true)}
+                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200 ml-4"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             {event.campaign && (
               <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <Megaphone className="w-4 h-4" />
@@ -144,7 +170,18 @@ export function EventDetailTabs({ event, activeTab, campaigns }: EventDetailTabs
         )}
 
         {activeTab === "settings" && (
-          <EventSettings event={event} />
+          <EventSettings
+            event={{
+              ...event,
+              autoLifecycle: (event as any).autoLifecycle ?? false,
+              campaignId: event.campaignId ?? null,
+              startDate: event.startDate ?? null,
+              endDate: event.endDate ?? null,
+              hasWindowsWithTimes: (event as any).windows?.some(
+                (w: any) => w.startTime && w.endTime
+              ) ?? false,
+            }}
+          />
         )}
       </div>
     </>
