@@ -272,6 +272,16 @@ Plans:
 Plans:
 - [x] TBD (run /gsd:plan-phase 37 to break down) (completed 2026-03-04)
 
+### Phase 38: Update auto-lifecycle to use next event start time instead of event start/end dates
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 37
+**Plans:** 1/3 plans executed
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 38 to break down)
+
 ---
 
 _For project context, see .planning/PROJECT.md_
