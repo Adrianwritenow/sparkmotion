@@ -667,21 +667,8 @@ export async function GET(request: NextRequest) {
     }
    } catch (dbError) {
     console.error(`[Hub] DB error for band ${bandId}:`, dbError);
-    // Graceful fallback: redirect to org website or generic fallback
-    const hostname = request.headers.get("host") || "";
-    const orgSlug = extractOrgSlug(hostname);
-    let dest = FALLBACK_URL;
-    if (orgSlug) {
-      try {
-        const org = await db.organization.findUnique({
-          where: { slug: orgSlug, deletedAt: null },
-          select: { websiteUrl: true },
-        });
-        if (org?.websiteUrl) dest = org.websiteUrl;
-      } catch { /* DB still down, use hardcoded fallback */ }
-    }
-    trackError("hub_db_fallback", bandId, null, String(dbError), dest);
-    return NextResponse.redirect(dest, 302);
+    trackError("hub_db_fallback", bandId, null, String(dbError), FALLBACK_URL);
+    return NextResponse.redirect(FALLBACK_URL, 302);
    }
   }
 
