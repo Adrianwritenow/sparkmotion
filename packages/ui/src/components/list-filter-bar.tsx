@@ -3,16 +3,16 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { Search, X } from "lucide-react";
-import { Input } from "@sparkmotion/ui/input";
-import { Button } from "@sparkmotion/ui/button";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@sparkmotion/ui/select";
-import { useDebounce } from "@sparkmotion/ui";
+} from "./ui/select";
+import { useDebounce } from "../hooks/use-debounce";
 
 interface ListFilterBarProps {
   statusOptions?: { value: string; label: string }[];

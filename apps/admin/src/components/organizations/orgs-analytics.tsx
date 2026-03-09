@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@sparkmotion/ui/select";
-import { DateRangeFilter } from "@/components/analytics/date-range-filter";
+import { DateRangeFilter } from "@sparkmotion/ui";
 import { KpiCards } from "@/components/analytics/kpi-cards";
 import { TapTrendChart } from "@/components/analytics/tap-trend-chart";
 import { TopOrgsTable } from "@/components/analytics/top-orgs-table";

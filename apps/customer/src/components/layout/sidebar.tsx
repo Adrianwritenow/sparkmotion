@@ -18,7 +18,7 @@ import { signOut, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 
 import Link from "next/link";
-import { SmLogotype } from "@/components/sm-logotype";
+import { SmLogotype } from "@sparkmotion/ui";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "next-themes";
 

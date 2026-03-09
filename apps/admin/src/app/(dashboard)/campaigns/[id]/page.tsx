@@ -12,15 +12,19 @@ export default async function CampaignDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { tab?: string };
+  searchParams: { tab?: string; sort?: string; dir?: string };
 }) {
+  const VALID_SORTS = ["createdAt", "startDate", "endDate"] as const;
+  const sortField = VALID_SORTS.includes(searchParams.sort as any) ? searchParams.sort! : "startDate";
+  const sortDir = searchParams.dir === "desc" ? "desc" : "asc";
+
   const campaign = await db.campaign.findUnique({
     where: { id: params.id, deletedAt: null },
     include: {
       org: { select: { name: true } },
       events: {
         where: { deletedAt: null },
-        orderBy: { createdAt: "desc" },
+        orderBy: { [sortField]: sortDir },
         include: {
           org: { select: { name: true } },
           _count: { select: { bands: { where: { deletedAt: null } } } },

@@ -39,6 +39,7 @@ interface EventListWithActionsProps {
   showCampaign?: boolean;
   orgName: string;
   totalCount?: number;
+  campaignId?: string;
 }
 
 const EVENT_SORT_OPTIONS = [
@@ -47,7 +48,7 @@ const EVENT_SORT_OPTIONS = [
   { value: "endDate", label: "End Date" },
 ];
 
-export function EventListWithActions({ events, showOrg, showCampaign, orgName, totalCount }: EventListWithActionsProps) {
+export function EventListWithActions({ events, showOrg, showCampaign, orgName, totalCount, campaignId }: EventListWithActionsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const utils = trpc.useUtils();
@@ -234,6 +235,7 @@ export function EventListWithActions({ events, showOrg, showCampaign, orgName, t
         selectable={true}
         selectedIds={selectedIds}
         onSelectionChange={handleSelectionChange}
+        campaignId={campaignId}
       />
 
       {/* Floating Action Bar */}

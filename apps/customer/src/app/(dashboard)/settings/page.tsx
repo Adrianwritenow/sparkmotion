@@ -3,7 +3,7 @@ import { User } from "lucide-react";
 import { OrgNameForm } from "@/components/settings/org-name-form";
 import { OrgWebsiteUrlForm } from "@/components/settings/org-website-url-form";
 import { ProfileForm } from "@/components/settings/profile-form";
-import { TimezoneSelector } from "@/components/settings/timezone-selector";
+import { TimezoneSelectorConnected } from "@/components/settings/timezone-selector";
 import { auth } from "@sparkmotion/auth";
 import { db } from "@sparkmotion/database";
 
@@ -109,7 +109,7 @@ export default async function SettingsPage() {
             </h2>
             <div className="space-y-6">
               {/* Working timezone preference */}
-              <TimezoneSelector />
+              <TimezoneSelectorConnected />
             </div>
           </div>
         </div>
