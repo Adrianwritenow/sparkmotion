@@ -62,11 +62,12 @@ None — all work was pre-completed during Plan 38-02 per Rule 2 (missing critic
 |------|-------------|
 | 9b08001 | feat(38-02): move autoLifecycle to Settings tab (customer files included) |
 | c42377a | feat(38-03): mirror auto-lifecycle admin UI changes in customer app |
+| b9f564c | feat(38-03): add Clock icon with tooltip to customer event cards |
 
 ## Self-Check: PASSED
 
 - customer event-settings.tsx has Auto-Lifecycle: CONFIRMED
-- customer event-card-list.tsx has Clock icon: CONFIRMED
+- customer event-card-list.tsx has Clock icon: CONFIRMED (committed b9f564c)
 - customer campaign-events-tab.tsx has "first window starts": CONFIRMED
 - customer page.tsx has changeLog.findFirst: CONFIRMED
 - customer event-detail-tabs.tsx has transitionDismissed: CONFIRMED
