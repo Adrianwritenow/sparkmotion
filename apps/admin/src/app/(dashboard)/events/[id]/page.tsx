@@ -1,7 +1,7 @@
 import { db } from "@sparkmotion/database";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, Calendar, MapPin } from "lucide-react";
+import { Building2, Calendar, MapPin } from "lucide-react";
+import { BackButton } from "@sparkmotion/ui";
 import { EventDetailTabs } from "@/components/events/event-detail-tabs";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export default async function EventDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { tab?: string };
+  searchParams: { tab?: string; from?: string; campaignId?: string };
 }) {
   const event = await db.event.findUnique({
     where: { id: params.id, deletedAt: null },
@@ -34,6 +34,9 @@ export default async function EventDetailPage({
   });
 
   const activeTab = searchParams.tab || "overview";
+  const fromCampaign = searchParams.from === "campaign" && searchParams.campaignId;
+  const backLabel = fromCampaign ? "Back to Campaign Events" : "Back to Events";
+  const backHref = fromCampaign ? `/campaigns/${searchParams.campaignId}?tab=events` : "/events";
 
   // Status badge component
   const statusConfig = {
@@ -65,13 +68,7 @@ export default async function EventDetailPage({
   return (
     <div className="space-y-6">
       {/* Back Button */}
-      <Link
-        href="/events"
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Events
-      </Link>
+      <BackButton label={backLabel} fallbackHref={backHref} />
 
       {/* Event Header */}
       <div className="flex flex-col md:flex-row gap-6 items-start justify-between">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, LinkIcon } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@sparkmotion/ui/button";
+import { Switch } from "@sparkmotion/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ interface CampaignEventsTabProps {
     _count: { bands: number };
     tapCount?: number;
     engagementPercent?: number;
+    autoLifecycle?: boolean;
   }>;
   orgs: Array<{ id: string; name: string }>;
   campaigns: Array<{ id: string; name: string }>;
@@ -54,6 +56,16 @@ export function CampaignEventsTab({
     { campaignId },
     { enabled: addDialogOpen }
   );
+
+  const allAutoLifecycle = events.length > 0 && events.every(e => e.autoLifecycle);
+
+  const toggleAutoLifecycle = trpc.events.toggleAutoLifecycleByCampaign.useMutation({
+    onSuccess: () => {
+      utils.campaigns.byId.invalidate({ id: campaignId });
+      utils.events.list.invalidate();
+      router.refresh();
+    },
+  });
 
   const addEvents = trpc.campaigns.addEvents.useMutation({
     onSuccess: () => {
@@ -84,9 +96,28 @@ export function CampaignEventsTab({
         </Button>
       </div>
 
+      {/* Auto-Lifecycle Bulk Toggle */}
+      {events.length > 0 && (
+        <div className="flex items-center justify-between bg-muted/50 border rounded-lg px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Auto-Lifecycle</p>
+            <p className="text-xs text-muted-foreground">
+              Automatically activate on start date and complete on end date for all events
+            </p>
+          </div>
+          <Switch
+            checked={allAutoLifecycle}
+            disabled={toggleAutoLifecycle.isPending}
+            onCheckedChange={(checked) =>
+              toggleAutoLifecycle.mutate({ campaignId, enabled: checked })
+            }
+          />
+        </div>
+      )}
+
       {/* Event List */}
       {events.length > 0 ? (
-        <EventListWithActions events={events} showOrg={false} />
+        <EventListWithActions events={events} showOrg={false} campaignId={campaignId} />
       ) : (
         <div className="bg-card border border-border rounded-lg p-12 text-center">
           <p className="text-muted-foreground">

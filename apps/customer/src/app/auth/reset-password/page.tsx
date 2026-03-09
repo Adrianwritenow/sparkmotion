@@ -8,7 +8,7 @@ import { signOut, useSession } from "next-auth/react";
 import { Button } from "@sparkmotion/ui/button";
 import { Input } from "@sparkmotion/ui/input";
 import { Label } from "@sparkmotion/ui/label";
-import { SmLogotype } from "@/components/sm-logotype";
+import { SmLogotype } from "@sparkmotion/ui";
 import { trpc } from "@/lib/trpc";
 
 const PASSWORD_RULES = [

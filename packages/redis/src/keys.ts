@@ -12,4 +12,10 @@ export const KEYS = {
   tapLogPending: () => "tap-log:pending" as const,
   resetRateLimit: (email: string) => `rate:reset:${email}` as const,
   loginLockout: (email: string) => `lockout:${email}` as const,
+  tapsReceived: () => "monitoring:taps:received" as const,
+  tapsFlushed: () => "monitoring:taps:flushed" as const,
+  tapsDropped: () => "monitoring:taps:dropped" as const,
+  errorCounter: (type: string) => `monitoring:errors:${type}` as const,
+  errorEventHash: (eventId: string) => `monitoring:errors:event:${eventId}` as const,
+  errorLog: () => "monitoring:errors:log" as const,
 } as const;

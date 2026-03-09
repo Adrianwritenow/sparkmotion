@@ -1,16 +1,9 @@
 'use client';
-import { trpc } from '@/lib/trpc';
-import { Label } from '@sparkmotion/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@sparkmotion/ui/select';
-import { US_TIMEZONES } from '@sparkmotion/ui';
 
-export function TimezoneSelector() {
+import { trpc } from '@/lib/trpc';
+import { TimezoneSelector } from '@sparkmotion/ui';
+
+export function TimezoneSelectorConnected() {
   const { data: user } = trpc.users.me.useQuery();
   const utils = trpc.useUtils();
   const updateTimezone = trpc.users.updateTimezone.useMutation({
@@ -23,32 +16,11 @@ export function TimezoneSelector() {
   const selectedTimezone = user?.timezone || browserTimezone;
 
   return (
-    <div className="space-y-2">
-      <Label>Timezone Preference</Label>
-      <p className="text-xs text-muted-foreground">
-        Times display in the event timezone. Hover to see your preferred timezone.
-      </p>
-      <Select
-        value={selectedTimezone}
-        onValueChange={(value) => updateTimezone.mutate({ timezone: value })}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Select timezone" />
-        </SelectTrigger>
-        <SelectContent>
-          {US_TIMEZONES.map((tz) => (
-            <SelectItem key={tz.value} value={tz.value}>
-              {tz.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {updateTimezone.isSuccess && (
-        <p className="text-xs text-green-600">Timezone saved</p>
-      )}
-      {updateTimezone.isError && (
-        <p className="text-xs text-destructive">Failed to save timezone</p>
-      )}
-    </div>
+    <TimezoneSelector
+      value={selectedTimezone}
+      onValueChange={(tz) => updateTimezone.mutate({ timezone: tz })}
+      isSuccess={updateTimezone.isSuccess}
+      isError={updateTimezone.isError}
+    />
   );
 }

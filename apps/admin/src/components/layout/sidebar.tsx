@@ -3,6 +3,7 @@
 import {
   Building2,
   CalendarDays,
+  BarChart3,
   ClipboardList,
   Disc3,
   LayoutDashboard,
@@ -21,7 +22,7 @@ import { signOut, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 
 import Link from "next/link";
-import { SmLogotype } from "@/components/sm-logotype";
+import { SmLogotype } from "@sparkmotion/ui";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "next-themes";
 
@@ -54,6 +55,7 @@ export function Sidebar({ isMobile = false }: SidebarProps) {
     { href: "/campaigns", label: "Campaigns", icon: Megaphone },
     { href: "/activity", label: "Activity", icon: Disc3, showAlert: (flaggedCount ?? 0) > 0 },
     { href: "/users", label: "Users", icon: Users },
+    { href: "/usage", label: "Usage", icon: BarChart3 },
     { href: "/change-log", label: "Change Log", icon: ClipboardList },
   ];
 

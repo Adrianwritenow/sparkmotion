@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
 
   const startTime = Date.now();
   let totalFlushed = 0;
+  let totalDropped = 0;
   let batchCount = 0;
   let failedBatches = 0;
 
@@ -104,6 +105,7 @@ export async function GET(request: NextRequest) {
         const droppedCount = taps.length - tapLogData.length;
         if (droppedCount > 0) {
           console.warn(`flush-taps: ${droppedCount} taps dropped (unknown bandIds)`);
+          totalDropped += droppedCount;
         }
 
         // Aggregate per-band updates
@@ -170,7 +172,7 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        totalFlushed += taps.length;
+        totalFlushed += tapLogData.length;
         batchCount++;
       } catch (batchError) {
         failedBatches++;
@@ -185,19 +187,45 @@ export async function GET(request: NextRequest) {
           pipeline.rpush(key, item);
         }
         await pipeline.exec();
+
+        // Fire-and-forget: track the batch failure for monitoring
+        Promise.all([
+          redis.incr(KEYS.errorCounter("cron_batch_failed")),
+          redis.lpush(
+            KEYS.errorLog(),
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              type: "cron_batch_failed",
+              bandId: null,
+              eventId: null,
+              reason: `Batch ${batchCount + 1} failed, re-queued ${items.length} items: ${String(batchError)}`,
+              redirectTo: null,
+            }),
+          ),
+          redis.ltrim(KEYS.errorLog(), 0, 199),
+        ]).catch(console.error);
       }
+    }
+
+    // Update monitoring counters (fire-and-forget)
+    if (totalFlushed > 0 || totalDropped > 0) {
+      const monPipeline = redis.pipeline();
+      if (totalFlushed > 0) monPipeline.incrby(KEYS.tapsFlushed(), totalFlushed);
+      if (totalDropped > 0) monPipeline.incrby(KEYS.tapsDropped(), totalDropped);
+      monPipeline.exec().catch(console.error);
     }
 
     const remaining = await redis.llen(key);
 
     console.log(
-      `flush-taps: ${totalFlushed} taps flushed in ${batchCount} batches, ` +
+      `flush-taps: ${totalFlushed} taps flushed, ${totalDropped} dropped in ${batchCount} batches, ` +
         `${failedBatches} failed, ${remaining} remaining (${Date.now() - startTime}ms)`
     );
 
     return NextResponse.json({
       success: true,
       flushed: totalFlushed,
+      dropped: totalDropped,
       batches: batchCount,
       failedBatches,
       remaining,

@@ -2,7 +2,7 @@ import { db } from "@sparkmotion/database";
 import Link from "next/link";
 import { Building2, Users, ArrowUpRight, Calendar } from "lucide-react";
 import { AddOrgButton } from "@/components/organizations/add-org-button";
-import { ListFilterBar } from "@/components/list-filter-bar";
+import { ListFilterBar } from "@sparkmotion/ui";
 import { OrgActions } from "@/components/organizations/org-actions";
 import { OrgTrashButton } from "@/components/organizations/org-trash-button";
 
