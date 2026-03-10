@@ -3,10 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, LinkIcon } from "lucide-react";
-import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@sparkmotion/ui/button";
-import { Switch } from "@sparkmotion/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +31,6 @@ interface CampaignEventsTabProps {
     _count: { bands: number };
     tapCount?: number;
     engagementPercent?: number;
-    autoLifecycle?: boolean;
   }>;
   campaigns: Array<{ id: string; name: string }>;
   orgName: string;
@@ -57,25 +54,6 @@ export function CampaignEventsTab({
     { campaignId },
     { enabled: addDialogOpen }
   );
-
-  const allAutoLifecycle = events.length > 0 && events.every(e => e.autoLifecycle);
-
-  const toggleAutoLifecycle = trpc.events.toggleAutoLifecycleByCampaign.useMutation({
-    onSuccess: (data) => {
-      utils.campaigns.byId.invalidate({ id: campaignId });
-      utils.events.list.invalidate();
-      router.refresh();
-      if (data.skipped && data.skipped.length > 0) {
-        const skippedList = data.skipped.map((s: { name: string; reason: string }) => `${s.name}: ${s.reason}`).join("\n");
-        toast.warning(`${data.updated} event${data.updated !== 1 ? "s" : ""} enabled. ${data.skipped.length} skipped:`, {
-          description: skippedList,
-          duration: 8000,
-        });
-      } else if (data.updated > 0) {
-        toast.success(`Auto-lifecycle ${data.updated > 0 ? "enabled" : "disabled"} for ${data.updated} event${data.updated !== 1 ? "s" : ""}`);
-      }
-    },
-  });
 
   const addEvents = trpc.campaigns.addEvents.useMutation({
     onSuccess: () => {
@@ -105,25 +83,6 @@ export function CampaignEventsTab({
           Create Event
         </Button>
       </div>
-
-      {/* Auto-Lifecycle Bulk Toggle */}
-      {events.length > 0 && (
-        <div className="flex items-center justify-between bg-muted/50 border rounded-lg px-4 py-3">
-          <div>
-            <p className="text-sm font-medium">Auto-Lifecycle</p>
-            <p className="text-xs text-muted-foreground">
-              Automatically activate each event when its first window starts, and complete when the next event in the tour begins
-            </p>
-          </div>
-          <Switch
-            checked={allAutoLifecycle}
-            disabled={toggleAutoLifecycle.isPending}
-            onCheckedChange={(checked) =>
-              toggleAutoLifecycle.mutate({ campaignId, enabled: checked })
-            }
-          />
-        </div>
-      )}
 
       {/* Event List */}
       {events.length > 0 ? (
