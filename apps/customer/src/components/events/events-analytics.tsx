@@ -77,14 +77,30 @@ const windowTypeTapsConfig = {
 } satisfies ChartConfig;
 
 
+/** Convert a datetime-local value (event-local wall-clock) to correct UTC ISO string. */
+function eventLocalToUtcIso(datetimeLocal: string, tz: string): string {
+  const asUtc = new Date(datetimeLocal + "Z");
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(asUtc);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  const tzIso = `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}Z`;
+  const offsetMs = asUtc.getTime() - new Date(tzIso).getTime();
+  return new Date(asUtc.getTime() + offsetMs).toISOString();
+}
+
 interface EventsAnalyticsProps {
   eventId: string;
   eventName: string;
   orgName: string;
   estimatedAttendees: number | null;
+  eventTimezone: string;
 }
 
-export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendees }: EventsAnalyticsProps) {
+export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendees, eventTimezone }: EventsAnalyticsProps) {
   const captureRef = useRef<HTMLDivElement>(null);
   const [selectedWindowIds, setSelectedWindowIds] = useState<string[]>(["all"]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -132,10 +148,10 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
   const singleWindowId = activeWindowIds.length === 1 ? activeWindowIds[0] : undefined;
 
   const derivedFrom =
-    (customFrom ? `${customFrom}:00.000Z` : undefined) ||
+    (customFrom ? eventLocalToUtcIso(customFrom, eventTimezone) : undefined) ||
     (dateRange?.from ? format(dateRange.from, "yyyy-MM-dd'T'00:00:00.000'Z'") : undefined);
   const derivedTo =
-    (customTo ? `${customTo}:00.000Z` : undefined) ||
+    (customTo ? eventLocalToUtcIso(customTo, eventTimezone) : undefined) ||
     (dateRange?.to ? format(dateRange.to, "yyyy-MM-dd'T'23:59:59.999'Z'") : undefined);
 
   const filterParams = {

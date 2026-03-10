@@ -141,6 +141,7 @@ export function EventDetailTabs({ event, activeTab, campaigns, recentTransition 
               eventName={event.name}
               orgName={event.org?.name ?? ""}
               estimatedAttendees={event.estimatedAttendees ?? null}
+              eventTimezone={event.timezone}
             />
           </div>
         )}
