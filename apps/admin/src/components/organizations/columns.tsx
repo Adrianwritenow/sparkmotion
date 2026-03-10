@@ -42,6 +42,7 @@ export const columns: ColumnDef<OrgWithCounts>[] = [
             month: "short",
             day: "numeric",
             year: "numeric",
+            timeZone: "UTC",
           })}
         </div>
       );

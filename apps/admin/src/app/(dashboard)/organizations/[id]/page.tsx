@@ -107,7 +107,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
                 <span>
-                  Joined {new Date(org.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                  Joined {new Date(org.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}
                 </span>
               </div>
             </div>
@@ -147,7 +147,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
                   </h3>
                   <p className="text-muted-foreground leading-relaxed">
                     {org.name} has been active since{" "}
-                    {new Date(org.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}{" "}
+                    {new Date(org.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}{" "}
                     and currently has {org._count.events} active events.
                     Slug: {org.slug || "Not configured"}.
                   </p>

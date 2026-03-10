@@ -140,13 +140,13 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
               <CalendarDays className="w-4 h-4" />
               <span>
                 {event.startDate && event.endDate ? (
-                  `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                  `${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })} - ${new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`
                 ) : event.startDate ? (
-                  `Starts ${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                  `Starts ${new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`
                 ) : (() => {
                   const firstWindow = event.windows?.find((w) => w.startTime);
                   return firstWindow?.startTime
-                    ? new Date(firstWindow.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                    ? new Date(firstWindow.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
                     : "-";
                 })()}
               </span>
