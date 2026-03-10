@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-04T03:04:19.605Z"
+last_updated: "2026-03-09T19:40:00Z"
 progress:
-  total_phases: 37
-  completed_phases: 31
-  total_plans: 83
-  completed_plans: 80
+  total_phases: 38
+  completed_phases: 38
+  total_plans: 86
+  completed_plans: 86
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 37 — Update event and campaign analytics UI and KPI calculations to match reference designs
-Plan: 03 COMPLETE — CampaignAnalytics reference design refactor in admin and customer apps
-Status: Phase 37 Plan 03 COMPLETE — 3 of 3 plans complete; Phase 37 COMPLETE
-Last activity: 2026-03-04 — Phase 37-03 complete: CampaignAnalytics Engagement Overview (4 KPI cells, Nx multiplier, green % badge), progress bar, Tap Activity sparkline, BarChart, 3-col bottom row, multi-select event filter, Registration Growth chart
+Phase: 38 — Update auto-lifecycle to use next event start time instead of event start/end dates
+Plan: 03 COMPLETE — Customer app auto-lifecycle UI mirror (Settings tab toggle, Clock icon, transition banner, bulk toggle update)
+Status: Phase 38 Plan 03 COMPLETE — 3 of 3 plans complete; Phase 38 COMPLETE
+Last activity: 2026-03-09 — Phase 38-03 complete: customer app fully mirrored admin auto-lifecycle UI changes; all 3 plans done
 
-Progress: (3 of 3 plans complete — Phase 37 COMPLETE)
+Progress: (3 of 3 plans complete — Phase 38 COMPLETE)
 
 ## Performance Metrics
 
@@ -341,6 +341,8 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 37]: Multi-select checkbox dropdown replaces single-select for window filters; Sparkline uses bare ResponsiveContainer without ChartContainer; Manual pie legend rows replace ChartLegend component; Customer EventsAnalytics is exact copy of admin
 - [Phase 37]: Engagement Rate displayed as Nx multiplier (tapCount/bandCount) in campaign analytics replacing old percentage formula
 - [Phase 37]: Campaign analytics multi-select uses Popover+Checkbox pattern for event filtering; inline datetime-local inputs replace calendar popover
+- [Phase 38]: campaignChainMap sorted by earliest window startTime enables O(n) chain traversal for ACTIVE->COMPLETED; last event falls back to endDate at 23:59:59 in event timezone
+- [Phase 38-02]: autoLifecycle toggle moved from edit form to Settings tab; campaignId guard hides section entirely for non-campaign events; hasWindowsWithTimes computed inline via windows.some() to avoid schema change; TooltipProvider wraps entire EventCardList (single provider pattern); customer app mirrored with same changes
 
 ### Pending Todos
 
@@ -348,6 +350,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 38 added: Update auto-lifecycle to use next event start time instead of event start/end dates
 - Phase 37 added: Update event and campaign analytics UI and KPI calculations to match reference designs
 - Phase 36 added: Code cleanup - dead code removal and reusable abstractions
 - Phase 34 added: Add soft delete capabilities for Campaigns/Events/Organizations/Bands with restore, SOC2-compliant cron cleanup, and trash UI
@@ -419,7 +422,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-04
-Stopped at: Completed 37-03-PLAN.md — CampaignAnalytics refactored to reference design in both admin and customer apps
-Resume file: N/A — Phase 37 all 3 plans complete
-Next step: Phase 37 complete — all plans done
+Last session: 2026-03-09
+Stopped at: Completed 38-03-PLAN.md — Clock icon added to customer event-card-list; customer app fully mirrors admin auto-lifecycle UI; Phase 38 all 3 plans complete
+Resume file: N/A — Phase 38 all 3 plans complete; all 86 plans across 38 phases complete
+Next step: Phase 38 complete — all plans done
