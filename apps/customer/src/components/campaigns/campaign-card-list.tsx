@@ -118,12 +118,14 @@ export function CampaignCardList({
                     month: "short",
                     day: "numeric",
                     year: "numeric",
+                    timeZone: "UTC",
                   })}{" "}
                   -{" "}
                   {new Date(campaign.endDate).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
+                    timeZone: "UTC",
                   })}
                 </span>
               </div>

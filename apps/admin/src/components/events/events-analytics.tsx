@@ -76,6 +76,7 @@ const windowTypeTapsConfig = {
   },
 } satisfies ChartConfig;
 
+
 interface EventsAnalyticsProps {
   eventId: string;
   eventName: string;
@@ -164,6 +165,66 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
   const { data: registrationByWindow, isLoading: registrationByWindowLoading } =
     trpc.analytics.registrationGrowthByWindow.useQuery(byWindowParams, { enabled: showByWindow });
 
+  // Unique taps timeline — respects date range filter (not window filter)
+  const { data: uniqueTapsData, isLoading: uniqueTapsLoading } =
+    trpc.analytics.uniqueTapsTimeline.useQuery(byWindowParams);
+
+  // Pivot unique-taps-timeline into wide format: { date, [windowId]: uniqueCount }
+  // Pads with zero rows before/after when only one date exists so area chart renders lines, not just dots
+  const uniqueTapsWide = useMemo(() => {
+    if (!uniqueTapsData || uniqueTapsData.length === 0) return [];
+    const byDate = new Map<string, Record<string, number>>();
+    const windowIds = new Set<string>();
+    for (const row of uniqueTapsData) {
+      if (!byDate.has(row.date)) byDate.set(row.date, {});
+      byDate.get(row.date)![row.windowId] = row.uniqueCount;
+      windowIds.add(row.windowId);
+    }
+    const rows = Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+    // If only one date, pad with empty rows so areas render as shapes
+    if (rows.length === 1) {
+      const zeros = Object.fromEntries([...windowIds].map((id) => [id, 0]));
+      rows.unshift({ date: "", ...zeros });
+      rows.push({ date: " ", ...zeros });
+    }
+    return rows;
+  }, [uniqueTapsData]);
+
+  // Unique window list from unique taps data
+  const uniqueTapsWindowList = useMemo(() => {
+    if (!uniqueTapsData) return [];
+    const seen = new Map<string, string>();
+    for (const row of uniqueTapsData) {
+      if (!seen.has(row.windowId)) seen.set(row.windowId, row.windowLabel);
+    }
+    return Array.from(seen.entries()).map(([id, label]) => ({ id, label }));
+  }, [uniqueTapsData]);
+
+  // Dynamic chart config for unique taps by window
+  const uniqueTapsConfig = Object.fromEntries(
+    uniqueTapsWindowList.map((w) => [
+      w.id,
+      { label: w.label, color: windowColorMap.get(w.id) ?? "#FF6B35" },
+    ])
+  ) satisfies ChartConfig;
+
+  // Unique taps aggregates for summary card
+  const uniqueTapsAggregates = useMemo(() => {
+    if (!uniqueTapsData || uniqueTapsData.length === 0) return { total: 0, dailyTotals: [] as { date: string; total: number }[], peakDay: null as { date: string; total: number } | null };
+    const byDate = new Map<string, number>();
+    let total = 0;
+    for (const row of uniqueTapsData) {
+      byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.uniqueCount);
+      total += row.uniqueCount;
+    }
+    const dailyTotals = Array.from(byDate.entries()).map(([date, count]) => ({ date, total: count }));
+    const peakDay = dailyTotals.reduce<{ date: string; total: number } | null>(
+      (max, d) => (!max || d.total > max.total ? d : max),
+      null
+    );
+    return { total, dailyTotals, peakDay };
+  }, [uniqueTapsData]);
+
   // Pivot engagement-by-window into wide format: { date, [windowId]: count }
   const engagementWide = useMemo(() => {
     if (!engagementByWindow || engagementByWindow.length === 0) return [];
@@ -197,11 +258,19 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
   const registrationWide = useMemo(() => {
     if (!registrationByWindow || registrationByWindow.length === 0) return [];
     const byDate = new Map<string, Record<string, number>>();
+    const windowIds = new Set<string>();
     for (const row of registrationByWindow) {
       if (!byDate.has(row.date)) byDate.set(row.date, {});
       byDate.get(row.date)![row.windowId] = row.count;
+      windowIds.add(row.windowId);
     }
-    return Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+    const rows = Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+    if (rows.length === 1) {
+      const zeros = Object.fromEntries([...windowIds].map((id) => [id, 0]));
+      rows.unshift({ date: "", ...zeros });
+      rows.push({ date: " ", ...zeros });
+    }
+    return rows;
   }, [registrationByWindow]);
 
   const registrationByWindowConfig = Object.fromEntries(
@@ -797,6 +866,128 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
               No registration data available
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Unique Taps — 1/4 summary + 3/4 stacked area chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
+
+        {/* Left: Unique Taps summary card */}
+        <div className="lg:col-span-1 bg-card border border-border rounded-lg p-6 flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-1.5 bg-primary/15 rounded-md">
+              <Users className="w-4 h-4 text-primary" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">Unique Taps</h3>
+          </div>
+          {overviewLoading ? (
+            <Skeleton className="h-7 w-20" />
+          ) : (
+            <p className="text-3xl font-bold text-foreground">
+              {overviewSummary?.uniqueBands.toLocaleString() ?? "0"}
+            </p>
+          )}
+          <div className="flex-1 mt-1">
+            {uniqueTapsAggregates.dailyTotals.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={uniqueTapsAggregates.dailyTotals}>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0]!.payload as { date: string; total: number };
+                      return (
+                        <div className="rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+                          <p className="font-medium">{d.date}</p>
+                          <p className="text-muted-foreground">{d.total.toLocaleString()} unique taps</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke="#FF6B35"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "#FF6B35", strokeWidth: 0 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[100px] flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">No data yet</span>
+              </div>
+            )}
+          </div>
+          {uniqueTapsAggregates.peakDay && (
+            <div className="mt-3 pt-3 border-t border-border flex items-baseline justify-between">
+              <span className="text-[10px] text-muted-foreground">Peak Day</span>
+              <span className="text-xs font-medium text-foreground">
+                {uniqueTapsAggregates.peakDay.date} &middot; {uniqueTapsAggregates.peakDay.total.toLocaleString()}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Unique Taps Timeline line chart */}
+        <div className="lg:col-span-3 bg-card border border-border rounded-lg p-6">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-foreground">Unique Taps Timeline</h3>
+            <p className="text-sm text-muted-foreground mt-1">Daily unique band activations by window</p>
+          </div>
+          {uniqueTapsLoading ? (
+            <Skeleton className="h-72 w-full" />
+          ) : uniqueTapsWide.length > 0 ? (
+            <>
+              <ChartContainer config={uniqueTapsConfig} className="h-72 w-full">
+                <LineChart data={uniqueTapsWide}>
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  {uniqueTapsWindowList.map((w) => (
+                    <Line
+                      key={w.id}
+                      type="monotone"
+                      dataKey={w.id}
+                      name={w.label}
+                      stroke={windowColorMap.get(w.id) ?? "#FF6B35"}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  ))}
+                </LineChart>
+              </ChartContainer>
+              {uniqueTapsWindowList.length > 0 && (
+                <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-border">
+                  {uniqueTapsWindowList.map((w) => (
+                    <div key={w.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div
+                        className="w-3 h-3 rounded-sm"
+                        style={{ backgroundColor: windowColorMap.get(w.id) ?? "#FF6B35" }}
+                      />
+                      {w.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No tap data available
             </p>
           )}
         </div>
