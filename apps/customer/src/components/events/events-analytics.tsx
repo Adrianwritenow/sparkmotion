@@ -20,6 +20,8 @@ import {
   Bar,
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -75,6 +77,7 @@ const windowTypeTapsConfig = {
     color: "hsl(var(--chart-1))",
   },
 } satisfies ChartConfig;
+
 
 interface EventsAnalyticsProps {
   eventId: string;
@@ -164,6 +167,49 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
   const { data: registrationByWindow, isLoading: registrationByWindowLoading } =
     trpc.analytics.registrationGrowthByWindow.useQuery(byWindowParams, { enabled: showByWindow });
 
+  // Unique taps timeline — respects date range filter (not window filter)
+  const { data: uniqueTapsData, isLoading: uniqueTapsLoading } =
+    trpc.analytics.uniqueTapsTimeline.useQuery(byWindowParams);
+
+  // Pivot unique-taps-timeline into wide format: { date, [windowId]: uniqueCount }
+  // Pads with zero rows before/after when only one date exists so area chart renders lines, not just dots
+  const uniqueTapsWide = useMemo(() => {
+    if (!uniqueTapsData || uniqueTapsData.length === 0) return [];
+    const byDate = new Map<string, Record<string, number>>();
+    const windowIds = new Set<string>();
+    for (const row of uniqueTapsData) {
+      if (!byDate.has(row.date)) byDate.set(row.date, {});
+      byDate.get(row.date)![row.windowId] = row.uniqueCount;
+      windowIds.add(row.windowId);
+    }
+    const rows = Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+    // If only one date, pad with empty rows so areas render as shapes
+    if (rows.length === 1) {
+      const zeros = Object.fromEntries([...windowIds].map((id) => [id, 0]));
+      rows.unshift({ date: "", ...zeros });
+      rows.push({ date: " ", ...zeros });
+    }
+    return rows;
+  }, [uniqueTapsData]);
+
+  // Unique window list from unique taps data
+  const uniqueTapsWindowList = useMemo(() => {
+    if (!uniqueTapsData) return [];
+    const seen = new Map<string, string>();
+    for (const row of uniqueTapsData) {
+      if (!seen.has(row.windowId)) seen.set(row.windowId, row.windowLabel);
+    }
+    return Array.from(seen.entries()).map(([id, label]) => ({ id, label }));
+  }, [uniqueTapsData]);
+
+  // Dynamic chart config for unique taps by window
+  const uniqueTapsConfig = Object.fromEntries(
+    uniqueTapsWindowList.map((w) => [
+      w.id,
+      { label: w.label, color: windowColorMap.get(w.id) ?? "#FF6B35" },
+    ])
+  ) satisfies ChartConfig;
+
   // Pivot engagement-by-window into wide format: { date, [windowId]: count }
   const engagementWide = useMemo(() => {
     if (!engagementByWindow || engagementByWindow.length === 0) return [];
@@ -197,11 +243,19 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
   const registrationWide = useMemo(() => {
     if (!registrationByWindow || registrationByWindow.length === 0) return [];
     const byDate = new Map<string, Record<string, number>>();
+    const windowIds = new Set<string>();
     for (const row of registrationByWindow) {
       if (!byDate.has(row.date)) byDate.set(row.date, {});
       byDate.get(row.date)![row.windowId] = row.count;
+      windowIds.add(row.windowId);
     }
-    return Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+    const rows = Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+    if (rows.length === 1) {
+      const zeros = Object.fromEntries([...windowIds].map((id) => [id, 0]));
+      rows.unshift({ date: "", ...zeros });
+      rows.push({ date: " ", ...zeros });
+    }
+    return rows;
   }, [registrationByWindow]);
 
   const registrationByWindowConfig = Object.fromEntries(
@@ -800,6 +854,81 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
             </p>
           )}
         </div>
+      </div>
+
+      {/* Full-width Unique Taps Timeline stacked area chart */}
+      <div className="bg-card border border-border rounded-lg p-6 mt-6">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-foreground">Unique Taps Timeline</h3>
+          <p className="text-sm text-muted-foreground mt-1">Daily unique band activations by window</p>
+        </div>
+        {uniqueTapsLoading ? (
+          <Skeleton className="h-72 w-full" />
+        ) : uniqueTapsWide.length > 0 ? (
+          <>
+            <ChartContainer config={uniqueTapsConfig} className="h-72 w-full">
+              <AreaChart data={uniqueTapsWide}>
+                <defs>
+                  {uniqueTapsWindowList.map((w) => {
+                    const color = windowColorMap.get(w.id) ?? "#FF6B35";
+                    return (
+                      <linearGradient key={w.id} id={`uniqueTapsFill-${w.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={color} stopOpacity={0.05} />
+                      </linearGradient>
+                    );
+                  })}
+                </defs>
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="date"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                {uniqueTapsWindowList.map((w) => (
+                  <Area
+                    key={w.id}
+                    type="monotone"
+                    dataKey={w.id}
+                    name={w.label}
+                    stackId="a"
+                    stroke={windowColorMap.get(w.id) ?? "#FF6B35"}
+                    strokeWidth={2}
+                    fill={`url(#uniqueTapsFill-${w.id})`}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                ))}
+              </AreaChart>
+            </ChartContainer>
+            {uniqueTapsWindowList.length > 0 && (
+              <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-border">
+                {uniqueTapsWindowList.map((w) => (
+                  <div key={w.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div
+                      className="w-3 h-3 rounded-sm"
+                      style={{ backgroundColor: windowColorMap.get(w.id) ?? "#FF6B35" }}
+                    />
+                    {w.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No tap data available
+          </p>
+        )}
       </div>
       </section>
     </div>
