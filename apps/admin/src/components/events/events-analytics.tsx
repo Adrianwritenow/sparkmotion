@@ -26,7 +26,8 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { Users, MousePointerClick, Activity, TrendingUp, ChevronDown, CalendarIcon, X } from "lucide-react";
+import { Tooltip as ShadTooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@sparkmotion/ui/tooltip";
+import { Users, MousePointerClick, Activity, TrendingUp, ChevronDown, CalendarIcon, X, Info } from "lucide-react";
 import { ExportAnalyticsButton } from "@/components/analytics/export-analytics-button";
 
 const engagementConfig = {
@@ -79,9 +80,10 @@ interface EventsAnalyticsProps {
   eventId: string;
   eventName: string;
   orgName: string;
+  estimatedAttendees: number | null;
 }
 
-export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalyticsProps) {
+export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendees }: EventsAnalyticsProps) {
   const captureRef = useRef<HTMLDivElement>(null);
   const [selectedWindowIds, setSelectedWindowIds] = useState<string[]>(["all"]);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
@@ -222,9 +224,12 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
   const bandsTappedSubtitle = overviewSummary
     ? `${overviewSummary.uniqueBands.toLocaleString()} of ${overviewSummary.bandCount.toLocaleString()} bands`
     : "";
+  const activationDenom = estimatedAttendees && estimatedAttendees > 0
+    ? estimatedAttendees
+    : overviewSummary?.bandCount ?? 0;
   const activationPct =
-    overviewSummary && overviewSummary.bandCount > 0
-      ? Math.round((overviewSummary.uniqueBands / overviewSummary.bandCount) * 100)
+    overviewSummary && activationDenom > 0
+      ? Math.min(Math.round((overviewSummary.uniqueBands / activationDenom) * 100), 100)
       : 0;
 
   // Sparkline peak calculation
@@ -409,9 +414,21 @@ export function EventsAnalytics({ eventId, eventName, orgName }: EventsAnalytics
           {/* Band Activation Progress bar */}
           <div className="mt-4 pt-4 border-t border-border">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground">Band Activation Progress</span>
+              <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                Band Activation Progress
+                <TooltipProvider>
+                  <ShadTooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{estimatedAttendees ? "Bands activated / estimated attendees" : "Bands activated / total bands assigned"}</p>
+                    </TooltipContent>
+                  </ShadTooltip>
+                </TooltipProvider>
+              </span>
               <span className="text-[11px] font-semibold text-foreground">
-                {overviewSummary?.uniqueBands.toLocaleString() ?? "0"} / {overviewSummary?.bandCount.toLocaleString() ?? "0"} bands tapped
+                {overviewSummary?.uniqueBands.toLocaleString() ?? "0"} / {activationDenom.toLocaleString()} {estimatedAttendees ? "attendees" : "bands"} activated
               </span>
             </div>
             <div className="w-full h-2 bg-muted rounded-full overflow-hidden">

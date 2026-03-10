@@ -1036,7 +1036,7 @@ export const analyticsRouter = router({
           orgId: true,
           events: {
             where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
-            select: { id: true, name: true, location: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
+            select: { id: true, name: true, location: true, estimatedAttendees: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
             orderBy: { createdAt: "desc" },
           },
         },
@@ -1143,12 +1143,18 @@ export const analyticsRouter = router({
         });
       }
 
+      // Sum estimatedAttendees across events (skip nulls)
+      const totalEstimatedAttendees = filteredEvents.reduce((sum, e) => {
+        return e.estimatedAttendees != null ? sum + e.estimatedAttendees : sum;
+      }, 0);
+
       return {
         eventCount: eventId ? 1 : campaign.events.length,
         bandCount,
         tapCount: Number(tapCounts[0]?.total_taps ?? 0),
         uniqueBands,
         aggregateEngagement,
+        estimatedAttendees: totalEstimatedAttendees > 0 ? totalEstimatedAttendees : null,
         breakdown,
       };
     }),
