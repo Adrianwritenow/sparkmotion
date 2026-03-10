@@ -26,12 +26,14 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
+import { Tooltip as ShadTooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@sparkmotion/ui/tooltip";
 import {
   Users,
   MousePointerClick,
   Activity,
   TrendingUp,
   ChevronDown,
+  Info,
 } from "lucide-react";
 import { ExportAnalyticsButton } from "@/components/analytics/export-analytics-button";
 
@@ -165,9 +167,13 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
       ? Math.round((overviewSummary.uniqueBands / overviewSummary.bandCount) * 100)
       : 0;
 
+  const campaignEstimatedAttendees = overviewSummary?.estimatedAttendees ?? null;
+  const activationDenom = campaignEstimatedAttendees && campaignEstimatedAttendees > 0
+    ? campaignEstimatedAttendees
+    : overviewSummary?.bandCount ?? 0;
   const activationPct =
-    overviewSummary && overviewSummary.bandCount > 0
-      ? Math.round((overviewSummary.uniqueBands / overviewSummary.bandCount) * 100)
+    overviewSummary && activationDenom > 0
+      ? Math.min(Math.round((overviewSummary.uniqueBands / activationDenom) * 100), 100)
       : 0;
 
   // Sparkline peak
@@ -327,9 +333,21 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
           {/* Band Activation Progress bar */}
           <div className="mt-4">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-muted-foreground">Band Activation Progress</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                Band Activation Progress
+                <TooltipProvider>
+                  <ShadTooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{campaignEstimatedAttendees ? "Bands activated / estimated attendees (aggregated across events)" : "Bands activated / total bands assigned"}</p>
+                    </TooltipContent>
+                  </ShadTooltip>
+                </TooltipProvider>
+              </span>
               <span className="text-xs font-medium text-foreground">
-                {(overviewSummary?.uniqueBands ?? 0).toLocaleString()} / {(overviewSummary?.bandCount ?? 0).toLocaleString()} bands tapped
+                {(overviewSummary?.uniqueBands ?? 0).toLocaleString()} / {activationDenom.toLocaleString()} {campaignEstimatedAttendees ? "attendees" : "bands"} activated
               </span>
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">

@@ -112,6 +112,7 @@ export function EventDetailTabs({ event, activeTab, campaigns }: EventDetailTabs
               eventId={event.id}
               eventName={event.name}
               orgName={event.org?.name ?? ""}
+              estimatedAttendees={event.estimatedAttendees ?? null}
             />
           </div>
         )}
