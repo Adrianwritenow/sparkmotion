@@ -229,6 +229,61 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
     ])
   ) satisfies ChartConfig;
 
+  // ── Unique Taps Timeline ──
+  const { data: uniqueTapsData, isLoading: uniqueTapsLoading } =
+    trpc.analytics.campaignUniqueTapsTimeline.useQuery(filterParams);
+  const { data: uniqueTapsUnfiltered } =
+    trpc.analytics.campaignUniqueTapsTimeline.useQuery({ campaignId });
+
+  // Pivot unique taps into wide format: { date, [eventId]: uniqueCount }
+  const uniqueTapsWide = useMemo(() => {
+    if (!uniqueTapsData || uniqueTapsData.length === 0) return [];
+    const byDate = new Map<string, Record<string, number>>();
+    const evIds = new Set<string>();
+    for (const row of uniqueTapsData) {
+      if (!byDate.has(row.date)) byDate.set(row.date, {});
+      byDate.get(row.date)![row.eventId] = row.uniqueCount;
+      evIds.add(row.eventId);
+    }
+    const rows = Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
+    if (rows.length === 1) {
+      const zeros = Object.fromEntries([...evIds].map((id) => [id, 0]));
+      rows.unshift({ date: "", ...zeros });
+      rows.push({ date: " ", ...zeros });
+    }
+    return rows;
+  }, [uniqueTapsData]);
+
+  // Unique taps chart config
+  const uniqueTapsConfig = Object.fromEntries(
+    eventNames.map((ev) => [
+      ev.id,
+      { label: ev.name, color: eventColorMap.get(ev.id) ?? "#FF6B35" },
+    ])
+  ) satisfies ChartConfig;
+
+  // Unique taps aggregates (from unfiltered data for summary card)
+  const uniqueTapsAggregates = useMemo(() => {
+    const src = uniqueTapsUnfiltered;
+    if (!src || src.length === 0) return {
+      total: 0,
+      dailyTotals: [] as { date: string; total: number }[],
+      peakDay: null as { date: string; total: number } | null,
+    };
+    const byDate = new Map<string, number>();
+    let total = 0;
+    for (const row of src) {
+      byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.uniqueCount);
+      total += row.uniqueCount;
+    }
+    const dailyTotals = Array.from(byDate.entries()).map(([date, count]) => ({ date, total: count }));
+    const peakDay = dailyTotals.reduce<{ date: string; total: number } | null>(
+      (max, d) => (!max || d.total > max.total ? d : max),
+      null
+    );
+    return { total, dailyTotals, peakDay };
+  }, [uniqueTapsUnfiltered]);
+
   return (
     <div className="space-y-8" ref={captureRef}>
       {/* ── ANALYTICS OVERVIEW ── */}
@@ -653,6 +708,125 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
               No registration data available
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── UNIQUE TAPS TIMELINE ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-6">
+        {/* Left 1/4: Summary card */}
+        <div className="lg:col-span-1 bg-card border border-border rounded-lg p-6 flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-1.5 bg-primary/15 rounded-md">
+              <Users className="w-4 h-4 text-primary" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">Unique Taps</h3>
+          </div>
+          {overviewLoading ? (
+            <Skeleton className="h-7 w-20" />
+          ) : (
+            <p className="text-3xl font-bold text-foreground">
+              {overviewSummary?.uniqueBands.toLocaleString() ?? "0"}
+            </p>
+          )}
+          <div className="flex-1 mt-1">
+            {uniqueTapsAggregates.dailyTotals.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={uniqueTapsAggregates.dailyTotals}>
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+                    formatter={(v: number) => [v.toLocaleString(), "Unique"]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[100px] flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">No data yet</span>
+              </div>
+            )}
+          </div>
+          {uniqueTapsAggregates.peakDay && (
+            <div className="mt-3 pt-3 border-t border-border flex items-baseline justify-between">
+              <span className="text-[10px] text-muted-foreground">Peak Day</span>
+              <span className="text-xs font-medium text-foreground">
+                {uniqueTapsAggregates.peakDay.date} &middot; {uniqueTapsAggregates.peakDay.total.toLocaleString()}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Right 3/4: Unique taps line chart */}
+        <div className="lg:col-span-3 bg-card border border-border rounded-lg p-6">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-foreground">Unique Taps Timeline</h3>
+            <p className="text-sm text-muted-foreground mt-1">Daily unique band activations by event</p>
+          </div>
+          {uniqueTapsLoading ? (
+            <Skeleton className="h-72 w-full" />
+          ) : uniqueTapsWide.length > 0 ? (
+            <>
+              <ChartContainer config={uniqueTapsConfig} className="h-72 w-full">
+                <LineChart data={uniqueTapsWide}>
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  {eventNames.map((ev) => (
+                    <Line
+                      key={ev.id}
+                      type="monotone"
+                      dataKey={ev.id}
+                      name={ev.name}
+                      stroke={eventColorMap.get(ev.id) ?? "#FF6B35"}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  ))}
+                </LineChart>
+              </ChartContainer>
+              {eventNames.length > 0 && (
+                <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-border">
+                  {eventNames.map((ev) => (
+                    <div key={ev.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div
+                        className="w-3 h-3 rounded-sm"
+                        style={{ backgroundColor: eventColorMap.get(ev.id) ?? "#FF6B35" }}
+                      />
+                      {ev.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No tap data available
             </p>
           )}
         </div>

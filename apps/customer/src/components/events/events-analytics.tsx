@@ -20,8 +20,6 @@ import {
   Bar,
   LineChart,
   Line,
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -932,7 +930,7 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
           )}
         </div>
 
-        {/* Right: Unique Taps Timeline stacked area chart */}
+        {/* Right: Unique Taps Timeline line chart */}
         <div className="lg:col-span-3 bg-card border border-border rounded-lg p-6">
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-foreground">Unique Taps Timeline</h3>
@@ -943,18 +941,7 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
           ) : uniqueTapsWide.length > 0 ? (
             <>
               <ChartContainer config={uniqueTapsConfig} className="h-72 w-full">
-                <AreaChart data={uniqueTapsWide}>
-                  <defs>
-                    {uniqueTapsWindowList.map((w) => {
-                      const color = windowColorMap.get(w.id) ?? "#FF6B35";
-                      return (
-                        <linearGradient key={w.id} id={`uniqueTapsFill-${w.id}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                          <stop offset="95%" stopColor={color} stopOpacity={0.05} />
-                        </linearGradient>
-                      );
-                    })}
-                  </defs>
+                <LineChart data={uniqueTapsWide}>
                   <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
                   <XAxis
                     dataKey="date"
@@ -971,20 +958,18 @@ export function EventsAnalytics({ eventId, eventName, orgName, estimatedAttendee
                   />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   {uniqueTapsWindowList.map((w) => (
-                    <Area
+                    <Line
                       key={w.id}
                       type="monotone"
                       dataKey={w.id}
                       name={w.label}
-                      stackId="a"
                       stroke={windowColorMap.get(w.id) ?? "#FF6B35"}
                       strokeWidth={2}
-                      fill={`url(#uniqueTapsFill-${w.id})`}
                       dot={false}
                       activeDot={{ r: 4 }}
                     />
                   ))}
-                </AreaChart>
+                </LineChart>
               </ChartContainer>
               {uniqueTapsWindowList.length > 0 && (
                 <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-border">

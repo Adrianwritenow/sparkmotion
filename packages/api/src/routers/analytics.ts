@@ -1025,6 +1025,105 @@ export const analyticsRouter = router({
       }));
     }),
 
+  campaignUniqueTapsTimeline: protectedProcedure
+    .input(campaignAnalyticsFilterInput)
+    .query(async ({ ctx, input }) => {
+      const { campaignId, eventId } = input;
+
+      const campaign = await db.campaign.findUniqueOrThrow({
+        where: { id: campaignId, ...ACTIVE },
+        select: {
+          orgId: true,
+          events: {
+            where: { status: { in: ["ACTIVE", "COMPLETED"] }, ...ACTIVE },
+            select: { id: true, name: true },
+          },
+        },
+      });
+
+      enforceOrgAccess(ctx, campaign.orgId);
+
+      const campaignEvents = eventId
+        ? campaign.events.filter((e) => e.id === eventId)
+        : campaign.events;
+
+      const eventIds = campaignEvents.map((e) => e.id);
+
+      if (eventIds.length === 0) {
+        return [];
+      }
+
+      const { fromDate, toDate } = buildDateFilter(input);
+
+      const eventFilter = eventIds.length === 1
+        ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
+        : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
+
+      const eventIdFilter = eventIds.length === 1
+        ? Prisma.sql`"id" = ${eventIds[0]}`
+        : Prisma.sql`"id" IN (${Prisma.join(eventIds)})`;
+
+      const seriesStart = fromDate
+        ? Prisma.sql`${fromDate}::date`
+        : Prisma.sql`(SELECT MIN("createdAt")::date FROM "Event" WHERE ${eventIdFilter})::date`;
+      const seriesEnd = toDate
+        ? Prisma.sql`${toDate}::date`
+        : Prisma.sql`CURRENT_DATE`;
+
+      const tapDateFilter = (() => {
+        const parts: Prisma.Sql[] = [];
+        if (input.from) parts.push(Prisma.sql`AND tl."tappedAt" >= ${new Date(input.from)}`);
+        if (input.to) parts.push(Prisma.sql`AND tl."tappedAt" <= ${new Date(input.to)}`);
+        return parts.length > 0 ? Prisma.sql`${Prisma.join(parts, " ")}` : Prisma.sql``;
+      })();
+
+      const eventNameValues = Prisma.join(
+        campaignEvents.map((e) => Prisma.sql`(${e.id}, ${e.name})`),
+        ", "
+      );
+
+      const results = await db.$queryRaw<Array<{ date: Date; eventId: string; eventName: string; uniqueCount: bigint }>>(Prisma.sql`
+        WITH date_series AS (
+          SELECT generate_series(
+            ${seriesStart},
+            ${seriesEnd},
+            '1 day'::interval
+          )::date AS date
+        ),
+        campaign_events(id, name) AS (
+          VALUES ${eventNameValues}
+        ),
+        daily_counts AS (
+          SELECT
+            DATE_TRUNC('day', tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE e."timezone")::date AS date,
+            tl."eventId",
+            COUNT(DISTINCT tl."bandId")::int AS "uniqueCount"
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          INNER JOIN "Event" e ON tl."eventId" = e."id"
+          WHERE ${eventFilter}
+            ${tapDateFilter}
+          GROUP BY DATE_TRUNC('day', tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE e."timezone"), tl."eventId"
+        )
+        SELECT
+          ds.date,
+          ce.id AS "eventId",
+          ce.name AS "eventName",
+          COALESCE(dc."uniqueCount", 0)::int AS "uniqueCount"
+        FROM date_series ds
+        CROSS JOIN campaign_events ce
+        LEFT JOIN daily_counts dc ON ds.date = dc.date AND dc."eventId" = ce.id
+        ORDER BY ds.date ASC, ce.name ASC
+      `);
+
+      return results.map((row) => ({
+        date: row.date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+        eventId: row.eventId,
+        eventName: row.eventName,
+        uniqueCount: Number(row.uniqueCount),
+      }));
+    }),
+
   campaignSummary: protectedProcedure
     .input(campaignAnalyticsFilterInput)
     .query(async ({ ctx, input }) => {
