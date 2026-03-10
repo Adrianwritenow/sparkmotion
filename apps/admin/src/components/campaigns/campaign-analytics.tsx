@@ -743,6 +743,7 @@ export function CampaignAnalytics({ campaignId, campaignName, orgName, eventName
                     }}
                     labelStyle={{ color: "hsl(var(--muted-foreground))" }}
                     formatter={(v: number) => [v.toLocaleString(), "Unique"]}
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ""}
                   />
                   <Line
                     type="monotone"
