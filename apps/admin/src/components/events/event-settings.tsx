@@ -17,7 +17,16 @@ import {
 import { toast } from "sonner";
 
 interface EventSettingsProps {
-  event: { id: string; name: string; assignOnFlag: boolean };
+  event: {
+    id: string;
+    name: string;
+    assignOnFlag: boolean;
+    autoLifecycle: boolean;
+    campaignId: string | null;
+    startDate: Date | null;
+    endDate: Date | null;
+    hasWindowsWithTimes: boolean;
+  };
 }
 
 export function EventSettings({ event }: EventSettingsProps) {
@@ -25,6 +34,14 @@ export function EventSettings({ event }: EventSettingsProps) {
   const [open, setOpen] = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [assignOnFlag, setAssignOnFlag] = useState(event.assignOnFlag);
+  const [autoLifecycle, setAutoLifecycle] = useState(event.autoLifecycle);
+
+  const qualifies =
+    !!event.campaignId &&
+    !!event.startDate &&
+    !!event.endDate &&
+    event.hasWindowsWithTimes;
+
   const updateEvent = trpc.events.update.useMutation({
     onSuccess: () => router.refresh(),
   });
@@ -51,8 +68,42 @@ export function EventSettings({ event }: EventSettingsProps) {
     updateEvent.mutate({ id: event.id, assignOnFlag: checked });
   };
 
+  const handleAutoLifecycleChange = (checked: boolean) => {
+    setAutoLifecycle(checked);
+    updateEvent.mutate({ id: event.id, autoLifecycle: checked });
+  };
+
   return (
     <div className="space-y-6">
+      {/* Auto-Lifecycle Toggle - only show for campaign events */}
+      {event.campaignId && (
+        <div className="border rounded-lg p-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="auto-lifecycle" className="text-base font-semibold">
+                Auto-Lifecycle
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically activate when the first window starts and complete when the next tour event begins.
+              </p>
+              {!qualifies && (
+                <ul className="text-xs text-muted-foreground mt-2 list-disc list-inside space-y-0.5">
+                  {!event.startDate && <li>Start date required</li>}
+                  {!event.endDate && <li>End date required</li>}
+                  {!event.hasWindowsWithTimes && <li>At least one window with start and end times required</li>}
+                </ul>
+              )}
+            </div>
+            <Switch
+              id="auto-lifecycle"
+              checked={autoLifecycle}
+              onCheckedChange={handleAutoLifecycleChange}
+              disabled={!qualifies || updateEvent.isPending}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="border rounded-lg p-6">
         <div className="flex items-center justify-between">
           <div className="space-y-1">

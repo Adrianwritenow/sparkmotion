@@ -201,7 +201,10 @@ export const eventsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...rawData } = input;
-      const existing = await db.event.findUniqueOrThrow({ where: { id, ...ACTIVE } });
+      const existing = await db.event.findUniqueOrThrow({
+        where: { id, ...ACTIVE },
+        select: { orgId: true, campaignId: true, startDate: true, endDate: true, autoLifecycle: true, status: true },
+      });
       enforceOrgAccess(ctx, existing.orgId);
       // Filter out undefined values for Prisma (null is valid for nullable fields)
       const data: Record<string, any> = {};
@@ -212,6 +215,38 @@ export const eventsRouter = router({
       }
       // Treat empty string as null for optional FK fields
       if (data.campaignId === "") data.campaignId = null;
+
+      // Auto-disable autoLifecycle on manual status change
+      if (data.status && data.status !== existing.status) {
+        data.autoLifecycle = false;
+      }
+
+      // Auto-disable autoLifecycle when removed from campaign
+      if (data.campaignId === null && existing.autoLifecycle) {
+        data.autoLifecycle = false;
+      }
+
+      // Validate requirements when enabling autoLifecycle
+      if (data.autoLifecycle === true) {
+        const windowCount = await db.eventWindow.count({
+          where: {
+            eventId: id,
+            startTime: { not: null },
+            endTime: { not: null },
+          },
+        });
+        const effectiveCampaignId = data.campaignId !== undefined ? data.campaignId : existing.campaignId;
+        const effectiveStartDate = data.startDate !== undefined ? data.startDate : existing.startDate;
+        const effectiveEndDate = data.endDate !== undefined ? data.endDate : existing.endDate;
+
+        if (!effectiveCampaignId || !effectiveStartDate || !effectiveEndDate || windowCount === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Auto-lifecycle requires campaign assignment, start date, end date, and at least one window with start and end times",
+          });
+        }
+      }
+
       const event = await db.event.update({ where: { id }, data });
       invalidateEventCache(id).catch(console.error);
 
@@ -432,12 +467,57 @@ export const eventsRouter = router({
       });
       enforceOrgAccess(ctx, campaign.orgId);
 
-      const result = await db.event.updateMany({
+      // For disable, updateMany is fine (no validation needed)
+      if (!input.enabled) {
+        const result = await db.event.updateMany({
+          where: { campaignId: input.campaignId, ...ACTIVE },
+          data: { autoLifecycle: false },
+        });
+        return { updated: result.count, skipped: [] as Array<{ name: string; reason: string }> };
+      }
+
+      // For enable, validate per event
+      const events = await db.event.findMany({
         where: { campaignId: input.campaignId, ...ACTIVE },
-        data: { autoLifecycle: input.enabled },
+        select: {
+          id: true,
+          name: true,
+          startDate: true,
+          endDate: true,
+          _count: {
+            select: {
+              windows: {
+                where: { startTime: { not: null }, endTime: { not: null } },
+              },
+            },
+          },
+        },
       });
 
-      return { updated: result.count };
+      const qualifying: string[] = [];
+      const skipped: Array<{ name: string; reason: string }> = [];
+
+      for (const event of events) {
+        const reasons: string[] = [];
+        if (!event.startDate) reasons.push("No start date");
+        if (!event.endDate) reasons.push("No end date");
+        if (event._count.windows === 0) reasons.push("No window start/end times");
+
+        if (reasons.length > 0) {
+          skipped.push({ name: event.name, reason: reasons.join(", ") });
+        } else {
+          qualifying.push(event.id);
+        }
+      }
+
+      if (qualifying.length > 0) {
+        await db.event.updateMany({
+          where: { id: { in: qualifying } },
+          data: { autoLifecycle: true },
+        });
+      }
+
+      return { updated: qualifying.length, skipped };
     }),
 
   ...createTrashProcedures({

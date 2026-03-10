@@ -33,6 +33,16 @@ export default async function EventDetailPage({
     orderBy: { name: "asc" },
   });
 
+  const recentTransition = await db.changeLog.findFirst({
+    where: {
+      resourceId: params.id,
+      action: { startsWith: "event.autoLifecycle." },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { action: true, createdAt: true },
+  });
+
   const activeTab = searchParams.tab || "overview";
   const fromCampaign = searchParams.from === "campaign" && searchParams.campaignId;
   const backLabel = fromCampaign ? "Back to Campaign Events" : "Back to Events";
@@ -125,6 +135,7 @@ export default async function EventDetailPage({
         }}
         activeTab={activeTab}
         campaigns={campaigns}
+        recentTransition={recentTransition}
       />
     </div>
   );

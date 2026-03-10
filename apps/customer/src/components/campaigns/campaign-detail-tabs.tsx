@@ -107,7 +107,7 @@ export function CampaignDetailTabs({
         )}
 
         {activeTab === "settings" && (
-          <CampaignSettings campaign={campaign} />
+          <CampaignSettings campaign={campaign} events={campaign.events ?? []} />
         )}
       </div>
     </>

@@ -26,8 +26,6 @@ import { trpc } from "@/lib/trpc";
 import { useRouter } from "next/navigation";
 import { Event, EventStatus } from "@sparkmotion/database";
 import { GooglePlacesAutocomplete, getTimezoneForLocation } from "@sparkmotion/ui";
-import { Switch } from "@sparkmotion/ui/switch";
-
 const eventSchema = z.object({
   name: z.string().min(1, "Name is required"),
   location: z.string().optional(),
@@ -47,7 +45,6 @@ const eventSchema = z.object({
   startDate: z.date().nullable().optional(),
   endDate: z.date().nullable().optional(),
   campaignId: z.string().nullable().optional(),
-  autoLifecycle: z.boolean().optional(),
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
@@ -61,7 +58,6 @@ interface EventEditFormProps {
     venueName?: string | null;
     formattedAddress?: string | null;
     timezone?: string;
-    autoLifecycle?: boolean;
   };
   campaigns: Array<{ id: string; name: string }>;
 }
@@ -95,7 +91,6 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
       startDate: event.startDate ? new Date(event.startDate) : null,
       endDate: event.endDate ? new Date(event.endDate) : null,
       campaignId: event.campaignId ?? "",
-      autoLifecycle: (event as any).autoLifecycle ?? false,
     },
   });
 
@@ -105,7 +100,6 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
   const currentCampaignId = watch("campaignId");
   const currentStartDate = watch("startDate");
   const currentEndDate = watch("endDate");
-  const currentAutoLifecycle = watch("autoLifecycle");
   const updateEvent = trpc.events.update.useMutation({
     onSuccess: () => {
       utils.events.list.invalidate();
@@ -133,7 +127,6 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
       startDate: data.startDate,
       endDate: data.endDate,
       campaignId: data.campaignId && data.campaignId !== "none" ? data.campaignId : null,
-      autoLifecycle: data.autoLifecycle,
     });
   };
 
@@ -280,18 +273,6 @@ export function EventEditForm({ event, campaigns }: EventEditFormProps) {
           </Popover>
         </div>
 
-        <div className="md:col-span-2 flex items-center justify-between bg-muted/50 border rounded-lg px-4 py-3">
-          <div>
-            <p className="text-sm font-medium">Auto-Lifecycle</p>
-            <p className="text-xs text-muted-foreground">
-              Automatically activate on start date and complete on end date
-            </p>
-          </div>
-          <Switch
-            checked={currentAutoLifecycle ?? false}
-            onCheckedChange={(checked) => setValue("autoLifecycle", checked, { shouldDirty: true })}
-          />
-        </div>
       </div>
 
       <div className="flex gap-2">
