@@ -287,7 +287,7 @@ Plans:
 **Goal:** Extract all ~27 remaining duplicated components from admin/customer apps into packages/ui with optional props for variations, refactor Sidebar to config-driven navItems pattern, and extract getOrgFilter helper plus audit all tRPC routers for repeated patterns. No new features — pure consolidation refactor continuing Phase 36's work.
 **Requirements**: TBD
 **Depends on:** Phase 38
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 - [ ] 39-01-PLAN.md — Extract ~14 event domain components to packages/ui/events with barrel export

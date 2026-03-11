@@ -2,13 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
-status: unknown
-last_updated: "2026-03-09T19:40:00Z"
+status: completed
+stopped_at: Phase 39 Plan 04 COMPLETE — getOrgFilter extracted, events/campaigns/analytics routers refactored
+last_updated: "2026-03-11T19:39:00.314Z"
+last_activity: "2026-03-09 — Phase 38-03 complete: customer app fully mirrored admin auto-lifecycle UI changes; all 3 plans done"
 progress:
-  total_phases: 38
-  completed_phases: 38
-  total_plans: 86
-  completed_plans: 86
+  total_phases: 23
+  completed_phases: 18
+  total_plans: 64
+  completed_plans: 60
 ---
 
 # Project State
@@ -343,6 +345,7 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 37]: Campaign analytics multi-select uses Popover+Checkbox pattern for event filtering; inline datetime-local inputs replace calendar popover
 - [Phase 38]: campaignChainMap sorted by earliest window startTime enables O(n) chain traversal for ACTIVE->COMPLETED; last event falls back to endDate at 23:59:59 in event timezone
 - [Phase 38-02]: autoLifecycle toggle moved from edit form to Settings tab; campaignId guard hides section entirely for non-campaign events; hasWindowsWithTimes computed inline via windows.some() to avoid schema change; TooltipProvider wraps entire EventCardList (single provider pattern); customer app mirrored with same changes
+- [Phase 39-04]: getOrgFilter returns { orgId?: string } for spreading — clean fit for list procedures; bands nested event relation filter and windows entity-level enforceOrgAccess left as-is per plan guidance
 
 ### Pending Todos
 
@@ -423,7 +426,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Completed 38-03-PLAN.md — Clock icon added to customer event-card-list; customer app fully mirrors admin auto-lifecycle UI; Phase 38 all 3 plans complete
-Resume file: N/A — Phase 38 all 3 plans complete; all 86 plans across 38 phases complete
+Last session: 2026-03-11T19:38:44.161Z
+Stopped at: Phase 39 Plan 04 COMPLETE — getOrgFilter extracted, events/campaigns/analytics routers refactored
+Resume file: None
 Next step: Phase 38 complete — all plans done
