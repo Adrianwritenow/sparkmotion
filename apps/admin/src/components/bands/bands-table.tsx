@@ -36,7 +36,7 @@ import {
 } from "@sparkmotion/ui/select";
 import { getColumns, BandWithTag } from "./bands-columns";
 import { DeleteBandsDialog } from "./delete-bands-dialog";
-import { ReassignDialog } from "./reassign-dialog";
+import { ReassignDialog } from "@sparkmotion/ui/bands";
 
 const MODE_LABELS: Record<string, string> = {
   PRE: "Pre-Event",

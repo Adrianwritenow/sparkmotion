@@ -282,6 +282,19 @@ Plans:
 Plans:
 - [x] TBD (run /gsd:plan-phase 38 to break down) (completed 2026-03-09)
 
+### Phase 39: Refactor shared abstractions - extract reusable functions hooks and components across apps
+
+**Goal:** Extract all ~27 remaining duplicated components from admin/customer apps into packages/ui with optional props for variations, refactor Sidebar to config-driven navItems pattern, and extract getOrgFilter helper plus audit all tRPC routers for repeated patterns. No new features — pure consolidation refactor continuing Phase 36's work.
+**Requirements**: TBD
+**Depends on:** Phase 38
+**Plans:** 2/4 plans executed
+
+Plans:
+- [ ] 39-01-PLAN.md — Extract ~14 event domain components to packages/ui/events with barrel export
+- [ ] 39-02-PLAN.md — Extract campaigns, analytics, bands, dashboard components to packages/ui with barrel exports
+- [ ] 39-03-PLAN.md — Config-driven Sidebar and MobileHeader in packages/ui/layout, sort-row cleanup
+- [ ] 39-04-PLAN.md — Extract getOrgFilter helper, audit and refactor all tRPC routers
+
 ---
 
 _For project context, see .planning/PROJECT.md_

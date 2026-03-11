@@ -1,6 +1,6 @@
 import { Activity, Building2, Calendar, Users } from "lucide-react";
 
-import { RecentEventsTable } from "@/components/dashboard/recent-events-table";
+import { RecentEventsTable } from "@sparkmotion/ui/dashboard";
 import { RecentOrgs } from "@/components/dashboard/recent-orgs";
 import { CurrentDate, StatCard } from "@sparkmotion/ui";
 import { auth } from "@sparkmotion/auth";
@@ -109,7 +109,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
           {/* Left Column - Activity */}
           <div className="xl:col-span-2 space-y-8">
-            <RecentEventsTable events={eventsData} />
+            <RecentEventsTable events={eventsData} showOrgColumn />
           </div>
 
           {/* Right Column - Organizations */}

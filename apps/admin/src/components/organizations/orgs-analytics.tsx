@@ -11,10 +11,8 @@ import {
   SelectValue,
 } from "@sparkmotion/ui/select";
 import { DateRangeFilter } from "@sparkmotion/ui";
-import { KpiCards } from "@/components/analytics/kpi-cards";
-import { TapTrendChart } from "@/components/analytics/tap-trend-chart";
+import { KpiCards, TapTrendChart, TopEventsTable } from "@sparkmotion/ui/analytics";
 import { TopOrgsTable } from "@/components/analytics/top-orgs-table";
-import { TopEventsTable } from "@/components/analytics/top-events-table";
 
 const now = new Date();
 const defaultFrom = formatISO(subDays(startOfDay(now), 7));

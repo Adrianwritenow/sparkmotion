@@ -47,7 +47,7 @@ export default async function CampaignsPage({
       include: {
         events: {
           where: { status: { in: ["ACTIVE", "COMPLETED"] }, deletedAt: null },
-          select: { id: true, location: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
+          select: { id: true, location: true, estimatedAttendees: true, _count: { select: { bands: { where: { deletedAt: null } } } } },
         },
         _count: {
           select: {
@@ -61,16 +61,17 @@ export default async function CampaignsPage({
 
   // Batch query window-based engagement for all campaign events
   const allEventIds = campaigns.flatMap((c) => c.events.map((e) => e.id));
-  const bandCountByEvent = new Map(
-    campaigns.flatMap((c) => c.events.map((e) => [e.id, e._count.bands] as const))
+  const estimatedAttendeesByEvent = new Map(
+    campaigns.flatMap((c) => c.events.map((e) => [e.id, e.estimatedAttendees] as const))
   );
-  const engagementMap = await getEventEngagement(allEventIds, bandCountByEvent);
+  const engagementMap = await getEventEngagement(allEventIds, estimatedAttendeesByEvent);
 
   const campaignsWithStats = campaigns.map((campaign) => {
-    const { aggregateEngagement, totalBands } = aggregateCampaignEngagement(
+    const { aggregateEngagement } = aggregateCampaignEngagement(
       campaign.events,
       engagementMap,
     );
+    const totalBands = campaign.events.reduce((sum, e) => sum + e._count.bands, 0);
     const locations = campaign.events
       .map((e) => e.location)
       .filter((loc): loc is string => !!loc);

@@ -9,11 +9,12 @@ export interface EngagementResult {
 /**
  * Batch-compute engagement for a set of events.
  *
- * Formula: uniqueBands / totalBands * 100
+ * Formula: uniqueBands / estimatedAttendees * 100
+ * When estimatedAttendees is null or 0, engagementPercent = 0.
  */
 export async function getEventEngagement(
   eventIds: string[],
-  bandCountByEvent: Map<string, number>
+  estimatedAttendeesByEvent: Map<string, number | null>
 ): Promise<Map<string, EngagementResult>> {
   const result = new Map<string, EngagementResult>();
 
@@ -37,9 +38,9 @@ export async function getEventEngagement(
   `);
 
   for (const row of rows) {
-    const totalBands = bandCountByEvent.get(row.eventId) ?? 0;
-    const engagementPercent = totalBands > 0
-      ? Math.round((row.unique_bands / totalBands) * 100)
+    const estimatedAttendees = estimatedAttendeesByEvent.get(row.eventId) ?? null;
+    const engagementPercent = estimatedAttendees && estimatedAttendees > 0
+      ? Math.round((row.unique_bands / estimatedAttendees) * 100)
       : 0;
 
     result.set(row.eventId, {
@@ -54,35 +55,39 @@ export async function getEventEngagement(
 
 export interface CampaignEngagementResult {
   aggregateEngagement: number;
-  totalBands: number;
+  totalEstimatedAttendees: number;
   totalTaps: number;
 }
 
 /**
  * Aggregate engagement across all events in a campaign.
  *
- * Formula: SUM(uniqueBands) / SUM(totalBands) * 100
+ * Formula: SUM(uniqueBands) / SUM(estimatedAttendees) * 100
+ * Events with null estimatedAttendees are skipped in the denominator.
+ * When total is 0, aggregateEngagement = 0.
  */
 export function aggregateCampaignEngagement(
-  campaignEvents: Array<{ id: string; _count: { bands: number } }>,
+  campaignEvents: Array<{ id: string; estimatedAttendees: number | null }>,
   engagementMap: Map<string, EngagementResult>,
 ): CampaignEngagementResult {
   let totalUniqueBands = 0;
-  let totalBands = 0;
+  let totalEstimatedAttendees = 0;
   let totalTaps = 0;
 
   for (const event of campaignEvents) {
     const eng = engagementMap.get(event.id);
-    totalBands += event._count.bands;
+    if (event.estimatedAttendees != null) {
+      totalEstimatedAttendees += event.estimatedAttendees;
+    }
     if (eng) {
       totalUniqueBands += eng.uniqueBands;
       totalTaps += eng.totalTaps;
     }
   }
 
-  const aggregateEngagement = totalBands > 0
-    ? Math.round((totalUniqueBands / totalBands) * 100)
+  const aggregateEngagement = totalEstimatedAttendees > 0
+    ? Math.round((totalUniqueBands / totalEstimatedAttendees) * 100)
     : 0;
 
-  return { aggregateEngagement, totalBands, totalTaps };
+  return { aggregateEngagement, totalEstimatedAttendees, totalTaps };
 }

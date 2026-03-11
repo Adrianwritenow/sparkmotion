@@ -2,7 +2,7 @@ import { db } from "@sparkmotion/database";
 import { notFound } from "next/navigation";
 import { Building2, Calendar, MapPin } from "lucide-react";
 import { BackButton } from "@sparkmotion/ui";
-import { EventDetailTabs } from "@/components/events/event-detail-tabs";
+import { EventDetailTabs } from "@sparkmotion/ui/events";
 
 export const dynamic = "force-dynamic";
 

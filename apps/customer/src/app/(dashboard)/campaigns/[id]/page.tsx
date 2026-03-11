@@ -60,8 +60,8 @@ export default async function CampaignDetailPage({
     (e) => e.status === "ACTIVE" || e.status === "COMPLETED"
   );
   const eventIds = analyticsEvents.map((e) => e.id);
-  const bandCountByEvent = new Map(analyticsEvents.map((e) => [e.id, e._count.bands]));
-  const engagementMap = await getEventEngagement(eventIds, bandCountByEvent);
+  const estimatedAttendeesByEvent = new Map(analyticsEvents.map((e) => [e.id, e.estimatedAttendees]));
+  const engagementMap = await getEventEngagement(eventIds, estimatedAttendeesByEvent);
 
   const eventsWithStats = campaign.events.map((event) => {
     const eng = engagementMap.get(event.id);
