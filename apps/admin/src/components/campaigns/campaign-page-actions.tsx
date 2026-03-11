@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Button } from "@sparkmotion/ui/button";
 import { Plus } from "lucide-react";
-import { CampaignFormDialog } from "./campaign-form-dialog";
-import { CampaignTrashButton } from "./campaign-trash-button";
+import { CampaignFormDialog, CampaignTrashButton } from "@sparkmotion/ui/campaigns";
 
 interface CampaignPageActionsProps {
   orgs: Array<{ id: string; name: string }>;

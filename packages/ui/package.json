@@ -60,11 +60,16 @@
     "use-places-autocomplete": "^4.0.1",
     "next-themes": "^0.4.6",
     "zod": "^3.25.76",
+    "@sparkmotion/database": "workspace:*",
+    "@tanstack/react-table": "^8.21.3",
+    "sonner": "^2.0.7",
     "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.0"
+    "jspdf": "^4.2.0",
+    "papaparse": "^5.5.3"
   },
   "devDependencies": {
     "@types/react": "^18",
+    "@types/papaparse": "^5.5.2",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {

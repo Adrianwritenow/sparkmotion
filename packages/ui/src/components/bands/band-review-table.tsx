@@ -35,7 +35,7 @@ import {
 } from "../ui/table";
 import { TagBadge } from "../..";
 import { ReassignDialog } from "./reassign-dialog";
-import { BandDetailDialog } from "./band-detail-dialog";
+import { BandDetailDialog } from "./band-detail-dialog-connected";
 
 function useDebounce(value: string, delay: number) {
   const [debounced, setDebounced] = useState(value);

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@sparkmotion/ui/button";
-import { Input } from "@sparkmotion/ui/input";
-import { Badge } from "@sparkmotion/ui/badge";
-import { Skeleton } from "@sparkmotion/ui/skeleton";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Badge } from "../ui/badge";
+import { Skeleton } from "../ui/skeleton";
 import { Flag } from "lucide-react";
 import {
   Dialog,
@@ -13,15 +13,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@sparkmotion/ui/dialog";
+} from "../ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@sparkmotion/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@sparkmotion/ui/tabs";
+} from "../ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   Table,
   TableBody,
@@ -29,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@sparkmotion/ui/table";
+} from "../ui/table";
 
 interface BandRow {
   id: string;
@@ -254,7 +254,7 @@ export function BandDetailDialog({ band, onClose, onReassign }: BandDetailDialog
                           <TableRow key={log.id}>
                             <TableCell className="text-sm">{log.event.name}</TableCell>
                             <TableCell className="text-sm">
-                              {log.window?.title ?? MODE_LABELS[log.modeServed] ?? log.modeServed}
+                              {(log as any).window?.title ?? MODE_LABELS[log.modeServed] ?? log.modeServed}
                             </TableCell>
                             <TableCell className="text-sm">
                               {new Date(log.tappedAt).toLocaleString()}
