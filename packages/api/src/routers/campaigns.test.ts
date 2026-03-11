@@ -21,6 +21,7 @@ vi.mock('@sparkmotion/redis', () => ({}));
 // campaigns.ts imports getEventEngagement which also calls db.$queryRaw
 vi.mock('../lib/engagement', () => ({
   getEventEngagement: vi.fn().mockResolvedValue(new Map()),
+  aggregateCampaignEngagement: vi.fn().mockReturnValue({ aggregateEngagement: 0 }),
 }));
 
 import { prismaMock } from '../test-mocks';

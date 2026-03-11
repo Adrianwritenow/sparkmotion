@@ -98,25 +98,29 @@ describe('analytics.eventSummary', () => {
   });
 
   it('returns bandCount, tapCount, uniqueBands for ADMIN caller', async () => {
-    prismaMock.$queryRaw.mockResolvedValue([
-      { total_taps: BigInt(5), unique_bands: BigInt(3) },
-    ] as any);
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([{ total_taps: BigInt(5), unique_bands: BigInt(3) }] as any)
+      .mockResolvedValueOnce([{ repeat_bands: BigInt(1) }] as any);
     prismaMock.band.count.mockResolvedValue(10);
+    prismaMock.event.findUnique.mockResolvedValue({ estimatedAttendees: null } as any);
 
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const result = await caller.analytics.eventSummary({ eventId: 'event-1' });
 
-    expect(result).toEqual({ bandCount: 10, tapCount: 5, uniqueBands: 3, engagementPercent: 0 });
+    expect(result).toEqual({ bandCount: 10, tapCount: 5, uniqueBands: 3, repeatBands: 1, engagementPercent: 0, estimatedAttendees: null });
   });
 
   it('handles empty tap results gracefully (returns zeros)', async () => {
-    prismaMock.$queryRaw.mockResolvedValue([] as any);
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([] as any)
+      .mockResolvedValueOnce([{ repeat_bands: BigInt(0) }] as any);
     prismaMock.band.count.mockResolvedValue(0);
+    prismaMock.event.findUnique.mockResolvedValue({ estimatedAttendees: null } as any);
 
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const result = await caller.analytics.eventSummary({ eventId: 'event-1' });
 
-    expect(result).toEqual({ bandCount: 0, tapCount: 0, uniqueBands: 0, engagementPercent: 0 });
+    expect(result).toEqual({ bandCount: 0, tapCount: 0, uniqueBands: 0, repeatBands: 0, engagementPercent: 0, estimatedAttendees: null });
   });
 });
 
