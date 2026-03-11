@@ -28,7 +28,11 @@
     "./tabs": "./src/components/ui/tabs.tsx",
     "./tooltip": "./src/components/ui/tooltip.tsx",
     "./layout": "./src/components/layout/index.ts",
-    "./events": "./src/components/events/index.ts"
+    "./events": "./src/components/events/index.ts",
+    "./analytics": "./src/components/analytics/index.ts",
+    "./campaigns": "./src/components/campaigns/index.ts",
+    "./bands": "./src/components/bands/index.ts",
+    "./dashboard": "./src/components/dashboard/index.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.4.1",
