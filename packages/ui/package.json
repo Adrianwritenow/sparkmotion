@@ -26,7 +26,8 @@
     "./switch": "./src/components/ui/switch.tsx",
     "./table": "./src/components/ui/table.tsx",
     "./tabs": "./src/components/ui/tabs.tsx",
-    "./tooltip": "./src/components/ui/tooltip.tsx"
+    "./tooltip": "./src/components/ui/tooltip.tsx",
+    "./layout": "./src/components/layout/index.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.4.1",
