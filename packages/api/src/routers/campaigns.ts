@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db, Prisma } from "@sparkmotion/database";
-import { enforceOrgAccess } from "../lib/auth";
+import { enforceOrgAccess, getOrgFilter } from "../lib/auth";
 import { getEventEngagement } from "../lib/engagement";
 import { ACTIVE } from "../lib/soft-delete";
 import { createTrashProcedures } from "../lib/trash";
@@ -11,10 +11,7 @@ export const campaignsRouter = router({
   list: protectedProcedure
     .input(z.object({ orgId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const where =
-        ctx.user.role === "ADMIN"
-          ? input?.orgId ? { orgId: input.orgId, ...ACTIVE } : { ...ACTIVE }
-          : { orgId: ctx.user.orgId!, ...ACTIVE };
+      const where = { ...getOrgFilter(ctx, input?.orgId), ...ACTIVE };
       const campaigns = await db.campaign.findMany({
         where,
         include: {
@@ -69,7 +66,7 @@ export const campaignsRouter = router({
     .query(async ({ ctx, input }) => {
       const where: any = {
         ...ACTIVE,
-        ...(ctx.user.role === "CUSTOMER" ? { orgId: ctx.user.orgId! } : input?.orgId ? { orgId: input.orgId } : {}),
+        ...getOrgFilter(ctx, input?.orgId),
         ...(input?.search ? { name: { contains: input.search, mode: "insensitive" } } : {}),
         ...(input?.status ? { status: input.status } : {}),
       };

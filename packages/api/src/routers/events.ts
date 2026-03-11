@@ -6,7 +6,7 @@ import { invalidateEventCache, invalidateBandCache } from "@sparkmotion/redis";
 import { evaluateEventSchedule } from "../services/evaluate-schedule";
 import { purgeEventFromKV } from "../services/redirect-map-generator";
 import { getEventEngagement } from "../lib/engagement";
-import { enforceOrgAccess } from "../lib/auth";
+import { enforceOrgAccess, getOrgFilter } from "../lib/auth";
 import { ACTIVE, DELETED } from "../lib/soft-delete";
 import { createTrashProcedures } from "../lib/trash";
 
@@ -25,10 +25,7 @@ export const eventsRouter = router({
       sortDir: z.enum(["asc", "desc"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const where =
-        ctx.user.role === "ADMIN"
-          ? input?.orgId ? { orgId: input.orgId, ...ACTIVE } : { ...ACTIVE }
-          : { orgId: ctx.user.orgId ?? undefined, ...ACTIVE };
+      const where = { ...getOrgFilter(ctx, input?.orgId), ...ACTIVE };
       const sortBy = input?.sortBy ?? "createdAt";
       const sortDir = input?.sortDir ?? "desc";
       const events = await db.event.findMany({
@@ -73,7 +70,7 @@ export const eventsRouter = router({
     .query(async ({ ctx, input }) => {
       const where: any = {
         ...ACTIVE,
-        ...(ctx.user.role === "CUSTOMER" ? { orgId: ctx.user.orgId } : input?.orgId ? { orgId: input.orgId } : {}),
+        ...getOrgFilter(ctx, input?.orgId),
         ...(input?.campaignId ? { campaignId: input.campaignId } : {}),
         ...(input?.search ? { name: { contains: input.search, mode: "insensitive" } } : {}),
         ...(input?.status ? { status: input.status } : {}),
