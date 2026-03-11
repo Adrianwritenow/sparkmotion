@@ -102,6 +102,7 @@ interface EventsAnalyticsProps {
 	eventName: string;
 	orgName: string;
 	estimatedAttendees: number | null;
+	eventTimezone: string;
 }
 
 export function EventsAnalytics({
@@ -109,6 +110,7 @@ export function EventsAnalytics({
 	eventName,
 	orgName,
 	estimatedAttendees,
+	eventTimezone,
 }: EventsAnalyticsProps) {
 	const captureRef = useRef<HTMLDivElement>(null);
 	const [selectedWindowIds, setSelectedWindowIds] = useState<string[]>(["all"]);

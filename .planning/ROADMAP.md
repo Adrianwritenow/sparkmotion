@@ -282,6 +282,16 @@ Plans:
 Plans:
 - [x] TBD (run /gsd:plan-phase 38 to break down) (completed 2026-03-09)
 
+### Phase 39: Refactor shared abstractions - extract reusable functions hooks and components across apps
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 38
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 39 to break down)
+
 ---
 
 _For project context, see .planning/PROJECT.md_
