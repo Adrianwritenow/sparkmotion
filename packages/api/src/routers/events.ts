@@ -49,8 +49,8 @@ export const eventsRouter = router({
 
       // Batch engagement + tap stats via shared lib
       const eventIds = events.map((e) => e.id);
-      const bandCountByEvent = new Map(events.map((e) => [e.id, e._count.bands]));
-      const engagementMap = await getEventEngagement(eventIds, bandCountByEvent);
+      const estimatedAttendeesByEvent = new Map(events.map((e) => [e.id, e.estimatedAttendees]));
+      const engagementMap = await getEventEngagement(eventIds, estimatedAttendeesByEvent);
 
       return events.map((event) => {
         const eng = engagementMap.get(event.id);
@@ -115,8 +115,8 @@ export const eventsRouter = router({
       }
 
       // Engagement + tap stats via shared lib
-      const bandCountByEvent = new Map([[event.id, event._count.bands]]);
-      const engagementMap = await getEventEngagement([event.id], bandCountByEvent);
+      const estimatedAttendeesByEvent = new Map([[event.id, event.estimatedAttendees]]);
+      const engagementMap = await getEventEngagement([event.id], estimatedAttendeesByEvent);
       const eng = engagementMap.get(event.id);
 
       return {

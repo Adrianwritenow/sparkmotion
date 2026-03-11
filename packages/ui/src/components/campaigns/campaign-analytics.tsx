@@ -41,6 +41,7 @@ import {
 	MousePointerClick,
 	Activity,
 	TrendingUp,
+	Repeat,
 	ChevronDown,
 	Info,
 } from "lucide-react";
@@ -179,12 +180,10 @@ export function CampaignAnalytics({
 			? `${(overviewSummary.tapCount / overviewSummary.bandCount).toFixed(1)}x`
 			: "0.0x";
 
-	const bandsTappedPct =
-		overviewSummary && overviewSummary.bandCount > 0
-			? Math.round(
-					(overviewSummary.uniqueBands / overviewSummary.bandCount) * 100,
-				)
-			: 0;
+	const reEngagementPct =
+		overviewSummary && overviewSummary.uniqueBands > 0
+			? ((overviewSummary.repeatBands / overviewSummary.uniqueBands) * 100).toFixed(1)
+			: "0.0";
 
 	const campaignEstimatedAttendees =
 		overviewSummary?.estimatedAttendees ?? null;
@@ -398,24 +397,19 @@ export function CampaignAnalytics({
 									</span>
 								</div>
 
-								{/* Cell 3: Bands Tapped with green % badge */}
+								{/* Cell 3: Re-engagement */}
 								<div className="bg-muted/30 rounded-lg p-2.5 space-y-0.5">
 									<div className="flex items-center gap-1.5">
-										<Users className="w-3 h-3 text-muted-foreground" />
+										<Repeat className="w-3 h-3 text-muted-foreground" />
 										<span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-											Bands Tapped
+											Re-engagement
 										</span>
 									</div>
-									<div className="flex items-baseline gap-1.5">
-										<p className="text-xl font-bold text-foreground">
-											{(overviewSummary?.uniqueBands ?? 0).toLocaleString()}
-										</p>
-										<span className="text-[10px] font-medium text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400 px-1.5 py-0.5 rounded-full">
-											{bandsTappedPct}%
-										</span>
-									</div>
+									<p className="text-xl font-bold text-foreground">
+										{reEngagementPct}%
+									</p>
 									<span className="text-[10px] text-muted-foreground">
-										Of total bands
+										Tapped 2+ times
 									</span>
 								</div>
 
@@ -441,7 +435,7 @@ export function CampaignAnalytics({
 						<div className="mt-4">
 							<div className="flex items-center justify-between mb-1.5">
 								<span className="text-xs text-muted-foreground flex items-center gap-1">
-									Band Activation Progress
+									Band Activation Progress ({activationPct}%)
 									<TooltipProvider>
 										<ShadTooltip>
 											<TooltipTrigger asChild>

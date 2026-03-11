@@ -40,6 +40,7 @@ interface EventCardListProps {
     _count: { bands: number };
     tapCount?: number;
     engagementPercent?: number;
+    estimatedAttendees?: number | null;
     autoLifecycle?: boolean;
   }>;
   showOrg?: boolean;
@@ -235,7 +236,7 @@ export function EventCardList({ events, showOrg = true, showCampaign = false, se
                 <TrendingUp className="w-4 h-4 text-muted-foreground" />
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold text-foreground leading-none">
-                    {event.engagementPercent ?? 0}%
+                    {event.estimatedAttendees ? `${event.engagementPercent ?? 0}%` : "--"}
                   </span>
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">
                     Engagement

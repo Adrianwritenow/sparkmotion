@@ -44,6 +44,7 @@ import {
 	MousePointerClick,
 	Activity,
 	TrendingUp,
+	Repeat,
 	ChevronDown,
 	CalendarIcon,
 	X,
@@ -356,8 +357,14 @@ export function EventsAnalytics({
 			? (overviewSummary.tapCount / overviewSummary.bandCount).toFixed(1)
 			: "0.0";
 	const engagementPct = overviewSummary?.engagementPercent?.toFixed(1) ?? "0.0";
+	const reEngagementPct =
+		overviewSummary && overviewSummary.uniqueBands > 0
+			? ((overviewSummary.repeatBands / overviewSummary.uniqueBands) * 100).toFixed(1)
+			: "0.0";
 	const bandsTappedSubtitle = overviewSummary
-		? `${overviewSummary.uniqueBands.toLocaleString()} of ${overviewSummary.bandCount.toLocaleString()} bands`
+		? estimatedAttendees
+			? `${overviewSummary.uniqueBands.toLocaleString()} of ${estimatedAttendees.toLocaleString()} est. attendees`
+			: "No estimate set"
 		: "";
 	const activationDenom =
 		estimatedAttendees && estimatedAttendees > 0
@@ -518,26 +525,6 @@ export function EventsAnalytics({
 								</span>
 							</div>
 
-							{/* Bands Tapped */}
-							<div className="bg-muted/30 rounded-lg p-2.5 space-y-0.5">
-								<div className="flex items-center gap-1.5">
-									<Users className="w-3 h-3 text-muted-foreground" />
-									<span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-										Bands Tapped
-									</span>
-								</div>
-								{overviewLoading ? (
-									<Skeleton className="h-7 w-16" />
-								) : (
-									<p className="text-xl font-bold text-foreground">
-										{overviewSummary?.uniqueBands.toLocaleString() ?? "0"}
-									</p>
-								)}
-								<span className="text-[10px] text-muted-foreground">
-									Of total bands
-								</span>
-							</div>
-
 							{/* Engagement % */}
 							<div className="bg-muted/30 rounded-lg p-2.5 space-y-0.5">
 								<div className="flex items-center gap-1.5">
@@ -555,6 +542,26 @@ export function EventsAnalytics({
 								)}
 								<span className="text-[10px] text-muted-foreground">
 									{bandsTappedSubtitle}
+								</span>
+							</div>
+
+							{/* Re-engagement */}
+							<div className="bg-muted/30 rounded-lg p-2.5 space-y-0.5">
+								<div className="flex items-center gap-1.5">
+									<Repeat className="w-3 h-3 text-muted-foreground" />
+									<span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+										Re-engagement
+									</span>
+								</div>
+								{overviewLoading ? (
+									<Skeleton className="h-7 w-16" />
+								) : (
+									<p className="text-xl font-bold text-foreground">
+										{reEngagementPct}%
+									</p>
+								)}
+								<span className="text-[10px] text-muted-foreground">
+									Tapped 2+ times
 								</span>
 							</div>
 
@@ -583,7 +590,7 @@ export function EventsAnalytics({
 						<div className="mt-4 pt-4 border-t border-border">
 							<div className="flex items-center justify-between mb-1.5">
 								<span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
-									Band Activation Progress
+									Band Activation Progress ({activationPct}%)
 									<TooltipProvider>
 										<ShadTooltip>
 											<TooltipTrigger asChild>

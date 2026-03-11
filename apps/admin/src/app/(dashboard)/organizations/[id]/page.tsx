@@ -45,7 +45,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
 
   // Batch query tap stats + window-based engagement for org events
   const eventIds = org.events.map((e) => e.id);
-  const bandCountByEvent = new Map(org.events.map((e) => [e.id, e._count.bands]));
+  const estimatedAttendeesByEvent = new Map(org.events.map((e) => [e.id, e.estimatedAttendees]));
 
   const [tapStats, engagementMap] = await Promise.all([
     eventIds.length > 0
@@ -57,7 +57,7 @@ export default async function OrganizationDetailPage({ params, searchParams }: P
           GROUP BY tl."eventId"
         `)
       : [],
-    getEventEngagement(eventIds, bandCountByEvent),
+    getEventEngagement(eventIds, estimatedAttendeesByEvent),
   ]);
   const tapStatsMap = new Map(tapStats.map((s) => [s.eventId, Number(s.total_taps)]));
 

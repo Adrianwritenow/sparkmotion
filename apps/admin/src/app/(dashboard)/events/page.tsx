@@ -71,8 +71,8 @@ export default async function EventsPage({
 
   // Batch engagement + tap stats via shared lib
   const eventIds = events.map((e) => e.id);
-  const bandCountByEvent = new Map(events.map((e) => [e.id, e._count.bands]));
-  const engagementMap = await getEventEngagement(eventIds, bandCountByEvent);
+  const estimatedAttendeesByEvent = new Map(events.map((e) => [e.id, e.estimatedAttendees]));
+  const engagementMap = await getEventEngagement(eventIds, estimatedAttendeesByEvent);
 
   const eventsWithStats = events.map((event) => {
     const eng = engagementMap.get(event.id);

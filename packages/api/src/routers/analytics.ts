@@ -163,7 +163,7 @@ export const analyticsRouter = router({
     .query(async ({ input }) => {
       const { dateFilter, windowFilter } = buildDateFilter(input);
       const hasFilters = !!(input.windowId || input.from || input.to);
-      const [tapCounts, totalBandCount] = await Promise.all([
+      const [tapCounts, totalBandCount, event, repeatBandsResult] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
             COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
@@ -175,22 +175,35 @@ export const analyticsRouter = router({
             ${windowFilter}
         `),
         db.band.count({ where: { eventId: input.eventId, ...ACTIVE } }),
+        db.event.findUnique({ where: { id: input.eventId }, select: { estimatedAttendees: true } }),
+        db.$queryRaw<[{ repeat_bands: bigint }]>(Prisma.sql`
+          SELECT COUNT(*)::int AS repeat_bands FROM (
+            SELECT tl."bandId" FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            WHERE tl."eventId" = ${input.eventId}
+              ${dateFilter}
+              ${windowFilter}
+            GROUP BY tl."bandId"
+            HAVING COUNT(DISTINCT tl."tappedAt") > 1
+          ) sub
+        `),
       ]);
       const uniqueBands = Number(tapCounts[0]?.unique_bands ?? 0);
+      const estimatedAttendees = event?.estimatedAttendees ?? null;
 
       let engagementPercent: number;
       let bandCount: number;
       if (hasFilters) {
         // When filtered, use unique bands from filtered query as the band count
-        // and derive engagement inline instead of querying all TapLog rows
+        // and derive engagement using estimatedAttendees as denominator
         bandCount = uniqueBands;
-        engagementPercent = totalBandCount > 0
-          ? Math.round((uniqueBands / totalBandCount) * 10000) / 100
+        engagementPercent = estimatedAttendees && estimatedAttendees > 0
+          ? Math.round((uniqueBands / estimatedAttendees) * 10000) / 100
           : 0;
       } else {
         bandCount = totalBandCount;
-        const bandCountMap = new Map([[input.eventId, totalBandCount]]);
-        const engagementMap = await getEventEngagement([input.eventId], bandCountMap);
+        const estimatedAttendeesMap = new Map([[input.eventId, estimatedAttendees]]);
+        const engagementMap = await getEventEngagement([input.eventId], estimatedAttendeesMap);
         engagementPercent = engagementMap.get(input.eventId)?.engagementPercent ?? 0;
       }
 
@@ -198,7 +211,9 @@ export const analyticsRouter = router({
         bandCount,
         tapCount: Number(tapCounts[0]?.total_taps ?? 0),
         uniqueBands,
+        repeatBands: Number(repeatBandsResult[0]?.repeat_bands ?? 0),
         engagementPercent,
+        estimatedAttendees,
       };
     }),
 
@@ -214,16 +229,17 @@ export const analyticsRouter = router({
       const isLive = eventId && toDate >= now && fromDate <= now;
 
       if (isLive) {
-        const [redisAnalytics, totalBands] = await Promise.all([
+        const [redisAnalytics, liveEvent] = await Promise.all([
           getAnalytics(eventId),
-          db.band.count({ where: { eventId, ...ACTIVE } }),
+          db.event.findUnique({ where: { id: eventId }, select: { estimatedAttendees: true } }),
         ]);
 
         const { totalTaps, uniqueTaps, byMode } = redisAnalytics;
+        const liveEstimatedAttendees = liveEvent?.estimatedAttendees ?? null;
         const minutesInRange = Math.max(1, (now.getTime() - fromDate.getTime()) / 60000);
         const tpm = Math.round((totalTaps / minutesInRange) * 100) / 100;
-        const bandActivityPercent = totalBands > 0
-          ? Math.round((uniqueTaps / totalBands) * 100)
+        const bandActivityPercent = liveEstimatedAttendees && liveEstimatedAttendees > 0
+          ? Math.round((uniqueTaps / liveEstimatedAttendees) * 100)
           : 0;
         const avgTapsPerBand = uniqueTaps > 0
           ? Math.round((totalTaps / uniqueTaps) * 100) / 100
@@ -261,10 +277,10 @@ export const analyticsRouter = router({
         eventWhere.id = eventId;
       }
 
-      // Get event IDs matching org scope
+      // Get event IDs + estimatedAttendees matching org scope
       const events = await db.event.findMany({
         where: { ...eventWhere, ...ACTIVE },
-        select: { id: true },
+        select: { id: true, estimatedAttendees: true },
       });
       const eventIds = events.map(e => e.id);
 
@@ -313,8 +329,13 @@ export const analyticsRouter = router({
         ? Prisma.sql`AND tl."eventId" IN (${Prisma.join(eventIds)})`
         : Prisma.sql`AND 1=1`;
 
+      // Sum estimatedAttendees across matching events
+      const totalEstimatedAttendees = events.reduce((sum, e) => {
+        return e.estimatedAttendees != null ? sum + e.estimatedAttendees : sum;
+      }, 0);
+
       // Execute additional queries in parallel
-      const [peakTpmResult, totalBands, modeDist] = await Promise.all([
+      const [peakTpmResult, modeDist] = await Promise.all([
         // Peak TPM: max taps in any single minute
         db.$queryRaw<Array<{ minute: Date; count: bigint }>>(Prisma.sql`
           SELECT DATE_TRUNC('minute', "tappedAt") as minute, COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int as count
@@ -327,15 +348,6 @@ export const analyticsRouter = router({
           LIMIT 1
         `),
 
-        // Total bands (for activity calculation)
-        db.band.count({
-          where: eventIds.length > 0
-            ? { eventId: { in: eventIds }, ...ACTIVE }
-            : eventId
-            ? { eventId, ...ACTIVE }
-            : { ...ACTIVE },
-        }),
-
         // Mode distribution
         db.tapLog.groupBy({
           by: ["modeServed"],
@@ -346,9 +358,9 @@ export const analyticsRouter = router({
 
       const peakTpm = peakTpmResult[0] ? Number(peakTpmResult[0].count) : 0;
 
-      // Band activity %
-      const bandActivityPercent = totalBands > 0
-        ? Math.round((uniqueBands / totalBands) * 100)
+      // Band activity % — uses estimatedAttendees as denominator
+      const bandActivityPercent = totalEstimatedAttendees > 0
+        ? Math.round((uniqueBands / totalEstimatedAttendees) * 100)
         : 0;
 
       // Avg taps/band
@@ -1182,13 +1194,13 @@ export const analyticsRouter = router({
         : campaign.events.map((e) => e.id);
 
       if (eventIds.length === 0) {
-        return { eventCount: 0, bandCount: 0, tapCount: 0, uniqueBands: 0, breakdown: [] };
+        return { eventCount: 0, bandCount: 0, tapCount: 0, uniqueBands: 0, repeatBands: 0, breakdown: [] };
       }
 
       const { dateFilter, windowFilter } = buildDateFilter(input);
       const hasFilters = !!(input.windowId || input.from || input.to);
 
-      const [tapCounts, totalBandCount, perEvent] = await Promise.all([
+      const [tapCounts, totalBandCount, perEvent, repeatBandsResult] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
             COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
@@ -1212,6 +1224,17 @@ export const analyticsRouter = router({
             ${windowFilter}
           GROUP BY tl."eventId"
         `),
+        db.$queryRaw<[{ repeat_bands: bigint }]>(Prisma.sql`
+          SELECT COUNT(*)::int AS repeat_bands FROM (
+            SELECT tl."bandId" FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            WHERE tl."eventId" IN (${Prisma.join(eventIds)})
+              ${dateFilter}
+              ${windowFilter}
+            GROUP BY tl."bandId"
+            HAVING COUNT(DISTINCT tl."tappedAt") > 1
+          ) sub
+        `),
       ]);
 
       const perEventMap = new Map(perEvent.map((r) => [r.eventId, r]));
@@ -1231,18 +1254,21 @@ export const analyticsRouter = router({
 
       if (hasFilters) {
         // When filtered, use unique bands from filtered query as the band count
-        // and derive engagement inline instead of querying all TapLog rows
+        // and derive engagement using estimatedAttendees as denominator
         bandCount = uniqueBands;
-        aggregateEngagement = totalBandCount > 0
-          ? Math.round((uniqueBands / totalBandCount) * 10000) / 100
+        const totalEstAtt = filteredEvents.reduce((sum, e) => {
+          return e.estimatedAttendees != null ? sum + e.estimatedAttendees : sum;
+        }, 0);
+        aggregateEngagement = totalEstAtt > 0
+          ? Math.round((uniqueBands / totalEstAtt) * 10000) / 100
           : 0;
         breakdown = filteredEvents.map((e) => {
           const stats = perEventMap.get(e.id);
           const tapCount = Number(stats?.total_taps ?? 0);
           const eventUniqueBands = Number(stats?.unique_bands ?? 0);
-          const eventTotalBands = e._count.bands;
-          const engagementPercent = eventTotalBands > 0
-            ? Math.round((eventUniqueBands / eventTotalBands) * 10000) / 100
+          const estAtt = e.estimatedAttendees;
+          const engagementPercent = estAtt && estAtt > 0
+            ? Math.round((eventUniqueBands / estAtt) * 10000) / 100
             : 0;
           return {
             eventId: e.id,
@@ -1255,10 +1281,10 @@ export const analyticsRouter = router({
         });
       } else {
         bandCount = totalBandCount;
-        const bandCountByEvent = new Map(
-          filteredEvents.map((e) => [e.id, e._count.bands] as const)
+        const estimatedAttendeesMap = new Map(
+          filteredEvents.map((e) => [e.id, e.estimatedAttendees] as const)
         );
-        const engagementMap = await getEventEngagement(eventIds, bandCountByEvent);
+        const engagementMap = await getEventEngagement(eventIds, estimatedAttendeesMap);
         const result = aggregateCampaignEngagement(filteredEvents, engagementMap);
         aggregateEngagement = result.aggregateEngagement;
         breakdown = filteredEvents.map((e) => {
@@ -1286,6 +1312,7 @@ export const analyticsRouter = router({
         bandCount,
         tapCount: Number(tapCounts[0]?.total_taps ?? 0),
         uniqueBands,
+        repeatBands: Number(repeatBandsResult[0]?.repeat_bands ?? 0),
         aggregateEngagement,
         estimatedAttendees: totalEstimatedAttendees > 0 ? totalEstimatedAttendees : null,
         breakdown,
