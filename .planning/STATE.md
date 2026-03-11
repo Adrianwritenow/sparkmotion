@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: completed
-stopped_at: Completed 39-03-PLAN.md
-last_updated: "2026-03-11T20:19:17.257Z"
-last_activity: "2026-03-09 — Phase 38-03 complete: customer app fully mirrored admin auto-lifecycle UI changes; all 3 plans done"
+stopped_at: Completed 39-01-PLAN.md
+last_updated: "2026-03-11T20:24:00Z"
+last_activity: "2026-03-11 — Phase 39-01 complete: all 15 event-domain components extracted to packages/ui/events, import sites updated, local copies deleted"
 progress:
   total_phases: 23
   completed_phases: 18
