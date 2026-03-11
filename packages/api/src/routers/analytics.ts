@@ -5,7 +5,7 @@ import { db } from "@sparkmotion/database";
 import { Prisma } from "@sparkmotion/database";
 import { TRPCError } from "@trpc/server";
 import { getEventEngagement, aggregateCampaignEngagement } from "../lib/engagement";
-import { enforceOrgAccess } from "../lib/auth";
+import { enforceOrgAccess, getOrgFilter } from "../lib/auth";
 import { ACTIVE } from "../lib/soft-delete";
 
 // Shared input schema for date range queries
@@ -255,13 +255,8 @@ export const analyticsRouter = router({
         },
       };
 
-      // Apply org-scoping for CUSTOMER role
-      let eventWhere: Prisma.EventWhereInput = {};
-      if (ctx.user.role === "CUSTOMER") {
-        eventWhere.orgId = ctx.user.orgId!;
-      } else if (ctx.user.role === "ADMIN" && orgId) {
-        eventWhere.orgId = orgId;
-      }
+      // Apply org-scoping and optional single-event filter
+      const eventWhere: Prisma.EventWhereInput = { ...getOrgFilter(ctx, orgId) };
       if (ctx.user.role === "ADMIN" && eventId) {
         eventWhere.id = eventId;
       }
@@ -385,13 +380,8 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       const { from, to, eventId, orgId } = input;
 
-      // Build org-scoping for events
-      let eventWhere: Prisma.EventWhereInput = {};
-      if (ctx.user.role === "CUSTOMER") {
-        eventWhere.orgId = ctx.user.orgId!;
-      } else if (ctx.user.role === "ADMIN" && orgId) {
-        eventWhere.orgId = orgId;
-      }
+      // Apply org-scoping and optional single-event filter
+      const eventWhere: Prisma.EventWhereInput = { ...getOrgFilter(ctx, orgId) };
       if (ctx.user.role === "ADMIN" && eventId) {
         eventWhere.id = eventId;
       }
@@ -436,13 +426,8 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       const { from, to } = input;
 
-      // Build org-scoping for events
-      let eventWhere: Prisma.EventWhereInput = {};
-      if (ctx.user.role === "CUSTOMER") {
-        eventWhere.orgId = ctx.user.orgId!;
-      } else if (ctx.user.role === "ADMIN" && input.orgId) {
-        eventWhere.orgId = input.orgId;
-      }
+      // Apply org-scoping
+      const eventWhere: Prisma.EventWhereInput = { ...getOrgFilter(ctx, input.orgId) };
 
       // Get event IDs matching org scope
       const events = await db.event.findMany({
