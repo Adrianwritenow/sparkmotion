@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
 status: completed
-stopped_at: Phase 39 Plan 04 COMPLETE — getOrgFilter extracted, events/campaigns/analytics routers refactored
-last_updated: "2026-03-11T19:39:00.314Z"
+stopped_at: Completed 39-03-PLAN.md
+last_updated: "2026-03-11T20:19:17.257Z"
 last_activity: "2026-03-09 — Phase 38-03 complete: customer app fully mirrored admin auto-lifecycle UI changes; all 3 plans done"
 progress:
   total_phases: 23
   completed_phases: 18
   total_plans: 64
-  completed_plans: 60
+  completed_plans: 61
 ---
 
 # Project State
@@ -346,6 +346,9 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 38]: campaignChainMap sorted by earliest window startTime enables O(n) chain traversal for ACTIVE->COMPLETED; last event falls back to endDate at 23:59:59 in event timezone
 - [Phase 38-02]: autoLifecycle toggle moved from edit form to Settings tab; campaignId guard hides section entirely for non-campaign events; hasWindowsWithTimes computed inline via windows.some() to avoid schema change; TooltipProvider wraps entire EventCardList (single provider pattern); customer app mirrored with same changes
 - [Phase 39-04]: getOrgFilter returns { orgId?: string } for spreading — clean fit for list procedures; bands nested event relation filter and windows entity-level enforceOrgAccess left as-is per plan guidance
+- [Phase 39-03]: DashboardShell client component per-app: keeps tRPC flaggedCount query in apps (not packages/ui), shared Sidebar stays pure/config-driven
+- [Phase 39-03]: next-themes added to packages/ui dependencies (not just peerDependencies) because TypeScript resolution in pnpm monorepo requires explicit declaration when package UI is compiled within app builds
+- [Phase 39-03]: Sort-row local copies deleted without import updates — both copies were dead code (no consumers found via grep)
 
 ### Pending Todos
 
@@ -426,7 +429,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T19:38:44.161Z
-Stopped at: Phase 39 Plan 04 COMPLETE — getOrgFilter extracted, events/campaigns/analytics routers refactored
+Last session: 2026-03-11T20:19:17.233Z
+Stopped at: Completed 39-03-PLAN.md
 Resume file: None
 Next step: Phase 38 complete — all plans done
