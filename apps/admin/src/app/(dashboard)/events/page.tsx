@@ -1,8 +1,6 @@
 import { db, Prisma, EventStatus } from "@sparkmotion/database";
 import { getEventEngagement } from "@sparkmotion/api";
-import { EventListWithActions } from "@/components/events/event-list-with-actions";
-import { CampaignFilter } from "@/components/events/campaign-filter";
-import { EventPageActions } from "@/components/events/event-page-actions";
+import { EventListWithActions, CampaignFilter, EventPageActions } from "@sparkmotion/ui/events";
 import { ListFilterBar } from "@sparkmotion/ui";
 
 export const dynamic = "force-dynamic";

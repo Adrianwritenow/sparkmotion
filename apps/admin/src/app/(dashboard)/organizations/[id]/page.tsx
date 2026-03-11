@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Globe, Calendar, Mail, Link2 } from "lucide-react";
 import { MembersTable } from "@/components/organizations/members-table";
-import { EventCardList } from "@/components/events/event-card-list";
+import { EventCardList } from "@sparkmotion/ui/events";
 import { OrgSettingsForm } from "@/components/organizations/org-settings-form";
 import { OrgHeaderActions } from "@/components/organizations/org-header-actions";
 import { OrgOverviewAnalytics } from "@/components/organizations/org-overview-analytics";

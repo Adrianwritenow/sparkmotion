@@ -14,7 +14,7 @@ import {
 import { Button } from "../ui/button";
 import { CampaignFormBase } from "./campaign-form";
 import { EventMultiSelect } from "./event-multi-select";
-import { EventForm } from "@/components/events/event-form";
+import { EventForm } from "../events/event-form";
 
 interface AvailableEvent {
   id: string;
