@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Calendar, MapPin } from "lucide-react";
 import { BackButton } from "@sparkmotion/ui";
 import { EventDetailTabs } from "@sparkmotion/ui/events";
+import { BandsTable } from "@/components/bands/bands-table";
 
 export const dynamic = "force-dynamic";
 
@@ -140,6 +141,7 @@ export default async function EventDetailPage({
         activeTab={activeTab}
         campaigns={campaigns}
         recentTransition={recentTransition}
+        bandsTabContent={<BandsTable eventId={params.id} />}
       />
     </div>
   );
