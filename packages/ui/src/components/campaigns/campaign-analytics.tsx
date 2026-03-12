@@ -36,6 +36,7 @@ import {
 	TooltipContent,
 	TooltipProvider,
 } from "@sparkmotion/ui/tooltip";
+import { Badge } from "@sparkmotion/ui/badge";
 import {
 	Users,
 	MousePointerClick,
@@ -44,8 +45,10 @@ import {
 	Repeat,
 	ChevronDown,
 	Info,
+	ZoomOut,
 } from "lucide-react";
 import { ExportAnalyticsButton } from "../analytics/export-analytics-button";
+import { DateRangeFilter } from "../date-range-filter";
 
 const PIE_COLORS = [
 	"hsl(var(--chart-1))",
@@ -59,6 +62,31 @@ const PIE_COLORS = [
 function getDistinctColor(index: number): string {
 	const hue = Math.round((index * 137.508) % 360);
 	return `hsl(${hue}, 70%, 55%)`;
+}
+
+/**
+ * Remove interior runs of all-zero rows, keeping the first & last zero
+ * adjacent to each non-zero stretch so charts show ramp-up/down.
+ */
+function skipZeroRuns<T extends Record<string, any>>(
+	rows: T[],
+	valueKeys: string[],
+): T[] {
+	if (rows.length <= 2) return rows;
+	const isZero = (row: T) => valueKeys.every((k) => !row[k] || row[k] === 0);
+	const result: T[] = [];
+	for (let i = 0; i < rows.length; i++) {
+		if (!isZero(rows[i]!)) {
+			result.push(rows[i]!);
+		} else {
+			const prevNonZero = i > 0 && !isZero(rows[i - 1]!);
+			const nextNonZero = i < rows.length - 1 && !isZero(rows[i + 1]!);
+			if (prevNonZero || nextNonZero || i === 0 || i === rows.length - 1) {
+				result.push(rows[i]!);
+			}
+		}
+	}
+	return result;
 }
 
 interface CampaignAnalyticsProps {
@@ -90,6 +118,11 @@ export function CampaignAnalytics({
 	// Multi-select event filter — "all" means no event filter applied
 	const [selectedEventIds, setSelectedEventIds] = useState<string[]>(["all"]);
 
+	// Date range state for drill-down
+	const [dateFrom, setDateFrom] = useState<string | undefined>(undefined);
+	const [dateTo, setDateTo] = useState<string | undefined>(undefined);
+	const [drillStack, setDrillStack] = useState<Array<{ from?: string; to?: string }>>([]);
+
 	const handleEventSelect = (id: string) => {
 		if (id === "all") {
 			setSelectedEventIds(["all"]);
@@ -112,9 +145,15 @@ export function CampaignAnalytics({
 	const singleEventId =
 		activeEventIds.length === 1 ? activeEventIds[0] : undefined;
 
+	// Filtered event list for charts (respects multi-select filter)
+	const filteredEventNames = activeEventIds.length > 0
+		? eventNames.filter((ev) => activeEventIds.includes(ev.id))
+		: eventNames;
+
 	const filterParams = {
 		campaignId,
 		eventId: singleEventId,
+		...(dateFrom && dateTo ? { from: dateFrom, to: dateTo } : {}),
 	};
 
 	// tRPC queries
@@ -138,24 +177,31 @@ export function CampaignAnalytics({
 	const { data: sparklineRaw } =
 		trpc.analytics.campaignEngagementByHour.useQuery({ campaignId });
 
-	// Pivot engagement data into wide format: { date, [eventId]: count }
+	// Pivot engagement data into wide format: { date, bucketStart, bucketEnd, [eventId]: count }
 	const engagementWide = (() => {
-		if (!engagement || engagement.length === 0) return [];
-		const byDate = new Map<string, Record<string, number>>();
-		for (const row of engagement) {
-			if (!byDate.has(row.date)) byDate.set(row.date, {});
-			const entry = byDate.get(row.date)!;
-			entry[row.eventId] = row.interactions;
+		if (!engagement?.data || engagement.data.length === 0) return [];
+		const byDate = new Map<string, Record<string, any>>();
+		for (const row of engagement.data) {
+			if (!byDate.has(row.date)) {
+				byDate.set(row.date, { bucketStart: row.bucketStart, bucketEnd: row.bucketEnd });
+			}
+			byDate.get(row.date)![row.eventId] = row.interactions;
 		}
-		return Array.from(byDate.entries()).map(([date, counts]) => ({
+		return Array.from(byDate.entries()).map(([date, rest]) => ({
 			date,
-			...counts,
+			...rest,
 		}));
 	})();
 
-	// Dynamic engagement chart config from eventNames
+	// Apply zero-skipping to engagement wide data
+	const engagementWideFiltered = useMemo(
+		() => skipZeroRuns(engagementWide, filteredEventNames.map((ev) => ev.id)),
+		[engagementWide, filteredEventNames],
+	);
+
+	// Dynamic engagement chart config from filtered events
 	const engagementBarConfig = Object.fromEntries(
-		eventNames.map((ev) => [
+		filteredEventNames.map((ev) => [
 			ev.id,
 			{ label: ev.name, color: eventColorMap.get(ev.id) ?? "#FF6B35" },
 		]),
@@ -163,9 +209,9 @@ export function CampaignAnalytics({
 
 	// Aggregate sparkline data: sum interactions across events per date
 	const sparklineData = (() => {
-		if (!sparklineRaw || sparklineRaw.length === 0) return undefined;
+		if (!sparklineRaw?.data || sparklineRaw.data.length === 0) return undefined;
 		const byDate = new Map<string, number>();
-		for (const row of sparklineRaw) {
+		for (const row of sparklineRaw.data) {
 			byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.interactions);
 		}
 		return Array.from(byDate.entries()).map(([date, interactions]) => ({
@@ -217,27 +263,31 @@ export function CampaignAnalytics({
 				value: w.count,
 				eventId: undefined as string | undefined,
 			}))
-		: (summary?.breakdown ?? []).map((e) => ({
-				name: e.name,
-				value: e.tapCount,
-				eventId: e.eventId,
-			}));
+		: (summary?.breakdown ?? [])
+				.filter((e) => activeEventIds.length === 0 || activeEventIds.includes(e.eventId))
+				.map((e) => ({
+					name: e.name,
+					value: e.tapCount,
+					eventId: e.eventId,
+				}));
 	const pieTotal = pieSource.reduce((s, d) => s + d.value, 0);
 	const pieLoading = singleEventId ? windowTapsLoading : summaryLoading;
 
-	// Taps by Event bar data — derived from summary breakdown
-	const tapsByEventData = (summary?.breakdown ?? []).map((e) => ({
-		name: e.name,
-		count: e.tapCount,
-		eventId: e.eventId,
-	}));
+	// Taps by Event bar data — derived from summary breakdown, filtered
+	const tapsByEventData = (summary?.breakdown ?? [])
+		.filter((e) => activeEventIds.length === 0 || activeEventIds.includes(e.eventId))
+		.map((e) => ({
+			name: e.name,
+			count: e.tapCount,
+			eventId: e.eventId,
+		}));
 	const tapsByEventTotal = tapsByEventData.reduce((s, d) => s + d.count, 0);
 
 	// Registration Growth — pivot per-event data into wide format
 	const registrationWide = (() => {
-		if (!registrationData || registrationData.length === 0) return [];
+		if (!registrationData?.data || registrationData.data.length === 0) return [];
 		const byDate = new Map<string, Record<string, number>>();
-		for (const row of registrationData) {
+		for (const row of registrationData.data) {
 			if (!byDate.has(row.date)) byDate.set(row.date, {});
 			const entry = byDate.get(row.date)!;
 			entry[row.eventId] = row.count;
@@ -248,9 +298,15 @@ export function CampaignAnalytics({
 		}));
 	})();
 
+	// Apply zero-skipping to registration wide data
+	const registrationWideFiltered = useMemo(
+		() => skipZeroRuns(registrationWide, filteredEventNames.map((ev) => ev.id)),
+		[registrationWide, filteredEventNames],
+	);
+
 	// Dynamic registration chart config from eventNames
 	const registrationConfig = Object.fromEntries(
-		eventNames.map((ev) => [
+		filteredEventNames.map((ev) => [
 			ev.id,
 			{ label: ev.name, color: eventColorMap.get(ev.id) ?? "#FF6B35" },
 		]),
@@ -264,10 +320,10 @@ export function CampaignAnalytics({
 
 	// Pivot unique taps into wide format: { date, [eventId]: uniqueCount }
 	const uniqueTapsWide = useMemo(() => {
-		if (!uniqueTapsData || uniqueTapsData.length === 0) return [];
+		if (!uniqueTapsData?.data || uniqueTapsData.data.length === 0) return [];
 		const byDate = new Map<string, Record<string, number>>();
 		const evIds = new Set<string>();
-		for (const row of uniqueTapsData) {
+		for (const row of uniqueTapsData.data) {
 			if (!byDate.has(row.date)) byDate.set(row.date, {});
 			byDate.get(row.date)![row.eventId] = row.uniqueCount;
 			evIds.add(row.eventId);
@@ -284,9 +340,22 @@ export function CampaignAnalytics({
 		return rows;
 	}, [uniqueTapsData]);
 
+	// Apply zero-skipping to unique taps wide data
+	const uniqueTapsEventIds = useMemo(() => {
+		if (!uniqueTapsData?.data) return [];
+		const seen = new Set<string>();
+		for (const row of uniqueTapsData.data) seen.add(row.eventId);
+		return [...seen];
+	}, [uniqueTapsData]);
+
+	const uniqueTapsWideFiltered = useMemo(
+		() => skipZeroRuns(uniqueTapsWide, uniqueTapsEventIds),
+		[uniqueTapsWide, uniqueTapsEventIds],
+	);
+
 	// Unique taps chart config
 	const uniqueTapsConfig = Object.fromEntries(
-		eventNames.map((ev) => [
+		filteredEventNames.map((ev) => [
 			ev.id,
 			{ label: ev.name, color: eventColorMap.get(ev.id) ?? "#FF6B35" },
 		]),
@@ -294,7 +363,7 @@ export function CampaignAnalytics({
 
 	// Unique taps aggregates (from unfiltered data for summary card)
 	const uniqueTapsAggregates = useMemo(() => {
-		const src = uniqueTapsUnfiltered;
+		const src = uniqueTapsData?.data ?? uniqueTapsUnfiltered?.data;
 		if (!src || src.length === 0)
 			return {
 				total: 0,
@@ -316,7 +385,13 @@ export function CampaignAnalytics({
 			null,
 		);
 		return { total, dailyTotals, peakDay };
-	}, [uniqueTapsUnfiltered]);
+	}, [uniqueTapsData, uniqueTapsUnfiltered]);
+
+	// Apply zero-skipping to unique taps summary sparkline
+	const uniqueTapsDailyFiltered = useMemo(
+		() => skipZeroRuns(uniqueTapsAggregates.dailyTotals, ["total"]),
+		[uniqueTapsAggregates.dailyTotals],
+	);
 
 	return (
 		<div className="space-y-8" ref={captureRef}>
@@ -328,7 +403,7 @@ export function CampaignAnalytics({
 						entityName={campaignName}
 						orgName={orgName}
 						summary={summary}
-						engagement={engagement}
+						engagement={engagement?.data}
 						windowTaps={windowTaps?.map((w) => ({
 							name: w.title || w.windowType,
 							count: w.count,
@@ -544,6 +619,27 @@ export function CampaignAnalytics({
 			<section>
 				<div className="flex items-center gap-3 flex-wrap mb-4">
 					<h2 className="text-xl font-bold">Detailed Analytics</h2>
+					{dateFrom && dateTo ? (
+						<DateRangeFilter
+							from={dateFrom}
+							to={dateTo}
+							onRangeChange={(from, to) => {
+								setDateFrom(from);
+								setDateTo(to);
+								setDrillStack([]);
+							}}
+						/>
+					) : (
+						<DateRangeFilter
+							from="2020-01-01T00:00:00.000Z"
+							to={new Date().toISOString()}
+							onRangeChange={(from, to) => {
+								setDateFrom(from);
+								setDateTo(to);
+								setDrillStack([]);
+							}}
+						/>
+					)}
 					<Popover>
 						<PopoverTrigger asChild>
 							<Button variant="outline" className="gap-2">
@@ -584,13 +680,44 @@ export function CampaignAnalytics({
 
 				{/* Full-width Campaign Engagement BarChart */}
 				<div className="bg-card border border-border rounded-lg p-6">
-					<div className="mb-6">
-						<h3 className="text-lg font-semibold text-foreground">
-							Campaign Engagement
-						</h3>
-						<p className="text-sm text-muted-foreground mt-1">
-							Interactions across all campaign events
-						</p>
+					<div className="mb-6 flex items-start justify-between">
+						<div>
+							<div className="flex items-center gap-2">
+								<h3 className="text-lg font-semibold text-foreground">
+									Campaign Engagement
+								</h3>
+								{engagement?.granularity && (
+									<Badge variant="secondary">{engagement.granularity}</Badge>
+								)}
+							</div>
+							<p className="text-sm text-muted-foreground mt-1">
+								{engagement?.granularity === "yearly"
+									? "Yearly interactions across all campaign events"
+									: engagement?.granularity === "monthly"
+										? "Monthly interactions across all campaign events"
+										: engagement?.granularity === "weekly"
+											? "Weekly interactions across all campaign events"
+											: engagement?.granularity === "hourly"
+												? "Hourly interactions across all campaign events"
+												: engagement?.granularity === "minute"
+													? "Minute-by-minute interactions across all campaign events"
+													: "Daily interactions across all campaign events"}
+							</p>
+						</div>
+						{drillStack.length > 0 && (
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => {
+									const prev = drillStack[drillStack.length - 1]!;
+									setDrillStack((s) => s.slice(0, -1));
+									setDateFrom(prev?.from);
+									setDateTo(prev?.to);
+								}}
+							>
+								<ZoomOut className="w-4 h-4 mr-1" /> Zoom Out
+							</Button>
+						)}
 					</div>
 					{engagementLoading ? (
 						<Skeleton className="h-72 w-full" />
@@ -599,7 +726,17 @@ export function CampaignAnalytics({
 							config={engagementBarConfig}
 							className="h-72 w-full"
 						>
-							<BarChart data={engagementWide}>
+							<BarChart
+								data={engagementWideFiltered}
+								onClick={(data) => {
+									const payload = data?.activePayload?.[0]?.payload;
+									if (!payload?.bucketStart || !payload?.bucketEnd) return;
+									setDrillStack((prev) => [...prev, { from: dateFrom, to: dateTo }]);
+									setDateFrom(payload.bucketStart);
+									setDateTo(payload.bucketEnd);
+								}}
+								style={{ cursor: "pointer" }}
+							>
 								<CartesianGrid vertical={false} stroke="hsl(var(--border))" />
 								<XAxis
 									dataKey="date"
@@ -618,7 +755,7 @@ export function CampaignAnalytics({
 									cursor={false}
 									content={<ChartTooltipContent />}
 								/>
-								{eventNames.map((ev) => (
+								{filteredEventNames.map((ev) => (
 									<Bar
 										key={ev.id}
 										dataKey={ev.id}
@@ -792,12 +929,12 @@ export function CampaignAnalytics({
 						</div>
 						{registrationLoading ? (
 							<Skeleton className="h-64 w-full" />
-						) : registrationWide.length > 0 ? (
+						) : registrationWideFiltered.length > 0 ? (
 							<ChartContainer
 								config={registrationConfig}
 								className="h-64 w-full"
 							>
-								<LineChart data={registrationWide}>
+								<LineChart data={registrationWideFiltered}>
 									<CartesianGrid vertical={false} stroke="hsl(var(--border))" />
 									<XAxis
 										dataKey="date"
@@ -819,7 +956,7 @@ export function CampaignAnalytics({
 										}}
 									/>
 									<ChartTooltip content={<ChartTooltipContent />} />
-									{eventNames.map((ev) => (
+									{filteredEventNames.map((ev) => (
 										<Line
 											key={ev.id}
 											type="monotone"
@@ -855,9 +992,9 @@ export function CampaignAnalytics({
 						</div>
 
 						<div className="flex-1 mt-1">
-							{uniqueTapsAggregates.dailyTotals.length > 0 ? (
+							{uniqueTapsDailyFiltered.length > 0 ? (
 								<ResponsiveContainer width="100%" height="100%">
-									<LineChart data={uniqueTapsAggregates.dailyTotals}>
+									<LineChart data={uniqueTapsDailyFiltered}>
 										<Tooltip
 											contentStyle={{
 												background: "hsl(var(--popover))",
@@ -908,18 +1045,29 @@ export function CampaignAnalytics({
 								Unique Taps Timeline
 							</h3>
 							<p className="text-sm text-muted-foreground mt-1">
-								Daily unique band activations by event
+								{uniqueTapsData?.granularity === "yearly"
+									? "Yearly"
+									: uniqueTapsData?.granularity === "monthly"
+										? "Monthly"
+										: uniqueTapsData?.granularity === "weekly"
+											? "Weekly"
+											: uniqueTapsData?.granularity === "hourly"
+												? "Hourly"
+												: uniqueTapsData?.granularity === "minute"
+													? "Minute-by-minute"
+													: "Daily"}{" "}
+								unique band activations by event
 							</p>
 						</div>
 						{uniqueTapsLoading ? (
 							<Skeleton className="h-72 w-full" />
-						) : uniqueTapsWide.length > 0 ? (
+						) : uniqueTapsWideFiltered.length > 0 ? (
 							<>
 								<ChartContainer
 									config={uniqueTapsConfig}
 									className="h-72 w-full"
 								>
-									<LineChart data={uniqueTapsWide}>
+									<LineChart data={uniqueTapsWideFiltered}>
 										<CartesianGrid
 											vertical={false}
 											stroke="hsl(var(--border))"
@@ -944,7 +1092,7 @@ export function CampaignAnalytics({
 											}}
 										/>
 										<ChartTooltip content={<ChartTooltipContent />} />
-										{eventNames.map((ev) => (
+										{filteredEventNames.map((ev) => (
 											<Line
 												key={ev.id}
 												type="monotone"
@@ -960,7 +1108,7 @@ export function CampaignAnalytics({
 								</ChartContainer>
 								{eventNames.length > 0 && (
 									<div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-border">
-										{eventNames.map((ev) => (
+										{filteredEventNames.map((ev) => (
 											<div
 												key={ev.id}
 												className="flex items-center gap-1.5 text-xs text-muted-foreground"
