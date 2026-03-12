@@ -2,8 +2,6 @@
 
 import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { format } from "date-fns";
-import type { DateRange } from "react-day-picker";
 import {
 	ChartContainer,
 	ChartTooltip,
@@ -46,11 +44,12 @@ import {
 	TrendingUp,
 	Repeat,
 	ChevronDown,
-	CalendarIcon,
 	X,
 	Info,
+	ZoomOut,
 } from "lucide-react";
 import { ExportAnalyticsButton } from "@/components/analytics/export-analytics-button";
+import { DateRangeFilter } from "../date-range-filter";
 
 const engagementConfig = {
 	interactions: {
@@ -98,6 +97,31 @@ const windowTypeTapsConfig = {
 	},
 } satisfies ChartConfig;
 
+/**
+ * Remove interior runs of all-zero rows, keeping the first & last zero
+ * adjacent to each non-zero stretch so charts show ramp-up/down.
+ */
+function skipZeroRuns<T extends Record<string, any>>(
+	rows: T[],
+	valueKeys: string[],
+): T[] {
+	if (rows.length <= 2) return rows;
+	const isZero = (row: T) => valueKeys.every((k) => !row[k] || row[k] === 0);
+	const result: T[] = [];
+	for (let i = 0; i < rows.length; i++) {
+		if (!isZero(rows[i]!)) {
+			result.push(rows[i]!);
+		} else {
+			const prevNonZero = i > 0 && !isZero(rows[i - 1]!);
+			const nextNonZero = i < rows.length - 1 && !isZero(rows[i + 1]!);
+			if (prevNonZero || nextNonZero || i === 0 || i === rows.length - 1) {
+				result.push(rows[i]!);
+			}
+		}
+	}
+	return result;
+}
+
 interface EventsAnalyticsProps {
 	eventId: string;
 	eventName: string;
@@ -115,9 +139,9 @@ export function EventsAnalytics({
 }: EventsAnalyticsProps) {
 	const captureRef = useRef<HTMLDivElement>(null);
 	const [selectedWindowIds, setSelectedWindowIds] = useState<string[]>(["all"]);
-	const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-	const [customFrom, setCustomFrom] = useState<string>("");
-	const [customTo, setCustomTo] = useState<string>("");
+	const [dateFrom, setDateFrom] = useState<string | undefined>(undefined);
+	const [dateTo, setDateTo] = useState<string | undefined>(undefined);
+	const [drillStack, setDrillStack] = useState<Array<{ from?: string; to?: string }>>([]);
 	const [windowDropdownOpen, setWindowDropdownOpen] = useState(false);
 
 	const { data: windows } = trpc.windows.list.useQuery({ eventId });
@@ -160,23 +184,10 @@ export function EventsAnalytics({
 	const singleWindowId =
 		activeWindowIds.length === 1 ? activeWindowIds[0] : undefined;
 
-	const derivedFrom =
-		(customFrom ? new Date(customFrom).toISOString() : undefined) ||
-		(dateRange?.from ? dateRange.from.toISOString() : undefined);
-	const derivedTo =
-		(customTo ? new Date(customTo).toISOString() : undefined) ||
-		(dateRange?.to
-			? (() => {
-					const d = new Date(dateRange.to);
-					d.setHours(23, 59, 59, 999);
-					return d.toISOString();
-				})()
-			: undefined);
-
 	const filterParams = {
 		eventId,
 		windowId: singleWindowId,
-		...(derivedFrom && derivedTo ? { from: derivedFrom, to: derivedTo } : {}),
+		...(dateFrom && dateTo ? { from: dateFrom, to: dateTo } : {}),
 	};
 
 	const { data: engagement, isLoading: engagementLoading } =
@@ -202,7 +213,7 @@ export function EventsAnalytics({
 	// By-window queries — only when NOT filtering to a single window
 	const byWindowParams = {
 		eventId,
-		...(derivedFrom && derivedTo ? { from: derivedFrom, to: derivedTo } : {}),
+		...(dateFrom && dateTo ? { from: dateFrom, to: dateTo } : {}),
 	};
 	const showByWindow = !singleWindowId;
 	const { data: engagementByWindow, isLoading: engagementByWindowLoading } =
@@ -221,10 +232,10 @@ export function EventsAnalytics({
 	// Pivot unique-taps-timeline into wide format: { date, [windowId]: uniqueCount }
 	// Pads with zero rows before/after when only one date exists so area chart renders lines, not just dots
 	const uniqueTapsWide = useMemo(() => {
-		if (!uniqueTapsData || uniqueTapsData.length === 0) return [];
+		if (!uniqueTapsData?.data || uniqueTapsData.data.length === 0) return [];
 		const byDate = new Map<string, Record<string, number>>();
 		const windowIds = new Set<string>();
-		for (const row of uniqueTapsData) {
+		for (const row of uniqueTapsData.data) {
 			if (!byDate.has(row.date)) byDate.set(row.date, {});
 			byDate.get(row.date)![row.windowId] = row.uniqueCount;
 			windowIds.add(row.windowId);
@@ -244,9 +255,9 @@ export function EventsAnalytics({
 
 	// Unique window list from unique taps data
 	const uniqueTapsWindowList = useMemo(() => {
-		if (!uniqueTapsData) return [];
+		if (!uniqueTapsData?.data) return [];
 		const seen = new Map<string, string>();
-		for (const row of uniqueTapsData) {
+		for (const row of uniqueTapsData.data) {
 			if (!seen.has(row.windowId)) seen.set(row.windowId, row.windowLabel);
 		}
 		return Array.from(seen.entries()).map(([id, label]) => ({ id, label }));
@@ -262,7 +273,7 @@ export function EventsAnalytics({
 
 	// Unique taps aggregates for summary card
 	const uniqueTapsAggregates = useMemo(() => {
-		if (!uniqueTapsData || uniqueTapsData.length === 0)
+		if (!uniqueTapsData?.data || uniqueTapsData.data.length === 0)
 			return {
 				total: 0,
 				dailyTotals: [] as { date: string; total: number }[],
@@ -270,7 +281,7 @@ export function EventsAnalytics({
 			};
 		const byDate = new Map<string, number>();
 		let total = 0;
-		for (const row of uniqueTapsData) {
+		for (const row of uniqueTapsData.data) {
 			byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.uniqueCount);
 			total += row.uniqueCount;
 		}
@@ -285,12 +296,12 @@ export function EventsAnalytics({
 		return { total, dailyTotals, peakDay };
 	}, [uniqueTapsData]);
 
-	// Pivot engagement-by-window into wide format: { date, [windowId]: count }
+	// Pivot engagement-by-window into wide format: { date, bucketStart, bucketEnd, [windowId]: count }
 	const engagementWide = useMemo(() => {
-		if (!engagementByWindow || engagementByWindow.length === 0) return [];
-		const byDate = new Map<string, Record<string, number>>();
-		for (const row of engagementByWindow) {
-			if (!byDate.has(row.date)) byDate.set(row.date, {});
+		if (!engagementByWindow?.data || engagementByWindow.data.length === 0) return [];
+		const byDate = new Map<string, Record<string, any>>();
+		for (const row of engagementByWindow.data) {
+			if (!byDate.has(row.date)) byDate.set(row.date, { bucketStart: row.bucketStart, bucketEnd: row.bucketEnd });
 			byDate.get(row.date)![row.windowId] = row.interactions;
 		}
 		return Array.from(byDate.entries()).map(([date, counts]) => ({
@@ -301,13 +312,19 @@ export function EventsAnalytics({
 
 	// Unique window list from by-window data
 	const windowList = useMemo(() => {
-		if (!engagementByWindow) return [];
+		if (!engagementByWindow?.data) return [];
 		const seen = new Map<string, string>();
-		for (const row of engagementByWindow) {
+		for (const row of engagementByWindow.data) {
 			if (!seen.has(row.windowId)) seen.set(row.windowId, row.windowLabel);
 		}
 		return Array.from(seen.entries()).map(([id, label]) => ({ id, label }));
 	}, [engagementByWindow]);
+
+	// Apply zero-skipping to engagement-by-window data
+	const engagementWideFiltered = useMemo(
+		() => skipZeroRuns(engagementWide, windowList.map((w) => w.id)),
+		[engagementWide, windowList],
+	);
 
 	// Dynamic chart configs for by-window charts
 	const engagementByWindowConfig = Object.fromEntries(
@@ -319,10 +336,10 @@ export function EventsAnalytics({
 
 	// Pivot registration-by-window into wide format
 	const registrationWide = useMemo(() => {
-		if (!registrationByWindow || registrationByWindow.length === 0) return [];
+		if (!registrationByWindow?.data || registrationByWindow.data.length === 0) return [];
 		const byDate = new Map<string, Record<string, number>>();
 		const windowIds = new Set<string>();
-		for (const row of registrationByWindow) {
+		for (const row of registrationByWindow.data) {
 			if (!byDate.has(row.date)) byDate.set(row.date, {});
 			byDate.get(row.date)![row.windowId] = row.count;
 			windowIds.add(row.windowId);
@@ -339,6 +356,12 @@ export function EventsAnalytics({
 		return rows;
 	}, [registrationByWindow]);
 
+	// Apply zero-skipping to registration-by-window data
+	const registrationWideFiltered = useMemo(
+		() => skipZeroRuns(registrationWide, windowList.map((w) => w.id)),
+		[registrationWide, windowList],
+	);
+
 	const registrationByWindowConfig = Object.fromEntries(
 		windowList.map((w) => [
 			w.id,
@@ -346,10 +369,40 @@ export function EventsAnalytics({
 		]),
 	) satisfies ChartConfig;
 
+	// Apply zero-skipping to single-mode engagement data
+	const engagementFiltered = useMemo(
+		() => skipZeroRuns(engagement?.data ?? [], ["interactions"]),
+		[engagement],
+	);
+
+	// Apply zero-skipping to single-mode registration data
+	const registrationFiltered = useMemo(
+		() => skipZeroRuns(registrationData?.data ?? [], ["count"]),
+		[registrationData],
+	);
+
+	// Apply zero-skipping to unique taps wide data
+	const uniqueTapsWideFiltered = useMemo(
+		() => skipZeroRuns(uniqueTapsWide, uniqueTapsWindowList.map((w) => w.id)),
+		[uniqueTapsWide, uniqueTapsWindowList],
+	);
+
+	// Apply zero-skipping to unique taps summary sparkline
+	const uniqueTapsDailyFiltered = useMemo(
+		() => skipZeroRuns(uniqueTapsAggregates.dailyTotals, ["total"]),
+		[uniqueTapsAggregates.dailyTotals],
+	);
+
 	// Sparkline: always full event history, no filters
 	const { data: sparklineData } = trpc.analytics.engagementByHour.useQuery({
 		eventId,
 	});
+
+	// Apply zero-skipping to tap activity sparkline
+	const sparklineFiltered = useMemo(
+		() => skipZeroRuns(sparklineData?.data ?? [], ["interactions"]),
+		[sparklineData],
+	);
 
 	// Derived KPI values (from unfiltered overview)
 	const avgTapsPerBand =
@@ -379,15 +432,16 @@ export function EventsAnalytics({
 			: 0;
 
 	// Sparkline peak calculation
-	const peak = sparklineData?.reduce(
+	const peak = sparklineData?.data?.reduce(
 		(max, d) => (d.interactions > (max?.interactions ?? 0) ? d : max),
-		undefined as (typeof sparklineData)[number] | undefined,
+		undefined as NonNullable<typeof sparklineData>["data"][number] | undefined,
 	);
 
 	// Build filter subtitle
+	const engagementGranularity = showByWindow ? engagementByWindow?.granularity : engagement?.granularity;
 	const filterSubtitle =
-		derivedFrom && derivedTo
-			? `${customFrom ? customFrom.slice(0, 10) : format(dateRange!.from!, "MMM d")} - ${customTo ? customTo.slice(0, 10) : format(dateRange!.to!, "MMM d, yyyy")}`
+		dateFrom && dateTo
+			? `${new Date(dateFrom).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${new Date(dateTo).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
 			: selectedWindowIds.includes("all")
 				? "All time interaction data"
 				: activeWindowIds.length === 1
@@ -440,15 +494,23 @@ export function EventsAnalytics({
 
 	const hasCustomFilters =
 		!selectedWindowIds.includes("all") ||
-		!!dateRange ||
-		!!customFrom ||
-		!!customTo;
+		!!dateFrom ||
+		!!dateTo;
 
 	const clearFilters = () => {
 		setSelectedWindowIds(["all"]);
-		setDateRange(undefined);
-		setCustomFrom("");
-		setCustomTo("");
+		setDateFrom(undefined);
+		setDateTo(undefined);
+		setDrillStack([]);
+	};
+
+	// Drill-down click handler for engagement bar chart
+	const handleEngagementBarClick = (data: any) => {
+		const payload = data?.activePayload?.[0]?.payload;
+		if (!payload?.bucketStart || !payload?.bucketEnd) return;
+		setDrillStack((prev) => [...prev, { from: dateFrom, to: dateTo }]);
+		setDateFrom(payload.bucketStart);
+		setDateTo(payload.bucketEnd);
 	};
 
 	return (
@@ -461,11 +523,38 @@ export function EventsAnalytics({
 						entityName={eventName}
 						orgName={orgName}
 						summary={summary}
-						engagement={engagement}
+						overviewSummary={overviewSummary ? {
+							bandCount: overviewSummary.bandCount,
+							tapCount: overviewSummary.tapCount,
+							uniqueBands: overviewSummary.uniqueBands,
+							repeatBands: overviewSummary.repeatBands,
+							engagementPercent: overviewSummary.engagementPercent,
+						} : null}
+						dateRangeLabel={dateFrom && dateTo
+							? `${new Date(dateFrom).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(dateTo).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+							: undefined}
+						engagement={engagement?.data}
 						windowTaps={windowTaps?.map((w) => ({
 							name: w.title || w.windowType,
 							count: w.count,
 						}))}
+						redirectTypes={redirectTypeData}
+						registrationGrowth={registrationData?.data?.map((r) => ({
+							date: r.date,
+							count: r.count,
+						}))}
+						uniqueTaps={(() => {
+							if (!uniqueTapsData?.data) return null;
+							const byDate = new Map<string, number>();
+							for (const row of uniqueTapsData.data) {
+								byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.uniqueCount);
+							}
+							return Array.from(byDate.entries()).map(([date, uniqueCount]) => ({
+								date,
+								uniqueCount,
+							}));
+						})()}
+						reEngagedCount={overviewSummary?.repeatBands}
 						captureRef={captureRef}
 					/>
 				</div>
@@ -632,9 +721,9 @@ export function EventsAnalytics({
 							</h3>
 						</div>
 						<div className="flex-1 min-h-[100px]">
-							{sparklineData && sparklineData.length > 0 ? (
+							{sparklineFiltered.length > 0 ? (
 								<ResponsiveContainer width="100%" height={100}>
-									<LineChart data={sparklineData}>
+									<LineChart data={sparklineFiltered}>
 										<Tooltip
 											content={({ active, payload }) => {
 												if (!active || !payload?.length) return null;
@@ -669,7 +758,7 @@ export function EventsAnalytics({
 						{peak && (
 							<div className="mt-3 pt-3 border-t border-border flex items-baseline justify-between">
 								<span className="text-[10px] text-muted-foreground">
-									Peak Month
+									Peak
 								</span>
 								<span className="text-xs font-medium text-foreground">
 									{peak.date} &middot; {peak.interactions.toLocaleString()} taps
@@ -684,6 +773,27 @@ export function EventsAnalytics({
 			<section>
 				<div className="flex items-center gap-3 flex-wrap mb-4">
 					<h2 className="text-xl font-bold">Detailed Analytics</h2>
+					{dateFrom && dateTo ? (
+						<DateRangeFilter
+							from={dateFrom}
+							to={dateTo}
+							onRangeChange={(from, to) => {
+								setDateFrom(from);
+								setDateTo(to);
+								setDrillStack([]);
+							}}
+						/>
+					) : (
+						<DateRangeFilter
+							from="2020-01-01T00:00:00.000Z"
+							to={new Date().toISOString()}
+							onRangeChange={(from, to) => {
+								setDateFrom(from);
+								setDateTo(to);
+								setDrillStack([]);
+							}}
+						/>
+					)}
 					<Popover
 						open={windowDropdownOpen}
 						onOpenChange={setWindowDropdownOpen}
@@ -746,19 +856,6 @@ export function EventsAnalytics({
 							)}
 						</PopoverContent>
 					</Popover>
-					<span className="text-xs text-muted-foreground">Or Custom Time</span>
-					<input
-						type="datetime-local"
-						value={customFrom}
-						onChange={(e) => setCustomFrom(e.target.value)}
-						className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
-					/>
-					<input
-						type="datetime-local"
-						value={customTo}
-						onChange={(e) => setCustomTo(e.target.value)}
-						className="text-xs border border-border rounded-md px-2 py-1.5 bg-background text-foreground h-9"
-					/>
 					{hasCustomFilters && (
 						<Button variant="ghost" size="sm" onClick={clearFilters}>
 							<X className="mr-1 h-4 w-4" />
@@ -769,22 +866,59 @@ export function EventsAnalytics({
 
 				{/* Full-width engagement BarChart */}
 				<div className="bg-card border border-border rounded-lg p-6">
-					<div className="mb-6">
-						<h3 className="text-lg font-semibold text-foreground">
-							Event Engagement
-						</h3>
-						<p className="text-sm text-muted-foreground mt-1">
-							{filterSubtitle}
-						</p>
+					<div className="flex items-center justify-between mb-6">
+						<div>
+							<div className="flex items-center gap-2">
+								<h3 className="text-lg font-semibold text-foreground">
+									Event Engagement
+								</h3>
+								{engagementGranularity && (
+									<Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+										{engagementGranularity}
+									</Badge>
+								)}
+							</div>
+							<p className="text-sm text-muted-foreground mt-1">
+								{engagementGranularity === "yearly"
+									? "Yearly interactions"
+									: engagementGranularity === "monthly"
+										? "Monthly interactions"
+										: engagementGranularity === "weekly"
+											? "Weekly interactions"
+											: engagementGranularity === "hourly"
+												? "Hourly interactions"
+												: engagementGranularity === "minute"
+													? "Minute-by-minute interactions"
+													: filterSubtitle}
+							</p>
+						</div>
+						{drillStack.length > 0 && (
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => {
+									const prev = drillStack[drillStack.length - 1]!;
+									setDrillStack((s) => s.slice(0, -1));
+									setDateFrom(prev?.from);
+									setDateTo(prev?.to);
+								}}
+							>
+								<ZoomOut className="w-4 h-4 mr-1" /> Zoom Out
+							</Button>
+						)}
 					</div>
 					{(showByWindow ? engagementByWindowLoading : engagementLoading) ? (
 						<Skeleton className="h-72 w-full" />
-					) : showByWindow && engagementWide.length > 0 ? (
+					) : showByWindow && engagementWideFiltered.length > 0 ? (
 						<ChartContainer
 							config={engagementByWindowConfig}
 							className="h-72 w-full"
 						>
-							<BarChart data={engagementWide}>
+							<BarChart
+								data={engagementWideFiltered}
+								onClick={handleEngagementBarClick}
+								style={{ cursor: "pointer" }}
+							>
 								<CartesianGrid vertical={false} stroke="hsl(var(--border))" />
 								<XAxis
 									dataKey="date"
@@ -816,7 +950,11 @@ export function EventsAnalytics({
 						</ChartContainer>
 					) : (
 						<ChartContainer config={engagementConfig} className="h-72 w-full">
-							<BarChart data={engagement ?? []}>
+							<BarChart
+								data={engagementFiltered}
+								onClick={handleEngagementBarClick}
+								style={{ cursor: "pointer" }}
+							>
 								<CartesianGrid vertical={false} stroke="hsl(var(--border))" />
 								<XAxis
 									dataKey="date"
@@ -1007,12 +1145,12 @@ export function EventsAnalytics({
 							showByWindow ? registrationByWindowLoading : registrationLoading
 						) ? (
 							<Skeleton className="h-56 w-full" />
-						) : showByWindow && registrationWide.length > 0 ? (
+						) : showByWindow && registrationWideFiltered.length > 0 ? (
 							<ChartContainer
 								config={registrationByWindowConfig}
 								className="h-56 w-full"
 							>
-								<LineChart data={registrationWide}>
+								<LineChart data={registrationWideFiltered}>
 									<CartesianGrid vertical={false} stroke="hsl(var(--border))" />
 									<XAxis
 										dataKey="date"
@@ -1048,12 +1186,12 @@ export function EventsAnalytics({
 									))}
 								</LineChart>
 							</ChartContainer>
-						) : registrationData && registrationData.length > 0 ? (
+						) : registrationFiltered.length > 0 ? (
 							<ChartContainer
 								config={registrationConfig}
 								className="h-56 w-full"
 							>
-								<LineChart data={registrationData}>
+								<LineChart data={registrationFiltered}>
 									<CartesianGrid vertical={false} stroke="hsl(var(--border))" />
 									<XAxis
 										dataKey="date"
@@ -1107,9 +1245,9 @@ export function EventsAnalytics({
 						</div>
 
 						<div className="flex-1 mt-1">
-							{uniqueTapsAggregates.dailyTotals.length > 0 ? (
+							{uniqueTapsDailyFiltered.length > 0 ? (
 								<ResponsiveContainer width="100%" height="100%">
-									<LineChart data={uniqueTapsAggregates.dailyTotals}>
+									<LineChart data={uniqueTapsDailyFiltered}>
 										<Tooltip
 											content={({ active, payload }) => {
 												if (!active || !payload?.length) return null;
@@ -1147,7 +1285,7 @@ export function EventsAnalytics({
 						{uniqueTapsAggregates.peakDay && (
 							<div className="mt-3 pt-3 border-t border-border flex items-baseline justify-between">
 								<span className="text-[10px] text-muted-foreground">
-									Peak Day
+									Peak
 								</span>
 								<span className="text-xs font-medium text-foreground">
 									{uniqueTapsAggregates.peakDay.date} &middot;{" "}
@@ -1164,18 +1302,29 @@ export function EventsAnalytics({
 								Unique Taps Timeline
 							</h3>
 							<p className="text-sm text-muted-foreground mt-1">
-								Daily unique band activations by window
+								{uniqueTapsData?.granularity === "yearly"
+									? "Yearly"
+									: uniqueTapsData?.granularity === "monthly"
+										? "Monthly"
+										: uniqueTapsData?.granularity === "weekly"
+											? "Weekly"
+											: uniqueTapsData?.granularity === "hourly"
+												? "Hourly"
+												: uniqueTapsData?.granularity === "minute"
+													? "Minute-by-minute"
+													: "Daily"}{" "}
+								unique band activations by window
 							</p>
 						</div>
 						{uniqueTapsLoading ? (
 							<Skeleton className="h-72 w-full" />
-						) : uniqueTapsWide.length > 0 ? (
+						) : uniqueTapsWideFiltered.length > 0 ? (
 							<>
 								<ChartContainer
 									config={uniqueTapsConfig}
 									className="h-72 w-full"
 								>
-									<LineChart data={uniqueTapsWide}>
+									<LineChart data={uniqueTapsWideFiltered}>
 										<CartesianGrid
 											vertical={false}
 											stroke="hsl(var(--border))"
