@@ -2,11 +2,13 @@
 
 import { Button } from "./ui/button";
 import { startOfDay, subDays, subHours, endOfDay, formatISO } from "date-fns";
+import { TZDate } from "@date-fns/tz";
 
 interface DateRangeFilterProps {
   from: string;
   to: string;
   onRangeChange: (from: string, to: string) => void;
+  timezone?: string;
 }
 
 const ALL_TIME_FROM = "2020-01-01T00:00:00.000Z";
@@ -19,9 +21,9 @@ const presets = [
   { label: "30d", days: 30 },
 ];
 
-export function DateRangeFilter({ from, to, onRangeChange }: DateRangeFilterProps) {
+export function DateRangeFilter({ from, to, onRangeChange, timezone }: DateRangeFilterProps) {
   const handlePresetClick = (days: number) => {
-    const now = new Date();
+    const now = timezone ? new TZDate(new Date(), timezone) : new Date();
     if (days === -1) {
       onRangeChange(ALL_TIME_FROM, formatISO(endOfDay(now)));
       return;
