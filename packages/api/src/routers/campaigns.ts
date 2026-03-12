@@ -2,8 +2,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db, Prisma } from "@sparkmotion/database";
-import { enforceOrgAccess } from "../lib/auth";
-import { getEventEngagement } from "../lib/engagement";
+import { enforceOrgAccess, getOrgFilter } from "../lib/auth";
+import { getEventEngagement, aggregateCampaignEngagement } from "../lib/engagement";
 import { ACTIVE } from "../lib/soft-delete";
 import { createTrashProcedures } from "../lib/trash";
 
@@ -11,17 +11,14 @@ export const campaignsRouter = router({
   list: protectedProcedure
     .input(z.object({ orgId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const where =
-        ctx.user.role === "ADMIN"
-          ? input?.orgId ? { orgId: input.orgId, ...ACTIVE } : { ...ACTIVE }
-          : { orgId: ctx.user.orgId!, ...ACTIVE };
+      const where = { ...getOrgFilter(ctx, input?.orgId), ...ACTIVE };
       const campaigns = await db.campaign.findMany({
         where,
         include: {
           org: true,
           events: {
             where: { ...ACTIVE },
-            select: { id: true, location: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
+            select: { id: true, location: true, estimatedAttendees: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
           },
           _count: { select: { events: { where: { ...ACTIVE } } } },
         },
@@ -30,30 +27,20 @@ export const campaignsRouter = router({
 
       // Add aggregate engagement data from DB
       const allEventIds = campaigns.flatMap((c) => c.events.map((e) => e.id));
-      const bandCountByEvent = new Map(
-        campaigns.flatMap((c) => c.events.map((e) => [e.id, e._count.bands] as const))
+      const estimatedAttendeesByEvent = new Map(
+        campaigns.flatMap((c) => c.events.map((e) => [e.id, e.estimatedAttendees] as const))
       );
-      const engagementMap = await getEventEngagement(allEventIds, bandCountByEvent);
+      const engagementMap = await getEventEngagement(allEventIds, estimatedAttendeesByEvent);
 
       return campaigns.map((campaign) => {
-        let totalUniqueBands = 0;
-        let totalBands = 0;
-        for (const event of campaign.events) {
-          const eng = engagementMap.get(event.id);
-          totalBands += event._count.bands;
-          if (eng) {
-            totalUniqueBands += eng.uniqueBands;
-          }
-        }
-        const aggregateEngagement = totalBands > 0
-          ? Math.round((totalUniqueBands / totalBands) * 100)
-          : 0;
+        const result = aggregateCampaignEngagement(campaign.events, engagementMap);
+        const totalBands = campaign.events.reduce((sum, e) => sum + e._count.bands, 0);
         const locations = campaign.events
           .map((e) => e.location)
           .filter((loc): loc is string => !!loc);
         return {
           ...campaign,
-          aggregateEngagement,
+          aggregateEngagement: result.aggregateEngagement,
           totalBands,
           locations,
         };
@@ -69,7 +56,7 @@ export const campaignsRouter = router({
     .query(async ({ ctx, input }) => {
       const where: any = {
         ...ACTIVE,
-        ...(ctx.user.role === "CUSTOMER" ? { orgId: ctx.user.orgId! } : input?.orgId ? { orgId: input.orgId } : {}),
+        ...getOrgFilter(ctx, input?.orgId),
         ...(input?.search ? { name: { contains: input.search, mode: "insensitive" } } : {}),
         ...(input?.status ? { status: input.status } : {}),
       };
@@ -90,7 +77,7 @@ export const campaignsRouter = router({
           events: {
             where: { ...ACTIVE },
             orderBy: { createdAt: "desc" },
-            select: { id: true, location: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
+            select: { id: true, location: true, estimatedAttendees: true, _count: { select: { bands: { where: { ...ACTIVE } } } } },
           },
           _count: { select: { events: { where: { ...ACTIVE } } } },
         },
@@ -98,30 +85,20 @@ export const campaignsRouter = router({
 
       // Add aggregate engagement data from DB
       const eventIds = campaign.events.map((e) => e.id);
-      const bandCountByEvent = new Map(
-        campaign.events.map((e) => [e.id, e._count.bands] as const)
+      const estimatedAttendeesByEvent = new Map(
+        campaign.events.map((e) => [e.id, e.estimatedAttendees] as const)
       );
-      const engagementMap = await getEventEngagement(eventIds, bandCountByEvent);
+      const engagementMap = await getEventEngagement(eventIds, estimatedAttendeesByEvent);
 
-      let totalUniqueBands = 0;
-      let totalBands = 0;
-      for (const event of campaign.events) {
-        const eng = engagementMap.get(event.id);
-        totalBands += event._count.bands;
-        if (eng) {
-          totalUniqueBands += eng.uniqueBands;
-        }
-      }
-      const aggregateEngagement = totalBands > 0
-        ? Math.round((totalUniqueBands / totalBands) * 100)
-        : 0;
+      const result = aggregateCampaignEngagement(campaign.events, engagementMap);
+      const totalBands = campaign.events.reduce((sum, e) => sum + e._count.bands, 0);
       const locations = campaign.events
         .map((e) => e.location)
         .filter((loc): loc is string => !!loc);
 
       return {
         ...campaign,
-        aggregateEngagement,
+        aggregateEngagement: result.aggregateEngagement,
         totalBands,
         locations,
       };

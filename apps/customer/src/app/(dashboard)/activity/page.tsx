@@ -1,4 +1,4 @@
-import { BandReviewTable } from "@/components/bands/band-review-table";
+import { BandReviewTable } from "@sparkmotion/ui/bands";
 
 export const dynamic = "force-dynamic";
 

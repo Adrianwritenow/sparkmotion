@@ -1,6 +1,6 @@
 import { db } from "@sparkmotion/database";
 import { notFound } from "next/navigation";
-import { WindowsList } from "@/components/events/windows-list";
+import { WindowsList } from "@sparkmotion/ui/events";
 
 export const dynamic = "force-dynamic";
 

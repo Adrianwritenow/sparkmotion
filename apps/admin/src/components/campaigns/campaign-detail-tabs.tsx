@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { CampaignEditForm } from "./campaign-edit-form";
-import { CampaignAnalytics } from "./campaign-analytics";
+import { CampaignAnalytics } from "@sparkmotion/ui/campaigns";
 import { CampaignEventsTab } from "./campaign-events-tab";
 import { CampaignSettings } from "./campaign-settings";
 import type { Campaign } from "@sparkmotion/database";

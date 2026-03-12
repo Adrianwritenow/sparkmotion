@@ -13,3 +13,19 @@ export function enforceOrgAccess(
     throw new TRPCError({ code: "FORBIDDEN" });
   }
 }
+
+/**
+ * Returns a Prisma where clause fragment for org-scoping list queries.
+ * CUSTOMER: always scoped to their own org.
+ * ADMIN: scoped to inputOrgId if provided, otherwise unscoped (all orgs).
+ */
+export function getOrgFilter(
+  ctx: { user: { role: string; orgId?: string | null } | null },
+  inputOrgId?: string
+): { orgId?: string } {
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  if (ctx.user.role === "CUSTOMER") {
+    return { orgId: ctx.user.orgId ?? undefined };
+  }
+  return inputOrgId ? { orgId: inputOrgId } : {};
+}

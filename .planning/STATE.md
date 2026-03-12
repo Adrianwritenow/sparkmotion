@@ -2,13 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: milestone
-status: unknown
-last_updated: "2026-03-09T19:40:00Z"
+status: completed
+stopped_at: Completed 39-02-PLAN.md
+last_updated: "2026-03-11T21:26:00Z"
+last_activity: "2026-03-11 — Phase 39-02 complete: analytics/campaigns/bands/dashboard components migrated to packages/ui, 22 local copies deleted, build verified 6/6"
 progress:
-  total_phases: 38
-  completed_phases: 38
-  total_plans: 86
-  completed_plans: 86
+  total_phases: 23
+  completed_phases: 18
+  total_plans: 64
+  completed_plans: 62
 ---
 
 # Project State
@@ -22,12 +24,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 38 — Update auto-lifecycle to use next event start time instead of event start/end dates
-Plan: 03 COMPLETE — Customer app auto-lifecycle UI mirror (Settings tab toggle, Clock icon, transition banner, bulk toggle update)
-Status: Phase 38 Plan 03 COMPLETE — 3 of 3 plans complete; Phase 38 COMPLETE
-Last activity: 2026-03-09 — Phase 38-03 complete: customer app fully mirrored admin auto-lifecycle UI changes; all 3 plans done
+Phase: 39 — Refactor shared abstractions: extract reusable functions, hooks, and components across apps
+Plan: 02 COMPLETE — Migrate remaining duplicated campaign/analytics/bands/dashboard components to packages/ui
+Status: Phase 39 Plan 02 COMPLETE — 2 of 4 plans complete; Phase 39 in progress
+Last activity: 2026-03-11 — Phase 39-02 complete: analytics/campaigns/bands/dashboard migrated to packages/ui, 22 local copies deleted, all builds pass
 
-Progress: (3 of 3 plans complete — Phase 38 COMPLETE)
+Progress: (2 of 4 plans complete — Phase 39 in progress)
 
 ## Performance Metrics
 
@@ -343,6 +345,12 @@ All decisions logged in PROJECT.md Key Decisions table (43 entries).
 - [Phase 37]: Campaign analytics multi-select uses Popover+Checkbox pattern for event filtering; inline datetime-local inputs replace calendar popover
 - [Phase 38]: campaignChainMap sorted by earliest window startTime enables O(n) chain traversal for ACTIVE->COMPLETED; last event falls back to endDate at 23:59:59 in event timezone
 - [Phase 38-02]: autoLifecycle toggle moved from edit form to Settings tab; campaignId guard hides section entirely for non-campaign events; hasWindowsWithTimes computed inline via windows.some() to avoid schema change; TooltipProvider wraps entire EventCardList (single provider pattern); customer app mirrored with same changes
+- [Phase 39-04]: getOrgFilter returns { orgId?: string } for spreading — clean fit for list procedures; bands nested event relation filter and windows entity-level enforceOrgAccess left as-is per plan guidance
+- [Phase 39-03]: DashboardShell client component per-app: keeps tRPC flaggedCount query in apps (not packages/ui), shared Sidebar stays pure/config-driven
+- [Phase 39-03]: next-themes added to packages/ui dependencies (not just peerDependencies) because TypeScript resolution in pnpm monorepo requires explicit declaration when package UI is compiled within app builds
+- [Phase 39-03]: Sort-row local copies deleted without import updates — both copies were dead code (no consumers found via grep)
+- [Phase 39-02]: BandDetailDialogBase (data-prop) and BandDetailDialog (tRPC-coupled connected) kept as separate files in packages/ui — different prop shapes prevent merging
+- [Phase 39-02]: packages/ui required 6 new deps (@tanstack/react-table, @sparkmotion/database, sonner, html2canvas, jspdf, papaparse) for newly migrated tRPC-coupled components
 
 ### Pending Todos
 
@@ -350,6 +358,7 @@ None.
 
 ### Roadmap Evolution
 
+- Phase 39 added: Refactor shared abstractions - extract reusable functions hooks and components across apps
 - Phase 38 added: Update auto-lifecycle to use next event start time instead of event start/end dates
 - Phase 37 added: Update event and campaign analytics UI and KPI calculations to match reference designs
 - Phase 36 added: Code cleanup - dead code removal and reusable abstractions
@@ -422,7 +431,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Completed 38-03-PLAN.md — Clock icon added to customer event-card-list; customer app fully mirrors admin auto-lifecycle UI; Phase 38 all 3 plans complete
-Resume file: N/A — Phase 38 all 3 plans complete; all 86 plans across 38 phases complete
-Next step: Phase 38 complete — all plans done
+Last session: 2026-03-11T21:26:00Z
+Stopped at: Completed 39-02-PLAN.md
+Resume file: None
+Next step: Phase 39 plans 03 and 04 remaining

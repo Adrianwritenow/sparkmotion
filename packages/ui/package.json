@@ -26,7 +26,13 @@
     "./switch": "./src/components/ui/switch.tsx",
     "./table": "./src/components/ui/table.tsx",
     "./tabs": "./src/components/ui/tabs.tsx",
-    "./tooltip": "./src/components/ui/tooltip.tsx"
+    "./tooltip": "./src/components/ui/tooltip.tsx",
+    "./layout": "./src/components/layout/index.ts",
+    "./events": "./src/components/events/index.ts",
+    "./analytics": "./src/components/analytics/index.ts",
+    "./campaigns": "./src/components/campaigns/index.ts",
+    "./bands": "./src/components/bands/index.ts",
+    "./dashboard": "./src/components/dashboard/index.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.4.1",
@@ -52,10 +58,18 @@
     "recharts": "^2.15.0",
     "tailwind-merge": "^2.5.5",
     "use-places-autocomplete": "^4.0.1",
-    "zod": "^3.25.76"
+    "next-themes": "^0.4.6",
+    "zod": "^3.25.76",
+    "@sparkmotion/database": "workspace:*",
+    "@tanstack/react-table": "^8.21.3",
+    "sonner": "^2.0.7",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.0",
+    "papaparse": "^5.5.3"
   },
   "devDependencies": {
     "@types/react": "^18",
+    "@types/papaparse": "^5.5.2",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {

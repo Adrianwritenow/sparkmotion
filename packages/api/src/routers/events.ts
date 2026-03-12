@@ -6,7 +6,7 @@ import { invalidateEventCache, invalidateBandCache } from "@sparkmotion/redis";
 import { evaluateEventSchedule } from "../services/evaluate-schedule";
 import { purgeEventFromKV } from "../services/redirect-map-generator";
 import { getEventEngagement } from "../lib/engagement";
-import { enforceOrgAccess } from "../lib/auth";
+import { enforceOrgAccess, getOrgFilter } from "../lib/auth";
 import { ACTIVE, DELETED } from "../lib/soft-delete";
 import { createTrashProcedures } from "../lib/trash";
 
@@ -25,10 +25,7 @@ export const eventsRouter = router({
       sortDir: z.enum(["asc", "desc"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const where =
-        ctx.user.role === "ADMIN"
-          ? input?.orgId ? { orgId: input.orgId, ...ACTIVE } : { ...ACTIVE }
-          : { orgId: ctx.user.orgId ?? undefined, ...ACTIVE };
+      const where = { ...getOrgFilter(ctx, input?.orgId), ...ACTIVE };
       const sortBy = input?.sortBy ?? "createdAt";
       const sortDir = input?.sortDir ?? "desc";
       const events = await db.event.findMany({
@@ -52,8 +49,8 @@ export const eventsRouter = router({
 
       // Batch engagement + tap stats via shared lib
       const eventIds = events.map((e) => e.id);
-      const bandCountByEvent = new Map(events.map((e) => [e.id, e._count.bands]));
-      const engagementMap = await getEventEngagement(eventIds, bandCountByEvent);
+      const estimatedAttendeesByEvent = new Map(events.map((e) => [e.id, e.estimatedAttendees]));
+      const engagementMap = await getEventEngagement(eventIds, estimatedAttendeesByEvent);
 
       return events.map((event) => {
         const eng = engagementMap.get(event.id);
@@ -73,7 +70,7 @@ export const eventsRouter = router({
     .query(async ({ ctx, input }) => {
       const where: any = {
         ...ACTIVE,
-        ...(ctx.user.role === "CUSTOMER" ? { orgId: ctx.user.orgId } : input?.orgId ? { orgId: input.orgId } : {}),
+        ...getOrgFilter(ctx, input?.orgId),
         ...(input?.campaignId ? { campaignId: input.campaignId } : {}),
         ...(input?.search ? { name: { contains: input.search, mode: "insensitive" } } : {}),
         ...(input?.status ? { status: input.status } : {}),
@@ -118,8 +115,8 @@ export const eventsRouter = router({
       }
 
       // Engagement + tap stats via shared lib
-      const bandCountByEvent = new Map([[event.id, event._count.bands]]);
-      const engagementMap = await getEventEngagement([event.id], bandCountByEvent);
+      const estimatedAttendeesByEvent = new Map([[event.id, event.estimatedAttendees]]);
+      const engagementMap = await getEventEngagement([event.id], estimatedAttendeesByEvent);
       const eng = engagementMap.get(event.id);
 
       return {

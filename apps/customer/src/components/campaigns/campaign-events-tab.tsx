@@ -14,8 +14,7 @@ import {
   DialogTitle,
 } from "@sparkmotion/ui/dialog";
 import { EventMultiSelect } from "./event-multi-select";
-import { EventListWithActions } from "@/components/events/event-list-with-actions";
-import { EventFormDialog } from "@/components/events/event-form-dialog";
+import { EventListWithActions, EventFormDialog } from "@sparkmotion/ui/events";
 
 interface CampaignEventsTabProps {
   campaignId: string;
