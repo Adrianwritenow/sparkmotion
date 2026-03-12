@@ -23,8 +23,8 @@ interface EventDetailTabsProps {
   activeTab: string;
   campaigns: Array<{ id: string; name: string }>;
   recentTransition?: { action: string; createdAt: Date } | null;
-  /** Render the Bands tab content (app-specific — passes app-local band components) */
-  renderBandsTab?: () => React.ReactNode;
+  /** Bands tab content (app-specific — passes app-local band components) */
+  bandsTabContent?: React.ReactNode;
   /** Admin: show the sample redirect URL section in the overview tab */
   showSampleUrl?: boolean;
   /** Admin: extra sections to render in EventSettings (e.g. Clean Up Analytics) */
@@ -44,7 +44,7 @@ export function EventDetailTabs({
   activeTab,
   campaigns,
   recentTransition,
-  renderBandsTab,
+  bandsTabContent,
   showSampleUrl = false,
   extraSettingsSections,
 }: EventDetailTabsProps) {
@@ -152,7 +152,7 @@ export function EventDetailTabs({
         )}
 
         {activeTab === "bands" && (
-          renderBandsTab ? renderBandsTab() : null
+          bandsTabContent ?? null
         )}
 
         {activeTab === "url-manager" && (
