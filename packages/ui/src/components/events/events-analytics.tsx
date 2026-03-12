@@ -398,6 +398,12 @@ export function EventsAnalytics({
 		eventId,
 	});
 
+	// Apply zero-skipping to tap activity sparkline
+	const sparklineFiltered = useMemo(
+		() => skipZeroRuns(sparklineData?.data ?? [], ["interactions"]),
+		[sparklineData],
+	);
+
 	// Derived KPI values (from unfiltered overview)
 	const avgTapsPerBand =
 		overviewSummary && overviewSummary.bandCount > 0
@@ -688,9 +694,9 @@ export function EventsAnalytics({
 							</h3>
 						</div>
 						<div className="flex-1 min-h-[100px]">
-							{sparklineData?.data && sparklineData.data.length > 0 ? (
+							{sparklineFiltered.length > 0 ? (
 								<ResponsiveContainer width="100%" height={100}>
-									<LineChart data={sparklineData.data}>
+									<LineChart data={sparklineFiltered}>
 										<Tooltip
 											content={({ active, payload }) => {
 												if (!active || !payload?.length) return null;

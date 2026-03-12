@@ -220,6 +220,12 @@ export function CampaignAnalytics({
 		}));
 	})();
 
+	// Apply zero-skipping to tap activity sparkline
+	const sparklineFiltered = useMemo(
+		() => skipZeroRuns(sparklineData ?? [], ["interactions"]),
+		[sparklineData],
+	);
+
 	// Derived KPI values (from unfiltered overview)
 	const engagementRate =
 		overviewSummary && overviewSummary.bandCount > 0
@@ -562,10 +568,10 @@ export function CampaignAnalytics({
 						</div>
 
 						<div className="flex-1 min-h-0">
-							{sparklineData && sparklineData.length > 0 ? (
+							{sparklineFiltered.length > 0 ? (
 								<ResponsiveContainer width="100%" height={100}>
 									<LineChart
-										data={sparklineData}
+										data={sparklineFiltered}
 										margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
 									>
 										<Tooltip
