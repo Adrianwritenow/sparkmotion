@@ -47,6 +47,13 @@ import {
 	Info,
 	ZoomOut,
 } from "lucide-react";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@sparkmotion/ui/select";
 import { ExportAnalyticsButton } from "../analytics/export-analytics-button";
 import { DateRangeFilter } from "../date-range-filter";
 
@@ -93,7 +100,7 @@ interface CampaignAnalyticsProps {
 	campaignId: string;
 	campaignName: string;
 	orgName: string;
-	eventNames: Array<{ id: string; name: string }>;
+	eventNames: Array<{ id: string; name: string; timezone: string }>;
 }
 
 export function CampaignAnalytics({
@@ -103,6 +110,30 @@ export function CampaignAnalytics({
 	eventNames,
 }: CampaignAnalyticsProps) {
 	const captureRef = useRef<HTMLDivElement>(null);
+
+	// Timezone selector state
+	const browserTz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+	const [displayTimezone, setDisplayTimezone] = useState(browserTz);
+
+	const availableTimezones = useMemo(() => {
+		/** Get short timezone abbreviation like "EST", "CT", "PT" */
+		const tzAbbr = (iana: string) => {
+			try {
+				const parts = new Intl.DateTimeFormat("en-US", { timeZone: iana, timeZoneName: "short" }).formatToParts(new Date());
+				return parts.find((p) => p.type === "timeZoneName")?.value ?? iana;
+			} catch {
+				return iana;
+			}
+		};
+		const tzSet = new Map<string, string>();
+		tzSet.set(browserTz, `Browser (${tzAbbr(browserTz)})`);
+		for (const ev of eventNames) {
+			if (!tzSet.has(ev.timezone)) {
+				tzSet.set(ev.timezone, tzAbbr(ev.timezone));
+			}
+		}
+		return Array.from(tzSet.entries());
+	}, [eventNames, browserTz]);
 
 	// Random color map: stable within session, randomized on refresh
 	const colorMapRef = useRef(new Map<string, string>());
@@ -154,6 +185,7 @@ export function CampaignAnalytics({
 		campaignId,
 		eventId: singleEventId,
 		...(dateFrom && dateTo ? { from: dateFrom, to: dateTo } : {}),
+		timezone: displayTimezone,
 	};
 
 	// tRPC queries
@@ -175,7 +207,7 @@ export function CampaignAnalytics({
 
 	// Sparkline: always full campaign history, no filters
 	const { data: sparklineRaw } =
-		trpc.analytics.campaignEngagementByHour.useQuery({ campaignId });
+		trpc.analytics.campaignEngagementByHour.useQuery({ campaignId, timezone: displayTimezone });
 
 	// Pivot engagement data into wide format: { date, bucketStart, bucketEnd, [eventId]: count }
 	const engagementWide = (() => {
@@ -322,7 +354,7 @@ export function CampaignAnalytics({
 	const { data: uniqueTapsData, isLoading: uniqueTapsLoading } =
 		trpc.analytics.campaignUniqueTapsTimeline.useQuery(filterParams);
 	const { data: uniqueTapsUnfiltered } =
-		trpc.analytics.campaignUniqueTapsTimeline.useQuery({ campaignId });
+		trpc.analytics.campaignUniqueTapsTimeline.useQuery({ campaignId, timezone: displayTimezone });
 
 	// Pivot unique taps into wide format: { date, [eventId]: uniqueCount }
 	const uniqueTapsWide = useMemo(() => {
@@ -683,6 +715,7 @@ export function CampaignAnalytics({
 								setDateTo(to);
 								setDrillStack([]);
 							}}
+							timezone={displayTimezone}
 						/>
 					) : (
 						<DateRangeFilter
@@ -693,7 +726,22 @@ export function CampaignAnalytics({
 								setDateTo(to);
 								setDrillStack([]);
 							}}
+							timezone={displayTimezone}
 						/>
+					)}
+					{availableTimezones.length > 1 && (
+						<Select value={displayTimezone} onValueChange={setDisplayTimezone}>
+							<SelectTrigger className="w-[200px]">
+								<SelectValue placeholder="Timezone" />
+							</SelectTrigger>
+							<SelectContent>
+								{availableTimezones.map(([tz, label]) => (
+									<SelectItem key={tz} value={tz}>
+										{label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 					)}
 					<Popover>
 						<PopoverTrigger asChild>
@@ -786,6 +834,8 @@ export function CampaignAnalytics({
 								onClick={(data) => {
 									const payload = data?.activePayload?.[0]?.payload;
 									if (!payload?.bucketStart || !payload?.bucketEnd) return;
+									// Don't drill deeper than minute granularity
+									if (engagement?.granularity === "minute") return;
 									setDrillStack((prev) => [...prev, { from: dateFrom, to: dateTo }]);
 									setDateFrom(payload.bucketStart);
 									setDateTo(payload.bucketEnd);
@@ -808,7 +858,7 @@ export function CampaignAnalytics({
 								/>
 								<ChartTooltip
 									cursor={false}
-									content={<ChartTooltipContent />}
+									content={<ChartTooltipContent hideZeroValues />}
 								/>
 								{filteredEventNames.map((ev) => (
 									<Bar
@@ -1010,7 +1060,7 @@ export function CampaignAnalytics({
 											fontSize: 12,
 										}}
 									/>
-									<ChartTooltip content={<ChartTooltipContent />} />
+									<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 									{filteredEventNames.map((ev) => (
 										<Line
 											key={ev.id}
@@ -1146,7 +1196,7 @@ export function CampaignAnalytics({
 												fontSize: 12,
 											}}
 										/>
-										<ChartTooltip content={<ChartTooltipContent />} />
+										<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 										{filteredEventNames.map((ev) => (
 											<Line
 												key={ev.id}

@@ -14,6 +14,7 @@ interface CampaignDetailTabsProps {
       id: string;
       name: string;
       status: string;
+      timezone: string;
       createdAt: Date;
       updatedAt: Date;
       location?: string | null;
@@ -101,7 +102,7 @@ export function CampaignDetailTabs({
               campaignId={campaign.id}
               campaignName={campaign.name}
               orgName={campaign.org?.name ?? ""}
-              eventNames={(campaign.events ?? []).filter((e) => e.status === "ACTIVE" || e.status === "COMPLETED").map((e) => ({ id: e.id, name: e.name }))}
+              eventNames={(campaign.events ?? []).filter((e) => e.status === "ACTIVE" || e.status === "COMPLETED").map((e) => ({ id: e.id, name: e.name, timezone: e.timezone }))}
             />
           </div>
         )}
