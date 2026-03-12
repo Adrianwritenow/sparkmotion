@@ -939,7 +939,7 @@ export function EventsAnalytics({
 								/>
 								<ChartTooltip
 									cursor={false}
-									content={<ChartTooltipContent />}
+									content={<ChartTooltipContent hideZeroValues />}
 								/>
 								{windowList.map((w) => (
 									<Bar
@@ -1175,7 +1175,7 @@ export function EventsAnalytics({
 											fontSize: 12,
 										}}
 									/>
-									<ChartTooltip content={<ChartTooltipContent />} />
+									<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 									{windowList.map((w) => (
 										<Line
 											key={w.id}
@@ -1352,7 +1352,7 @@ export function EventsAnalytics({
 												fontSize: 12,
 											}}
 										/>
-										<ChartTooltip content={<ChartTooltipContent />} />
+										<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 										{uniqueTapsWindowList.map((w) => (
 											<Line
 												key={w.id}

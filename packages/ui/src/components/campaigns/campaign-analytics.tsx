@@ -858,7 +858,7 @@ export function CampaignAnalytics({
 								/>
 								<ChartTooltip
 									cursor={false}
-									content={<ChartTooltipContent />}
+									content={<ChartTooltipContent hideZeroValues />}
 								/>
 								{filteredEventNames.map((ev) => (
 									<Bar
@@ -1060,7 +1060,7 @@ export function CampaignAnalytics({
 											fontSize: 12,
 										}}
 									/>
-									<ChartTooltip content={<ChartTooltipContent />} />
+									<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 									{filteredEventNames.map((ev) => (
 										<Line
 											key={ev.id}
@@ -1196,7 +1196,7 @@ export function CampaignAnalytics({
 												fontSize: 12,
 											}}
 										/>
-										<ChartTooltip content={<ChartTooltipContent />} />
+										<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 										{filteredEventNames.map((ev) => (
 											<Line
 												key={ev.id}
