@@ -523,11 +523,38 @@ export function EventsAnalytics({
 						entityName={eventName}
 						orgName={orgName}
 						summary={summary}
+						overviewSummary={overviewSummary ? {
+							bandCount: overviewSummary.bandCount,
+							tapCount: overviewSummary.tapCount,
+							uniqueBands: overviewSummary.uniqueBands,
+							repeatBands: overviewSummary.repeatBands,
+							engagementPercent: overviewSummary.engagementPercent,
+						} : null}
+						dateRangeLabel={dateFrom && dateTo
+							? `${new Date(dateFrom).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(dateTo).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+							: undefined}
 						engagement={engagement?.data}
 						windowTaps={windowTaps?.map((w) => ({
 							name: w.title || w.windowType,
 							count: w.count,
 						}))}
+						redirectTypes={redirectTypeData}
+						registrationGrowth={registrationData?.data?.map((r) => ({
+							date: r.date,
+							count: r.count,
+						}))}
+						uniqueTaps={(() => {
+							if (!uniqueTapsData?.data) return null;
+							const byDate = new Map<string, number>();
+							for (const row of uniqueTapsData.data) {
+								byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.uniqueCount);
+							}
+							return Array.from(byDate.entries()).map(([date, uniqueCount]) => ({
+								date,
+								uniqueCount,
+							}));
+						})()}
+						reEngagedCount={overviewSummary?.repeatBands}
 						captureRef={captureRef}
 					/>
 				</div>

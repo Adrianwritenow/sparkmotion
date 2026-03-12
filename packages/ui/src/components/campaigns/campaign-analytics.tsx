@@ -409,11 +409,60 @@ export function CampaignAnalytics({
 						entityName={campaignName}
 						orgName={orgName}
 						summary={summary}
-						engagement={engagement?.data}
+						overviewSummary={overviewSummary ? {
+							bandCount: overviewSummary.bandCount,
+							tapCount: overviewSummary.tapCount,
+							uniqueBands: overviewSummary.uniqueBands,
+							repeatBands: overviewSummary.repeatBands,
+							eventCount: overviewSummary.eventCount,
+						} : null}
+						dateRangeLabel={dateFrom && dateTo
+							? `${new Date(dateFrom).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(dateTo).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+							: undefined}
+						engagement={(() => {
+							if (!engagement?.data) return null;
+							const byDate = new Map<string, number>();
+							for (const row of engagement.data) {
+								byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.interactions);
+							}
+							return Array.from(byDate.entries()).map(([date, interactions]) => ({
+								date,
+								interactions,
+							}));
+						})()}
 						windowTaps={windowTaps?.map((w) => ({
 							name: w.title || w.windowType,
 							count: w.count,
 						}))}
+						registrationGrowth={(() => {
+							if (!registrationData?.data) return null;
+							const byDate = new Map<string, number>();
+							for (const row of registrationData.data) {
+								byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.count);
+							}
+							return Array.from(byDate.entries()).map(([date, count]) => ({
+								date,
+								count,
+							}));
+						})()}
+						uniqueTaps={(() => {
+							if (!uniqueTapsData?.data) return null;
+							const byDate = new Map<string, number>();
+							for (const row of uniqueTapsData.data) {
+								byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.uniqueCount);
+							}
+							return Array.from(byDate.entries()).map(([date, uniqueCount]) => ({
+								date,
+								uniqueCount,
+							}));
+						})()}
+						reEngagedCount={overviewSummary?.repeatBands}
+						perEventData={{
+							events: summary?.breakdown ?? [],
+							engagement: engagement?.data ?? [],
+							registration: registrationData?.data ?? [],
+							uniqueTaps: uniqueTapsData?.data ?? [],
+						}}
 						captureRef={captureRef}
 					/>
 				</div>
