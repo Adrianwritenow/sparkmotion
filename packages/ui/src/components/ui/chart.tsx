@@ -110,6 +110,7 @@ const ChartTooltipContent = React.forwardRef<
       payload?: Array<any>
       hideLabel?: boolean
       hideIndicator?: boolean
+      hideZeroValues?: boolean
       indicator?: "line" | "dot" | "dashed"
       nameKey?: string
       labelKey?: string
@@ -130,6 +131,7 @@ const ChartTooltipContent = React.forwardRef<
       indicator = "dot",
       hideLabel = false,
       hideIndicator = false,
+      hideZeroValues = false,
       label,
       labelFormatter,
       labelClassName,
@@ -196,6 +198,7 @@ const ChartTooltipContent = React.forwardRef<
         <div className="grid gap-1.5">
           {payload
             .filter((item) => item.type !== "none")
+            .filter((item) => !hideZeroValues || item.value !== 0)
             .map((item, index) => {
               const key = `${nameKey || item.name || item.dataKey || "value"}`
               const itemConfig = getPayloadConfigFromPayload(config, item, key)

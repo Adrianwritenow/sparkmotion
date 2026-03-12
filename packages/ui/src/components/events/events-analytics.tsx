@@ -508,6 +508,8 @@ export function EventsAnalytics({
 	const handleEngagementBarClick = (data: any) => {
 		const payload = data?.activePayload?.[0]?.payload;
 		if (!payload?.bucketStart || !payload?.bucketEnd) return;
+		// Don't drill deeper than minute granularity
+		if (engagementGranularity === "minute") return;
 		setDrillStack((prev) => [...prev, { from: dateFrom, to: dateTo }]);
 		setDateFrom(payload.bucketStart);
 		setDateTo(payload.bucketEnd);
@@ -782,6 +784,7 @@ export function EventsAnalytics({
 								setDateTo(to);
 								setDrillStack([]);
 							}}
+							timezone={eventTimezone}
 						/>
 					) : (
 						<DateRangeFilter
@@ -792,6 +795,7 @@ export function EventsAnalytics({
 								setDateTo(to);
 								setDrillStack([]);
 							}}
+							timezone={eventTimezone}
 						/>
 					)}
 					<Popover
@@ -935,7 +939,7 @@ export function EventsAnalytics({
 								/>
 								<ChartTooltip
 									cursor={false}
-									content={<ChartTooltipContent />}
+									content={<ChartTooltipContent hideZeroValues />}
 								/>
 								{windowList.map((w) => (
 									<Bar
@@ -1171,7 +1175,7 @@ export function EventsAnalytics({
 											fontSize: 12,
 										}}
 									/>
-									<ChartTooltip content={<ChartTooltipContent />} />
+									<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 									{windowList.map((w) => (
 										<Line
 											key={w.id}
@@ -1348,7 +1352,7 @@ export function EventsAnalytics({
 												fontSize: 12,
 											}}
 										/>
-										<ChartTooltip content={<ChartTooltipContent />} />
+										<ChartTooltip content={<ChartTooltipContent hideZeroValues />} />
 										{uniqueTapsWindowList.map((w) => (
 											<Line
 												key={w.id}

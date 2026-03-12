@@ -30,6 +30,7 @@ const campaignAnalyticsFilterInput = z.object({
   windowId: z.string().optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
+  timezone: z.string().optional(),
 });
 
 async function getEventTimezone(eventId: string): Promise<string> {
@@ -156,36 +157,80 @@ function getBucketEnd(date: Date, g: Granularity): Date {
 }
 
 /**
- * For daily/weekly/monthly/yearly, convert tappedAt to event-local time before truncating (determines "which day").
- * For hourly/minute, use UTC directly so drill-down bucketStart/End align with tappedAt filters.
+ * PostgreSQL `AT TIME ZONE` returns timestamp without timezone, which Prisma
+ * reads as UTC. This reverses that to produce a correct UTC ISO string.
+ *
+ * Example: 3 PM CDT is stored as Date("2026-03-12T15:00:00Z") (fake UTC).
+ * This function returns "2026-03-12T20:00:00.000Z" (real UTC).
  */
-function tzExpr(col: string, g: Granularity): Prisma.Sql {
-  return g !== "hourly" && g !== "minute"
-    ? Prisma.raw(`${col} AT TIME ZONE 'UTC' AT TIME ZONE e."timezone"`)
-    : Prisma.raw(col);
+function localToUtcIso(fakeUtcDate: Date, tz: string): string {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(fakeUtcDate);
+  const g = (type: string) => parts.find((p) => p.type === type)!.value;
+  const h = +g("hour") === 24 ? 0 : +g("hour");
+  const localMs = Date.UTC(+g("year"), +g("month") - 1, +g("day"), h, +g("minute"), +g("second"));
+  // Intl doesn't format ms — preserve from original to avoid offset drift
+  const ms = fakeUtcDate.getTime() % 1000;
+  const offsetMs = fakeUtcDate.getTime() - (localMs + ms);
+  return new Date(fakeUtcDate.getTime() + offsetMs).toISOString();
 }
 
-/** Build series start/end + truncation SQL based on granularity */
-function buildSeriesSql(g: Granularity, fromDate: Date | undefined, toDate: Date | undefined, eventFilter: Prisma.Sql) {
+/**
+ * Convert a UTC timestamp column to a given timezone before truncating.
+ * When `tz` is provided, uses a parameterized timezone string.
+ * When omitted, references e."timezone" from the query's Event join.
+ */
+function tzExpr(col: string, tz?: string): Prisma.Sql {
+  if (tz) {
+    return Prisma.sql`${Prisma.raw(col)} AT TIME ZONE 'UTC' AT TIME ZONE ${tz}`;
+  }
+  return Prisma.raw(`${col} AT TIME ZONE 'UTC' AT TIME ZONE e."timezone"`);
+}
+
+/** Build series start/end + truncation SQL based on granularity.
+ *  When `tz` is provided, series boundaries are converted to that timezone. */
+function buildSeriesSql(g: Granularity, fromDate: Date | undefined, toDate: Date | undefined, eventFilter: Prisma.Sql, tz?: string) {
   const unit = granularityUnit(g);
   const interval = granularityInterval(g);
-  const useDateCast = g !== "hourly" && g !== "minute";
+  const isSubDay = g === "hourly" || g === "minute";
+  const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
 
   const truncUnit = Prisma.raw(`'${unit}'`);
-  const seriesStart = fromDate
-    ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)${useDateCast ? Prisma.raw("::date") : Prisma.sql``}`
-    : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter}))${useDateCast ? Prisma.raw("::date") : Prisma.sql``}`;
-
-  const seriesEnd = toDate
-    ? (useDateCast
-        ? Prisma.sql`${toDate}::date`
-        : Prisma.sql`${toDate}::timestamptz`)
-    : (useDateCast
-        ? Prisma.sql`CURRENT_DATE`
-        : Prisma.sql`NOW()`);
-
-  const dateCast = useDateCast ? Prisma.raw("::date") : Prisma.sql``;
   const intervalSql = Prisma.raw(`'${interval}'::interval`);
+
+  let seriesStart: Prisma.Sql;
+  let seriesEnd: Prisma.Sql;
+
+  if (tz) {
+    seriesStart = fromDate
+      ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
+      : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
+    seriesEnd = toDate
+      ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
+      : isSubDay
+        ? Prisma.sql`(NOW() AT TIME ZONE ${tz})`
+        : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
+  } else {
+    seriesStart = fromDate
+      ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)${dateCast}`
+      : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter}))${dateCast}`;
+    seriesEnd = toDate
+      ? isSubDay
+        ? Prisma.sql`${toDate}::timestamptz`
+        : Prisma.sql`${toDate}::date`
+      : isSubDay
+        ? Prisma.sql`NOW()`
+        : Prisma.sql`CURRENT_DATE`;
+  }
 
   return { seriesStart, seriesEnd, dateCast, intervalSql, unit };
 }
@@ -587,29 +632,23 @@ export const analyticsRouter = router({
       const tz = await getEventTimezone(eventId);
       const granularity = detectGranularity(fromDate, toDate);
       const unit = granularityUnit(granularity);
-      const useTz = granularity !== "hourly" && granularity !== "minute";
+      const isSubDay = granularity === "hourly" || granularity === "minute";
       const truncUnit = Prisma.raw(`'${unit}'`);
-      const dateCast = useTz ? Prisma.raw("::date") : Prisma.sql``;
+      const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
       const intervalSql = Prisma.raw(`'${granularityInterval(granularity)}'::interval`);
 
       const seriesStart = fromDate
-        ? useTz
-          ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)`
+        ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
         : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = toDate
-        ? useTz
-          ? Prisma.sql`(${toDate} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`${toDate}::timestamptz`
-        : useTz
-          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`
-          : Prisma.sql`NOW()`;
+        ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
+        : isSubDay
+          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})`
+          : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
 
       const dateSeries = Prisma.sql`SELECT generate_series(${seriesStart}, ${seriesEnd}, ${intervalSql})${dateCast} AS date`;
 
-      const truncExpr = useTz
-        ? Prisma.sql`DATE_TRUNC(${truncUnit}, "tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-        : Prisma.sql`DATE_TRUNC(${truncUnit}, "tappedAt")`;
+      const truncExpr = Prisma.sql`DATE_TRUNC(${truncUnit}, "tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
 
       const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
@@ -638,8 +677,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           interactions: Number(row.count),
         })),
       };
@@ -665,30 +704,24 @@ export const analyticsRouter = router({
       const tz = await getEventTimezone(eventId);
       const granularity = detectGranularity(fromDate, toDate);
       const unit = granularityUnit(granularity);
-      const useTz = granularity !== "hourly" && granularity !== "minute";
+      const isSubDay = granularity === "hourly" || granularity === "minute";
       const truncUnit = Prisma.raw(`'${unit}'`);
-      const dateCast = useTz ? Prisma.raw("::date") : Prisma.sql``;
+      const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
       const intervalSql = Prisma.raw(`'${granularityInterval(granularity)}'::interval`);
 
       // Bound generate_series with filter dates when available
       const seriesStart = fromDate
-        ? useTz
-          ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)`
+        ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
         : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = toDate
-        ? useTz
-          ? Prisma.sql`(${toDate} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`${toDate}::timestamptz`
-        : useTz
-          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`
-          : Prisma.sql`NOW()`;
+        ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
+        : isSubDay
+          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})`
+          : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
 
       const dateSeries = Prisma.sql`SELECT generate_series(${seriesStart}, ${seriesEnd}, ${intervalSql})${dateCast} AS date`;
 
-      const truncExpr = useTz
-        ? Prisma.sql`DATE_TRUNC(${truncUnit}, first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-        : Prisma.sql`DATE_TRUNC(${truncUnit}, first_tap_at)`;
+      const truncExpr = Prisma.sql`DATE_TRUNC(${truncUnit}, first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
 
       // Date filter on first_tap_at (not tappedAt) — windowFilter dropped intentionally:
       // first tap should span all windows to correctly identify when a band first appeared.
@@ -731,8 +764,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           count: Number(row.count),
         })),
       };
@@ -777,29 +810,23 @@ export const analyticsRouter = router({
       const tz = await getEventTimezone(eventId);
       const granularity = detectGranularity(fromDate, toDate);
       const unit = granularityUnit(granularity);
-      const useTz = granularity !== "hourly" && granularity !== "minute";
+      const isSubDay = granularity === "hourly" || granularity === "minute";
       const truncUnit = Prisma.raw(`'${unit}'`);
-      const dateCast = useTz ? Prisma.raw("::date") : Prisma.sql``;
+      const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
       const intervalSql = Prisma.raw(`'${granularityInterval(granularity)}'::interval`);
 
       const seriesStart = fromDate
-        ? useTz
-          ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)`
+        ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
         : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = toDate
-        ? useTz
-          ? Prisma.sql`(${toDate} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`${toDate}::timestamptz`
-        : useTz
-          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`
-          : Prisma.sql`NOW()`;
+        ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
+        : isSubDay
+          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})`
+          : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
 
       const dateSeries = Prisma.sql`SELECT generate_series(${seriesStart}, ${seriesEnd}, ${intervalSql})${dateCast} AS date`;
 
-      const truncExpr = useTz
-        ? Prisma.sql`DATE_TRUNC(${truncUnit}, tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-        : Prisma.sql`DATE_TRUNC(${truncUnit}, tl."tappedAt")`;
+      const truncExpr = Prisma.sql`DATE_TRUNC(${truncUnit}, tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
 
       // Build window VALUES list with ::text casts, plus synthetic non-window categories
       const windowEntries = [
@@ -856,8 +883,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           windowId: row.windowId,
           windowLabel: row.windowLabel,
           interactions: Number(row.count),
@@ -896,29 +923,23 @@ export const analyticsRouter = router({
       const tz = await getEventTimezone(eventId);
       const granularity = detectGranularity(fromDate, toDate);
       const unit = granularityUnit(granularity);
-      const useTz = granularity !== "hourly" && granularity !== "minute";
+      const isSubDay = granularity === "hourly" || granularity === "minute";
       const truncUnit = Prisma.raw(`'${unit}'`);
-      const dateCast = useTz ? Prisma.raw("::date") : Prisma.sql``;
+      const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
       const intervalSql = Prisma.raw(`'${granularityInterval(granularity)}'::interval`);
 
       const seriesStart = fromDate
-        ? useTz
-          ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)`
+        ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
         : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT "createdAt" FROM "Event" WHERE "id" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = toDate
-        ? useTz
-          ? Prisma.sql`(${toDate} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`${toDate}::timestamptz`
-        : useTz
-          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`
-          : Prisma.sql`NOW()`;
+        ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
+        : isSubDay
+          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})`
+          : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
 
       const dateSeries = Prisma.sql`SELECT generate_series(${seriesStart}, ${seriesEnd}, ${intervalSql})${dateCast} AS date`;
 
-      const truncExpr = useTz
-        ? Prisma.sql`DATE_TRUNC(${truncUnit}, first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-        : Prisma.sql`DATE_TRUNC(${truncUnit}, first_tap_at)`;
+      const truncExpr = Prisma.sql`DATE_TRUNC(${truncUnit}, first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
 
       // Date filter on first_tap_at
       const firstTapDateFilter = fromDate && toDate
@@ -993,8 +1014,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           windowId: row.windowId,
           windowLabel: row.windowLabel,
           count: Number(row.count),
@@ -1032,13 +1053,14 @@ export const analyticsRouter = router({
       }
 
       const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
+      const tz = input.timezone ?? "UTC";
       const granularity = detectGranularity(fromDate, toDate);
 
       const eventFilter = eventIds.length === 1
         ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
         : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
 
-      const { seriesStart, seriesEnd, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter);
+      const { seriesStart, seriesEnd, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter, tz);
 
       const eventNameValues = Prisma.join(
         campaignEvents.map((e) => Prisma.sql`(${e.id}, ${e.name})`),
@@ -1060,7 +1082,7 @@ export const analyticsRouter = router({
         ),
         bucket_counts AS (
           SELECT
-            DATE_TRUNC(${truncSql}, ${tzExpr('"tappedAt"', granularity)})${dateCast} AS date,
+            DATE_TRUNC(${truncSql}, ${tzExpr('"tappedAt"', tz)})${dateCast} AS date,
             tl."eventId",
             COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
           FROM "TapLog" tl
@@ -1069,7 +1091,7 @@ export const analyticsRouter = router({
           WHERE ${eventFilter}
             ${dateFilter}
             ${windowFilter}
-          GROUP BY DATE_TRUNC(${truncSql}, ${tzExpr('"tappedAt"', granularity)}), tl."eventId"
+          GROUP BY 1, 2
         )
         SELECT
           ds.date,
@@ -1086,8 +1108,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           eventId: row.eventId,
           eventName: row.eventName,
           interactions: Number(row.count),
@@ -1124,6 +1146,7 @@ export const analyticsRouter = router({
       }
 
       const { fromDate, toDate } = buildDateFilter(input);
+      const tz = input.timezone ?? "UTC";
       const granularity = detectGranularity(fromDate, toDate);
 
       const eventFilter = eventIds.length === 1
@@ -1134,11 +1157,11 @@ export const analyticsRouter = router({
         ? Prisma.sql`"id" = ${eventIds[0]}`
         : Prisma.sql`"id" IN (${Prisma.join(eventIds)})`;
 
-      const { seriesStart: ss, seriesEnd: se, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter);
+      const { seriesStart: ss, seriesEnd: se, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter, tz);
       // For registration, fallback series start uses Event.createdAt instead of TapLog min
       const seriesStart = fromDate
         ? ss
-        : Prisma.sql`DATE_TRUNC(${Prisma.raw(`'${unit}'`)}, (SELECT MIN("createdAt") FROM "Event" WHERE ${eventIdFilter}))${dateCast}`;
+        : Prisma.sql`DATE_TRUNC(${Prisma.raw(`'${unit}'`)}, (SELECT MIN("createdAt") FROM "Event" WHERE ${eventIdFilter}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = se;
 
       // Date filter on first_tap_at (not tappedAt) — windowFilter dropped intentionally:
@@ -1178,14 +1201,14 @@ export const analyticsRouter = router({
         ),
         bucket_counts AS (
           SELECT
-            DATE_TRUNC(${truncSql}, ${tzExpr("ft.first_tap_at", granularity)})${dateCast} AS date,
+            DATE_TRUNC(${truncSql}, ${tzExpr("ft.first_tap_at", tz)})${dateCast} AS date,
             ft."eventId",
             COUNT(*)::int AS count
           FROM first_taps ft
           INNER JOIN "Event" e ON ft."eventId" = e."id"
           WHERE 1=1
             ${firstTapDateFilter}
-          GROUP BY DATE_TRUNC(${truncSql}, ${tzExpr("ft.first_tap_at", granularity)}), ft."eventId"
+          GROUP BY 1, 2
         )
         SELECT
           ds.date,
@@ -1202,8 +1225,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           eventId: row.eventId,
           eventName: row.eventName,
           count: Number(row.count),
@@ -1240,6 +1263,7 @@ export const analyticsRouter = router({
       }
 
       const { fromDate, toDate } = buildDateFilter(input);
+      const tz = input.timezone ?? "UTC";
       const granularity = detectGranularity(fromDate, toDate);
 
       const eventFilter = eventIds.length === 1
@@ -1250,10 +1274,10 @@ export const analyticsRouter = router({
         ? Prisma.sql`"id" = ${eventIds[0]}`
         : Prisma.sql`"id" IN (${Prisma.join(eventIds)})`;
 
-      const { seriesStart: ss, seriesEnd: se, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter);
+      const { seriesStart: ss, seriesEnd: se, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter, tz);
       const seriesStart = fromDate
         ? ss
-        : Prisma.sql`DATE_TRUNC(${Prisma.raw(`'${unit}'`)}, (SELECT MIN("createdAt") FROM "Event" WHERE ${eventIdFilter}))${dateCast}`;
+        : Prisma.sql`DATE_TRUNC(${Prisma.raw(`'${unit}'`)}, (SELECT MIN("createdAt") FROM "Event" WHERE ${eventIdFilter}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = se;
 
       const tapDateFilter = (() => {
@@ -1283,7 +1307,7 @@ export const analyticsRouter = router({
         ),
         bucket_counts AS (
           SELECT
-            DATE_TRUNC(${truncSql}, ${tzExpr('tl."tappedAt"', granularity)})${dateCast} AS date,
+            DATE_TRUNC(${truncSql}, ${tzExpr('tl."tappedAt"', tz)})${dateCast} AS date,
             tl."eventId",
             COUNT(DISTINCT tl."bandId")::int AS "uniqueCount"
           FROM "TapLog" tl
@@ -1291,7 +1315,7 @@ export const analyticsRouter = router({
           INNER JOIN "Event" e ON tl."eventId" = e."id"
           WHERE ${eventFilter}
             ${tapDateFilter}
-          GROUP BY DATE_TRUNC(${truncSql}, ${tzExpr('tl."tappedAt"', granularity)}), tl."eventId"
+          GROUP BY 1, 2
         )
         SELECT
           ds.date,
@@ -1308,8 +1332,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           eventId: row.eventId,
           eventName: row.eventName,
           uniqueCount: Number(row.uniqueCount),
@@ -2016,29 +2040,23 @@ export const analyticsRouter = router({
       const tz = await getEventTimezone(eventId);
       const granularity = detectGranularity(fromDate, toDate);
       const unit = granularityUnit(granularity);
-      const useTz = granularity !== "hourly" && granularity !== "minute";
+      const isSubDay = granularity === "hourly" || granularity === "minute";
       const truncUnit = Prisma.raw(`'${unit}'`);
-      const dateCast = useTz ? Prisma.raw("::date") : Prisma.sql``;
+      const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
       const intervalSql = Prisma.raw(`'${granularityInterval(granularity)}'::interval`);
 
       const seriesStart = fromDate
-        ? useTz
-          ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)`
+        ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
         : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = toDate
-        ? useTz
-          ? Prisma.sql`(${toDate} AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-          : Prisma.sql`${toDate}::timestamptz`
-        : useTz
-          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`
-          : Prisma.sql`NOW()`;
+        ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
+        : isSubDay
+          ? Prisma.sql`(NOW() AT TIME ZONE ${tz})`
+          : Prisma.sql`(NOW() AT TIME ZONE ${tz})::date`;
 
       const dateSeries = Prisma.sql`SELECT generate_series(${seriesStart}, ${seriesEnd}, ${intervalSql})${dateCast} AS date`;
 
-      const truncExpr = useTz
-        ? Prisma.sql`DATE_TRUNC(${truncUnit}, tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`
-        : Prisma.sql`DATE_TRUNC(${truncUnit}, tl."tappedAt")`;
+      const truncExpr = Prisma.sql`DATE_TRUNC(${truncUnit}, tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
 
       // Build window VALUES list with ::text casts, plus synthetic non-window categories
       const windowEntries = [
@@ -2095,8 +2113,8 @@ export const analyticsRouter = router({
         granularity,
         data: results.map((row) => ({
           date: formatGranularLabel(row.date, granularity),
-          bucketStart: row.date.toISOString(),
-          bucketEnd: getBucketEnd(row.date, granularity).toISOString(),
+          bucketStart: localToUtcIso(row.date, tz),
+          bucketEnd: localToUtcIso(getBucketEnd(row.date, granularity), tz),
           windowId: row.windowId,
           windowLabel: row.windowLabel,
           uniqueCount: Number(row.count),
