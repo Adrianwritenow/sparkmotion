@@ -104,13 +104,23 @@ export default {
 
     const utmParams = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
 
+    // Extract org slug early — needed for org-scoped KV keys
+    const orgSlug = extractOrgSlug(url.hostname);
+
     // KV lookup — edge-cached for 5 min (band→URL mappings rarely change)
-    const entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 300 });
+    let entry: KVEntry | null = null;
+    if (orgSlug) {
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 300 });
+      // Migration fallback: try bare bandId key (remove after migration)
+      if (!entry) {
+        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 300 });
+      }
+    }
 
     if (!entry) {
       // KV miss — proxy to Hub for auto-assignment, GeoIP, DB access
-      const orgSlug = extractOrgSlug(url.hostname);
       const hubUrl = new URL("/e", env.HUB_URL);
+      // orgSlug already extracted above
       hubUrl.searchParams.set("bandId", bandId);
       if (orgSlug) hubUrl.searchParams.set("orgSlug", orgSlug);
       for (const p of utmParams) {

@@ -41,6 +41,7 @@ export async function generateRedirectMap(options?: { eventIds?: string[] }): Pr
     select: {
       id: true,
       fallbackUrl: true,
+      org: { select: { slug: true } },
       windows: {
         where: { isActive: true },
         orderBy: { windowType: "asc" },
@@ -68,7 +69,7 @@ export async function generateRedirectMap(options?: { eventIds?: string[] }): Pr
     const valueJson = JSON.stringify(kvValue);
 
     for (const band of event.bands) {
-      entries.push({ key: band.bandId, value: valueJson });
+      entries.push({ key: `${event.org.slug}:${band.bandId}`, value: valueJson });
     }
   }
 
@@ -117,6 +118,12 @@ export async function purgeEventFromKV(eventId: string): Promise<{ purged: numbe
     return { purged: 0, skipped: true };
   }
 
+  // Look up org slug for org-scoped KV keys
+  const event = await db.event.findUnique({
+    where: { id: eventId },
+    select: { org: { select: { slug: true } } },
+  });
+
   const bands = await db.band.findMany({
     where: { eventId, deletedAt: null },
     select: { bandId: true },
@@ -126,7 +133,8 @@ export async function purgeEventFromKV(eventId: string): Promise<{ purged: numbe
     return { purged: 0, skipped: false };
   }
 
-  const keys = bands.map((b) => b.bandId);
+  const orgSlug = event?.org.slug;
+  const keys = bands.map((b) => orgSlug ? `${orgSlug}:${b.bandId}` : b.bandId);
 
   // Bulk delete in batches of 10K
   for (let i = 0; i < keys.length; i += CF_KV_BULK_DELETE_LIMIT) {

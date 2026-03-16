@@ -141,7 +141,7 @@ export const bandsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const band = await db.band.findUnique({ where: { id: input.id, ...ACTIVE }, include: { event: { select: { orgId: true } } } });
+      const band = await db.band.findUnique({ where: { id: input.id, ...ACTIVE }, include: { event: { select: { orgId: true, org: { select: { slug: true } } } } } });
       if (!band) throw new TRPCError({ code: "NOT_FOUND", message: "Band not found" });
       if (ctx.user.role !== "ADMIN" && band.event.orgId !== ctx.user.orgId) {
         throw new TRPCError({ code: "FORBIDDEN" });
@@ -150,7 +150,7 @@ export const bandsRouter = router({
         where: { id: input.id },
         data: { deletedAt: new Date(), deletedBy: ctx.user.id },
       });
-      invalidateBandCache(band.bandId).catch(console.error);
+      invalidateBandCache(band.event.org.slug, band.bandId).catch(console.error);
       generateRedirectMap({ eventIds: [band.eventId] }).catch(console.error);
       return { id: input.id };
     }),
@@ -160,7 +160,7 @@ export const bandsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const bands = await db.band.findMany({
         where: { id: { in: input.ids }, ...ACTIVE },
-        select: { id: true, bandId: true, eventId: true, event: { select: { orgId: true } } },
+        select: { id: true, bandId: true, eventId: true, event: { select: { orgId: true, org: { select: { slug: true } } } } },
       });
       if (bands.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No bands found" });
       if (ctx.user.role === "CUSTOMER") {
@@ -173,7 +173,7 @@ export const bandsRouter = router({
         data: { deletedAt: new Date(), deletedBy: ctx.user.id },
       });
       const affectedEventIds = [...new Set(bands.map((b) => b.eventId))];
-      Promise.all(bands.map((b) => invalidateBandCache(b.bandId))).catch(console.error);
+      Promise.all(bands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId))).catch(console.error);
       generateRedirectMap({ eventIds: affectedEventIds }).catch(console.error);
       return { deletedCount: bands.length };
     }),
@@ -183,7 +183,7 @@ export const bandsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const band = await db.band.findUnique({
         where: { id: input.id, ...ACTIVE },
-        include: { event: { select: { orgId: true } } },
+        include: { event: { select: { orgId: true, org: { select: { slug: true } } } } },
       });
       if (!band) throw new TRPCError({ code: "NOT_FOUND" });
       if (ctx.user.role !== "ADMIN" && band.event.orgId !== ctx.user.orgId) {
@@ -236,7 +236,7 @@ export const bandsRouter = router({
           redirectUrl: seedUrl,
         },
       });
-      invalidateBandCache(band.bandId).catch(console.error);
+      invalidateBandCache(band.event.org.slug, band.bandId).catch(console.error);
       invalidateEventCache(oldEventId).catch(console.error);
       invalidateEventCache(input.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [oldEventId, input.eventId] }).catch(console.error);
@@ -333,7 +333,7 @@ export const bandsRouter = router({
       // Get original eventIds and bandId values for collision check and cache invalidation
       const allBands = await db.band.findMany({
         where: { id: { in: bandIds }, ...ACTIVE },
-        select: { id: true, bandId: true, eventId: true },
+        select: { id: true, bandId: true, eventId: true, event: { select: { org: { select: { slug: true } } } } },
       });
 
       // Skip bands already assigned to the target event — no work needed
@@ -392,7 +392,7 @@ export const bandsRouter = router({
       const allEventIds = [...new Set([...originalEventIds, targetEventId])];
       Promise.all([
         ...allEventIds.map((id) => invalidateEventCache(id)),
-        ...sourceBands.map((b) => invalidateBandCache(b.bandId)),
+        ...sourceBands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId)),
       ]).catch(console.error);
       generateRedirectMap({ eventIds: allEventIds }).catch(console.error);
 
@@ -594,7 +594,7 @@ export const bandsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const band = await db.band.findUniqueOrThrow({
         where: { id: input.id },
-        include: { event: { select: { orgId: true } } },
+        include: { event: { select: { orgId: true, org: { select: { slug: true } } } } },
       });
       if (!band.deletedAt) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Band is not deleted" });
@@ -611,7 +611,7 @@ export const bandsRouter = router({
         where: { id: input.id },
         data: { deletedAt: null, deletedBy: null },
       });
-      invalidateBandCache(band.bandId).catch(console.error);
+      invalidateBandCache(band.event.org.slug, band.bandId).catch(console.error);
       generateRedirectMap({ eventIds: [band.eventId] }).catch(console.error);
       return { restored: 1, skipped: 0 };
     }),
@@ -624,7 +624,7 @@ export const bandsRouter = router({
         : { ...DELETED, event: { orgId: ctx.user.orgId! }, ...(input?.eventId ? { eventId: input.eventId } : {}) };
     const deletedBands = await db.band.findMany({
       where,
-      select: { id: true, bandId: true, eventId: true },
+      select: { id: true, bandId: true, eventId: true, event: { select: { org: { select: { slug: true } } } } },
     });
     if (deletedBands.length === 0) return { restored: 0, skipped: 0 };
 
@@ -647,7 +647,7 @@ export const bandsRouter = router({
     }
     // Invalidate caches
     const affectedEventIds = [...new Set(deletedBands.map((b) => b.eventId))];
-    Promise.all(deletedBands.map((b) => invalidateBandCache(b.bandId))).catch(console.error);
+    Promise.all(deletedBands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId))).catch(console.error);
     generateRedirectMap({ eventIds: affectedEventIds }).catch(console.error);
     return { restored, skipped };
   }),

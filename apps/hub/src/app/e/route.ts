@@ -450,6 +450,11 @@ export async function GET(request: NextRequest) {
   // Optional: explicit eventId from dev test panel (not used in production NFC flow)
   const eventId = request.nextUrl.searchParams.get("eventId");
 
+  // Extract org slug from subdomain early — used for org-scoped Redis/DB lookups
+  const hostname = request.headers.get("host") || "";
+  const orgSlug = extractOrgSlug(hostname)
+    ?? request.nextUrl.searchParams.get("orgSlug");
+
   // Parse UTM parameters
   const utmSource = request.nextUrl.searchParams.get("utm_source") || undefined;
   const utmMedium = request.nextUrl.searchParams.get("utm_medium") || undefined;
@@ -457,15 +462,19 @@ export async function GET(request: NextRequest) {
   const utmTerm = request.nextUrl.searchParams.get("utm_term") || undefined;
   const utmContent = request.nextUrl.searchParams.get("utm_content") || undefined;
 
-  // 1. Redis cache lookup
-  let cached = await getCachedBand(bandId);
+  // 1. Redis cache lookup (org-scoped — skip if no orgSlug)
+  let cached = orgSlug ? await getCachedBand(orgSlug, bandId) : null;
 
   // 2. Cache miss → DB fallback
   if (!cached) {
    try {
     // Find all bands with this bandId (supports multi-event bands)
     const bands = await db.band.findMany({
-      where: { bandId, deletedAt: null },
+      where: {
+        bandId,
+        deletedAt: null,
+        ...(orgSlug ? { event: { org: { slug: orgSlug } } } : {}),
+      },
       include: {
         event: {
           include: {
@@ -545,11 +554,6 @@ export async function GET(request: NextRequest) {
     if (!band) {
       console.log(`[Hub] Band ${bandId} not found, attempting auto-assignment`);
 
-      // Extract org slug from subdomain
-      const hostname = request.headers.get("host") || "";
-      const orgSlug = extractOrgSlug(hostname)
-        ?? request.nextUrl.searchParams.get("orgSlug");
-
       if (orgSlug) {
         // Attempt auto-assignment
         const assigned = await autoAssignBand(bandId, orgSlug, extractGeo(request), eventId);
@@ -589,8 +593,9 @@ export async function GET(request: NextRequest) {
         }
       } else {
         // No org slug (localhost or invalid subdomain), redirect to fallback
-        console.log(`[Hub] No org slug found for hostname ${hostname}, redirecting to fallback`);
-        trackError("no_org_slug", bandId, null, `No org slug for hostname ${hostname}`, FALLBACK_URL);
+        const host = request.headers.get("host") || "";
+        console.log(`[Hub] No org slug found for hostname ${host}, redirecting to fallback`);
+        trackError("no_org_slug", bandId, null, `No org slug for hostname ${host}`, FALLBACK_URL);
         return NextResponse.redirect(FALLBACK_URL, 302);
       }
     }
@@ -660,16 +665,14 @@ export async function GET(request: NextRequest) {
     };
 
     // Cache for next lookup (fire-and-forget)
-    // Only cache single-event bands. Multi-event bands must always run routing logic
-    // to select the correct event based on user location.
-    if (bands.length === 1) {
-      setCachedBand(bandId, cached).catch(console.error);
+    // Only cache single-event bands when orgSlug is known.
+    // Multi-event bands must always run routing logic to select the correct event.
+    if (bands.length === 1 && orgSlug) {
+      setCachedBand(orgSlug, bandId, cached).catch(console.error);
     }
    } catch (dbError) {
     console.error(`[Hub] DB error for band ${bandId}:`, dbError);
     // Graceful fallback: redirect to org website or generic fallback
-    const hostname = request.headers.get("host") || "";
-    const orgSlug = extractOrgSlug(hostname);
     let dest = FALLBACK_URL;
     if (orgSlug) {
       try {

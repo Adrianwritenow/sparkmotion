@@ -29,7 +29,7 @@ vi.mock('@sparkmotion/database', async () => {
 
 vi.mock('@sparkmotion/redis', () => ({
   invalidateEventCache: vi.fn().mockResolvedValue(undefined),
-  invalidateBandCache: vi.fn().mockResolvedValue(undefined),
+  invalidateBandCache: vi.fn().mockResolvedValue(undefined), // (orgSlug, bandId)
 }));
 
 vi.mock('../lib/engagement', () => ({
