@@ -12,17 +12,17 @@ export interface CachedBand {
 
 const BAND_TTL = 60; // 1 minute — tighter consistency when window URLs change
 
-export async function getCachedBand(bandId: string): Promise<CachedBand | null> {
-  const data = await redis.get(KEYS.band(bandId));
+export async function getCachedBand(orgSlug: string, bandId: string): Promise<CachedBand | null> {
+  const data = await redis.get(KEYS.band(orgSlug, bandId));
   return data ? JSON.parse(data) : null;
 }
 
-export async function setCachedBand(bandId: string, band: CachedBand): Promise<void> {
-  await redis.set(KEYS.band(bandId), JSON.stringify(band), "EX", BAND_TTL);
+export async function setCachedBand(orgSlug: string, bandId: string, band: CachedBand): Promise<void> {
+  await redis.set(KEYS.band(orgSlug, bandId), JSON.stringify(band), "EX", BAND_TTL);
 }
 
-export async function invalidateBandCache(bandId: string): Promise<void> {
-  await redis.del(KEYS.band(bandId));
+export async function invalidateBandCache(orgSlug: string, bandId: string): Promise<void> {
+  await redis.del(KEYS.band(orgSlug, bandId));
 }
 
 export async function invalidateEventAnalytics(eventId: string): Promise<void> {
