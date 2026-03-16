@@ -23,7 +23,7 @@ vi.mock('@sparkmotion/database', async () => {
 
 vi.mock('@sparkmotion/redis', () => ({
   invalidateEventCache: vi.fn().mockResolvedValue(undefined),
-  invalidateBandCache: vi.fn().mockResolvedValue(undefined),
+  invalidateBandCache: vi.fn().mockResolvedValue(undefined), // (orgSlug, bandId)
 }));
 
 import { createTestCaller, createMockBand, createMockEvent } from '../test-utils';
@@ -207,7 +207,7 @@ describe('bands.bulkReassign', () => {
   it('reassigns bands to a target event and returns updated count', async () => {
     const caller = createTestCaller({ role: 'ADMIN', orgId: null });
     const targetEvent = createMockEvent({ id: 'event-2', orgId: 'org-1' });
-    const sourceBands = [{ id: 'band-1', bandId: 'BAND-001', eventId: 'event-1' }];
+    const sourceBands = [{ id: 'band-1', bandId: 'BAND-001', eventId: 'event-1', event: { org: { slug: 'test-org' } } }];
     prismaMock.event.findUnique.mockResolvedValue(targetEvent as any);
     prismaMock.band.findMany.mockResolvedValue(sourceBands as any);
     prismaMock.band.deleteMany.mockResolvedValue({ count: 0 });

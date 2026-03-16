@@ -249,13 +249,18 @@ export const eventsRouter = router({
 
       // Purge KV entries + Redis band caches when event is cancelled
       if (data.status === "CANCELLED") {
+        const eventWithOrg = await db.event.findUnique({
+          where: { id },
+          select: { org: { select: { slug: true } } },
+        });
         const bands = await db.band.findMany({
           where: { eventId: id },
           select: { bandId: true },
         });
+        const slug = eventWithOrg?.org.slug;
         Promise.all([
           purgeEventFromKV(id),
-          ...bands.map((b) => invalidateBandCache(b.bandId)),
+          ...(slug ? bands.map((b) => invalidateBandCache(slug, b.bandId)) : []),
         ]).catch(console.error);
       }
 
@@ -293,7 +298,10 @@ export const eventsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const event = await db.event.findUniqueOrThrow({ where: { id: input.id, ...ACTIVE } });
+      const event = await db.event.findUniqueOrThrow({
+        where: { id: input.id, ...ACTIVE },
+        include: { org: { select: { slug: true } } },
+      });
       enforceOrgAccess(ctx, event.orgId);
       const bands = await db.band.findMany({
         where: { eventId: input.id, ...ACTIVE },
@@ -317,7 +325,7 @@ export const eventsRouter = router({
       // Invalidate event cache (includes analytics keys) + band caches
       Promise.all([
         invalidateEventCache(input.id),
-        ...bands.map((b) => invalidateBandCache(b.bandId)),
+        ...bands.map((b) => invalidateBandCache(event.org.slug, b.bandId)),
       ]).catch(console.error);
     }),
 
@@ -326,6 +334,7 @@ export const eventsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const events = await db.event.findMany({
         where: { id: { in: input.ids }, ...ACTIVE },
+        include: { org: { select: { slug: true } } },
       });
 
       if (events.length === 0) {
@@ -341,7 +350,7 @@ export const eventsRouter = router({
 
       const bands = await db.band.findMany({
         where: { eventId: { in: input.ids }, ...ACTIVE },
-        select: { bandId: true },
+        select: { bandId: true, event: { select: { org: { select: { slug: true } } } } },
       });
 
       const now = new Date();
@@ -369,7 +378,7 @@ export const eventsRouter = router({
       // Invalidate event caches (includes analytics keys) + band caches
       Promise.all([
         ...events.map((e) => invalidateEventCache(e.id)),
-        ...bands.map((b) => invalidateBandCache(b.bandId)),
+        ...bands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId)),
       ]).catch(console.error);
 
       return { deletedCount: events.length };

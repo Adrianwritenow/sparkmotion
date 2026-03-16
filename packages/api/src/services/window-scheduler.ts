@@ -174,13 +174,18 @@ export async function updateEventWindows() {
         console.log(`[AutoLifecycle] ${event.id}: ACTIVE → COMPLETED`);
 
         // Purge KV entries + invalidate band caches (same as CANCELLED flow)
+        const eventWithOrg = await db.event.findUnique({
+          where: { id: event.id },
+          select: { org: { select: { slug: true } } },
+        });
         const bands = await db.band.findMany({
           where: { eventId: event.id },
           select: { bandId: true },
         });
+        const slug = eventWithOrg?.org.slug;
         Promise.all([
           purgeEventFromKV(event.id),
-          ...bands.map((b) => invalidateBandCache(b.bandId)),
+          ...(slug ? bands.map((b) => invalidateBandCache(slug, b.bandId)) : []),
         ]).catch(console.error);
 
         db.changeLog.create({

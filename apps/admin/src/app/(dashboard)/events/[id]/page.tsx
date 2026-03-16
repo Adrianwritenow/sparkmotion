@@ -138,6 +138,7 @@ export default async function EventDetailPage({
         campaigns={campaigns}
         recentTransition={recentTransition}
         bandsTabContent={<BandsTable eventId={params.id} />}
+        showSampleUrl={true}
       />
     </div>
   );
