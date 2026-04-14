@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, adminProcedure, protectedProcedure } from "../trpc";
 import { db, Prisma } from "@sparkmotion/database";
-import { invalidateEventCache, invalidateBandCache } from "@sparkmotion/redis";
+import { invalidateEventCache, invalidateBandCache, invalidateBandCacheByEvent } from "@sparkmotion/redis";
 import { generateRedirectMap } from "../services/redirect-map-generator";
 import { enforceOrgAccess } from "../lib/auth";
 import { ACTIVE, DELETED } from "../lib/soft-delete";
@@ -151,6 +151,7 @@ export const bandsRouter = router({
         data: { deletedAt: new Date(), deletedBy: ctx.user.id },
       });
       invalidateBandCache(band.event.org.slug, band.bandId).catch(console.error);
+      invalidateBandCacheByEvent(band.eventId, band.bandId).catch(console.error);
       generateRedirectMap({ eventIds: [band.eventId] }).catch(console.error);
       return { id: input.id };
     }),
@@ -173,7 +174,10 @@ export const bandsRouter = router({
         data: { deletedAt: new Date(), deletedBy: ctx.user.id },
       });
       const affectedEventIds = [...new Set(bands.map((b) => b.eventId))];
-      Promise.all(bands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId))).catch(console.error);
+      Promise.all(bands.flatMap((b) => [
+        invalidateBandCache(b.event.org.slug, b.bandId),
+        invalidateBandCacheByEvent(b.eventId, b.bandId),
+      ])).catch(console.error);
       generateRedirectMap({ eventIds: affectedEventIds }).catch(console.error);
       return { deletedCount: bands.length };
     }),
@@ -237,6 +241,8 @@ export const bandsRouter = router({
         },
       });
       invalidateBandCache(band.event.org.slug, band.bandId).catch(console.error);
+      invalidateBandCacheByEvent(band.eventId, band.bandId).catch(console.error);
+      invalidateBandCacheByEvent(oldEventId, band.bandId).catch(console.error);
       invalidateEventCache(oldEventId).catch(console.error);
       invalidateEventCache(input.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [oldEventId, input.eventId] }).catch(console.error);
@@ -392,7 +398,10 @@ export const bandsRouter = router({
       const allEventIds = [...new Set([...originalEventIds, targetEventId])];
       Promise.all([
         ...allEventIds.map((id) => invalidateEventCache(id)),
-        ...sourceBands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId)),
+        ...sourceBands.flatMap((b) => [
+          invalidateBandCache(b.event.org.slug, b.bandId),
+          invalidateBandCacheByEvent(b.eventId, b.bandId),
+        ]),
       ]).catch(console.error);
       generateRedirectMap({ eventIds: allEventIds }).catch(console.error);
 
@@ -612,6 +621,7 @@ export const bandsRouter = router({
         data: { deletedAt: null, deletedBy: null },
       });
       invalidateBandCache(band.event.org.slug, band.bandId).catch(console.error);
+      invalidateBandCacheByEvent(band.eventId, band.bandId).catch(console.error);
       generateRedirectMap({ eventIds: [band.eventId] }).catch(console.error);
       return { restored: 1, skipped: 0 };
     }),
@@ -647,7 +657,10 @@ export const bandsRouter = router({
     }
     // Invalidate caches
     const affectedEventIds = [...new Set(deletedBands.map((b) => b.eventId))];
-    Promise.all(deletedBands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId))).catch(console.error);
+    Promise.all(deletedBands.flatMap((b) => [
+      invalidateBandCache(b.event.org.slug, b.bandId),
+      invalidateBandCacheByEvent(b.eventId, b.bandId),
+    ])).catch(console.error);
     generateRedirectMap({ eventIds: affectedEventIds }).catch(console.error);
     return { restored, skipped };
   }),

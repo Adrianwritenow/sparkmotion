@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { db } from "@sparkmotion/database";
-import { invalidateEventCache, invalidateBandCache } from "@sparkmotion/redis";
+import { invalidateEventCache, invalidateBandCache, invalidateBandCacheByEvent } from "@sparkmotion/redis";
 import { evaluateEventSchedule } from "../services/evaluate-schedule";
 import { purgeEventFromKV } from "../services/redirect-map-generator";
 import { getEventEngagement } from "../lib/engagement";
@@ -261,6 +261,7 @@ export const eventsRouter = router({
         Promise.all([
           purgeEventFromKV(id),
           ...(slug ? bands.map((b) => invalidateBandCache(slug, b.bandId)) : []),
+          ...bands.map((b) => invalidateBandCacheByEvent(id, b.bandId)),
         ]).catch(console.error);
       }
 
@@ -325,7 +326,10 @@ export const eventsRouter = router({
       // Invalidate event cache (includes analytics keys) + band caches
       Promise.all([
         invalidateEventCache(input.id),
-        ...bands.map((b) => invalidateBandCache(event.org.slug, b.bandId)),
+        ...bands.flatMap((b) => [
+          invalidateBandCache(event.org.slug, b.bandId),
+          invalidateBandCacheByEvent(input.id, b.bandId),
+        ]),
       ]).catch(console.error);
     }),
 
@@ -350,7 +354,7 @@ export const eventsRouter = router({
 
       const bands = await db.band.findMany({
         where: { eventId: { in: input.ids }, ...ACTIVE },
-        select: { bandId: true, event: { select: { org: { select: { slug: true } } } } },
+        select: { bandId: true, eventId: true, event: { select: { org: { select: { slug: true } } } } },
       });
 
       const now = new Date();
@@ -378,7 +382,10 @@ export const eventsRouter = router({
       // Invalidate event caches (includes analytics keys) + band caches
       Promise.all([
         ...events.map((e) => invalidateEventCache(e.id)),
-        ...bands.map((b) => invalidateBandCache(b.event.org.slug, b.bandId)),
+        ...bands.flatMap((b) => [
+          invalidateBandCache(b.event.org.slug, b.bandId),
+          invalidateBandCacheByEvent(b.eventId, b.bandId),
+        ]),
       ]).catch(console.error);
 
       return { deletedCount: events.length };

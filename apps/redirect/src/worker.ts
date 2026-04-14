@@ -107,9 +107,17 @@ export default {
     // Extract org slug early — needed for org-scoped KV keys
     const orgSlug = extractOrgSlug(url.hostname);
 
+    // New URL format params (?eventId=X&orgId=Z)
+    const eventId = url.searchParams.get("eventId");
+    const orgId = url.searchParams.get("orgId");
+
     // KV lookup — edge-cached for 5 min (band→URL mappings rarely change)
     let entry: KVEntry | null = null;
-    if (orgSlug) {
+    if (eventId) {
+      // New URL format: use eventId-scoped key
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 300 });
+    } else if (orgSlug) {
+      // Old URL format: use orgSlug-scoped key
       entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 300 });
       // Migration fallback: try bare bandId key (remove after migration)
       if (!entry) {
@@ -123,6 +131,8 @@ export default {
       // orgSlug already extracted above
       hubUrl.searchParams.set("bandId", bandId);
       if (orgSlug) hubUrl.searchParams.set("orgSlug", orgSlug);
+      if (eventId) hubUrl.searchParams.set("eventId", eventId);
+      if (orgId) hubUrl.searchParams.set("orgId", orgId);
       for (const p of utmParams) {
         const val = url.searchParams.get(p);
         if (val) hubUrl.searchParams.set(p, val);

@@ -69,7 +69,10 @@ export async function generateRedirectMap(options?: { eventIds?: string[] }): Pr
     const valueJson = JSON.stringify(kvValue);
 
     for (const band of event.bands) {
+      // orgSlug-keyed for old URL format (subdomain-based)
       entries.push({ key: `${event.org.slug}:${band.bandId}`, value: valueJson });
+      // eventId-keyed for new URL format (?eventId=X&orgId=Z)
+      entries.push({ key: `evt:${event.id}:${band.bandId}`, value: valueJson });
     }
   }
 
@@ -134,7 +137,11 @@ export async function purgeEventFromKV(eventId: string): Promise<{ purged: numbe
   }
 
   const orgSlug = event?.org.slug;
-  const keys = bands.map((b) => orgSlug ? `${orgSlug}:${b.bandId}` : b.bandId);
+  const keys = bands.flatMap((b) => {
+    const orgKey = orgSlug ? `${orgSlug}:${b.bandId}` : b.bandId;
+    const evtKey = `evt:${eventId}:${b.bandId}`;
+    return [orgKey, evtKey];
+  });
 
   // Bulk delete in batches of 10K
   for (let i = 0; i < keys.length; i += CF_KV_BULK_DELETE_LIMIT) {
