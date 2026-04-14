@@ -2,7 +2,8 @@
  * End-to-End Load Test — Full Production Simulation
  *
  * Runs 5 concurrent scenarios to simulate Compassion 30-city tour conditions:
- *   tappers:       Stepped-plateau redirect traffic (500→10K RPS)
+ *   tappers:       Stepped-plateau redirect traffic via subdomain (500→10K RPS)
+ *   directTappers: Same profile via direct URL format (eventId+orgId params)
  *   admins:        10 dashboards polling analytics every 5s
  *   exporters:     2 concurrent CSV exports every 30s
  *   cron_trigger:  Flush-taps cron every 15s
@@ -30,11 +31,13 @@ http.setResponseCallback(http.expectedStatuses({ min: 200, max: 302 }));
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const WORKER_URL = __ENV.WORKER_URL;
+const DIRECT_URL = __ENV.DIRECT_URL; // naked domain for direct format (e.g. https://sparkmotion.net)
 const HUB_URL = __ENV.HUB_URL;
 const ADMIN_URL = __ENV.ADMIN_URL;
 const TEST_EMAIL = __ENV.TEST_EMAIL ?? "loadtest@sparkmotion.net";
 const TEST_PASSWORD = __ENV.TEST_PASSWORD;
 const EVENT_ID = __ENV.LOADTEST_EVENT_ID;
+const ORG_ID = __ENV.LOADTEST_ORG_ID;
 const CRON_SECRET = __ENV.CRON_SECRET;
 const UPSTASH_URL = __ENV.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = __ENV.UPSTASH_REDIS_REST_TOKEN;
@@ -51,8 +54,11 @@ const EVENT_PREFIXES = ["LOADTEST-E1-", "LOADTEST-E2-", "LOADTEST-E3-"];
 
 // ─── Custom Metrics ───────────────────────────────────────────────────────────
 const redirectLatency = new Trend("redirect_latency", true);
+const directRedirectLatency = new Trend("direct_redirect_latency", true);
 const errorRate = new Rate("error_rate");
+const directErrorRate = new Rate("direct_error_rate");
 const kvHitRate = new Rate("kv_hit_rate");
+const directKvHitRate = new Rate("direct_kv_hit_rate");
 const analyticsLatency = new Trend("analytics_latency", true);
 const csvExportLatency = new Trend("csv_export_latency", true);
 const queueDepth = new Gauge("queue_depth");
@@ -78,6 +84,26 @@ export const options = {
         { duration: "2m", target: 7500 },   // ramp + hold 7.5K RPS
         { duration: "2m", target: 10000 },  // ramp + hold 10K RPS (ceiling probe)
         { duration: "30s", target: 0 },     // ramp down
+      ],
+    },
+
+    // Direct URL format: eventId + orgId params (no geo-routing)
+    // Same stepped-plateau profile, split 50/50 with subdomain tappers
+    directTappers: {
+      executor: "ramping-arrival-rate",
+      exec: "runDirectTapper",
+      startRate: 500,
+      timeUnit: "1s",
+      preAllocatedVUs: 2500,
+      maxVUs: 5000,
+      stages: [
+        { duration: "2m", target: 500 },
+        { duration: "2m", target: 1000 },
+        { duration: "2m", target: 2500 },
+        { duration: "2m", target: 5000 },
+        { duration: "2m", target: 7500 },
+        { duration: "2m", target: 10000 },
+        { duration: "30s", target: 0 },
       ],
     },
 
@@ -142,6 +168,16 @@ export const options = {
       { threshold: "rate<0.01", abortOnFail: false },  // warn
     ],
     kv_hit_rate: ["rate>0.99"],
+    // Direct URL format: same latency and error thresholds
+    direct_redirect_latency: [
+      { threshold: "p(95)<100", abortOnFail: false },
+      { threshold: "p(95)<50", abortOnFail: false },
+    ],
+    direct_error_rate: [
+      { threshold: "rate<0.03", abortOnFail: false },
+      { threshold: "rate<0.01", abortOnFail: false },
+    ],
+    direct_kv_hit_rate: ["rate>0.99"],
     cron_errors: ["rate<0.1"],
     // Note: queue_depth is a Gauge for observability — no threshold applied
   },
@@ -260,6 +296,46 @@ export function runTapper() {
   });
 
   // No sleep — arrival rate controls frequency
+}
+
+// ─── Scenario: directTappers ──────────────────────────────────────────────────
+// Direct URL format: eventId + orgId params, uses evt:{eventId}:{bandId} KV key
+export function runDirectTapper() {
+  if (!DIRECT_URL || !ORG_ID) {
+    // Skip if direct URL testing not configured
+    return;
+  }
+
+  const prefix = EVENT_PREFIXES[Math.floor(Math.random() * 3)];
+  const bandNum = Math.floor(Math.random() * BAND_COUNT) + 1;
+  const bandId = `${prefix}${String(bandNum).padStart(6, "0")}`;
+
+  const utmSuffix =
+    Math.random() < 0.5
+      ? "&utm_source=nfc&utm_medium=wristband&utm_campaign=compassion-tour-2026"
+      : "";
+
+  const res = http.get(
+    `${DIRECT_URL}/e?bandId=${bandId}&eventId=${EVENT_ID}&orgId=${ORG_ID}${utmSuffix}`,
+    {
+      redirects: 0,
+      tags: { name: "direct_redirect" },
+    }
+  );
+
+  const ok = res.status === 302;
+  const location = res.headers["Location"] || "";
+  const isKvHit = location.includes("compassion.com");
+
+  directRedirectLatency.add(res.timings.duration);
+  directErrorRate.add(!ok);
+  directKvHitRate.add(isKvHit);
+
+  check(res, {
+    "direct: status is 302": (r) => r.status === 302,
+    "direct: has Location header": () => location !== "",
+    "direct: KV hit (compassion.com)": () => isKvHit,
+  });
 }
 
 // ─── Scenario: admins ─────────────────────────────────────────────────────────
