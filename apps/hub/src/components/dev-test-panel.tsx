@@ -44,8 +44,11 @@ export function DevTestPanel() {
   const [showBandList, setShowBandList] = useState(false);
   const bandInputRef = useRef<HTMLDivElement>(null);
 
+  const [urlFormat, setUrlFormat] = useState<"direct" | "subdomain">("direct");
   const [scanLat, setScanLat] = useState<number | null>(null);
   const [scanLng, setScanLng] = useState<number | null>(null);
+
+  const baseUrl = process.env.NEXT_PUBLIC_SPARK_MOTION_URL || "sparkmotion.net";
 
   // Fetch data when panel opens
   useEffect(() => {
@@ -90,29 +93,37 @@ export function DevTestPanel() {
 
   const selectedOrg = data?.orgs.find((o) => o.id === selectedOrgId);
   const selectedEvent = selectedOrg?.events.find((e) => e.id === selectedEventId);
-  const canScan = bandInput.trim() !== "";
+  const canScan = bandInput.trim() !== "" && selectedOrg &&
+    (urlFormat === "subdomain" || selectedEventId);
 
   const filteredBands = selectedEvent?.bands.filter((band) =>
     band.bandId.toLowerCase().includes(bandInput.toLowerCase())
   ) ?? [];
 
-  const handleScan = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!canScan || !selectedOrg) return;
-    // Use current Hub origin with orgSlug query param (works on any deployment)
-    // In production with *.sparkmotion.net, subdomain extraction takes priority
-    const params = new URLSearchParams({
-      bandId: bandInput.trim(),
-      orgSlug: selectedOrg.slug,
-    });
-    if (selectedEventId) {
-      params.set("eventId", selectedEventId);
-    }
+  // Build the scan URL based on format
+  const buildScanUrl = (): string | null => {
+    if (!selectedOrg || !bandInput.trim()) return null;
+    const params = new URLSearchParams({ bandId: bandInput.trim() });
     if (scanLat !== null && scanLng !== null) {
       params.set("lat", scanLat.toFixed(6));
       params.set("lng", scanLng.toFixed(6));
     }
-    window.open(`${window.location.origin}/e?${params.toString()}`, "_blank");
+    if (urlFormat === "direct") {
+      if (!selectedEventId) return null;
+      params.set("eventId", selectedEventId);
+      params.set("orgId", selectedOrg.id);
+      return `https://${baseUrl}/e?${params.toString()}`;
+    } else {
+      return `https://${selectedOrg.slug}.${baseUrl}/e?${params.toString()}`;
+    }
+  };
+
+  const scanUrl = buildScanUrl();
+
+  const handleScan = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!scanUrl) return;
+    window.open(scanUrl, "_blank");
   };
 
   if (error === "Not available") {
@@ -161,10 +172,46 @@ export function DevTestPanel() {
                 </select>
               </div>
 
+              {/* URL Format toggle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  URL Format
+                </label>
+                <div className="flex items-center gap-1 rounded-md border border-gray-300 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setUrlFormat("direct")}
+                    className={`flex-1 px-2 py-1.5 rounded text-center transition-colors ${
+                      urlFormat === "direct"
+                        ? "bg-green-600 text-white"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Direct
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUrlFormat("subdomain")}
+                    className={`flex-1 px-2 py-1.5 rounded text-center transition-colors ${
+                      urlFormat === "subdomain"
+                        ? "bg-green-600 text-white"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Subdomain
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {urlFormat === "direct"
+                    ? "eventId + orgId params (no geo)"
+                    : "Org subdomain + GeoIP routing"}
+                </p>
+              </div>
+
               {/* Event selector */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Event
+                  Event{urlFormat === "direct" && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
                 <select
                   value={selectedEventId}
@@ -232,6 +279,14 @@ export function DevTestPanel() {
                   setScanLng(null);
                 }}
               />
+
+              {/* URL preview */}
+              {scanUrl && (
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-2">
+                  <p className="text-xs text-gray-500 mb-1">Will open:</p>
+                  <p className="text-xs font-mono text-gray-700 break-all">{scanUrl}</p>
+                </div>
+              )}
 
               {/* Scan button */}
               <button
