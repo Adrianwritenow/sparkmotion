@@ -16,6 +16,8 @@ vi.mock('@sparkmotion/database', async () => {
 
 vi.mock('@sparkmotion/redis', () => ({
   invalidateEventCache: vi.fn().mockResolvedValue(undefined),
+  invalidateBandCache: vi.fn().mockResolvedValue(undefined),
+  invalidateBandCacheByEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../services/redirect-map-generator', () => ({

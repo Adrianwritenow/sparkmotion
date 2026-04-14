@@ -2,11 +2,34 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, adminProcedure, protectedProcedure } from "../trpc";
 import { db } from "@sparkmotion/database";
-import { invalidateEventCache } from "@sparkmotion/redis";
+import { invalidateEventCache, invalidateBandCache, invalidateBandCacheByEvent } from "@sparkmotion/redis";
 import { generateRedirectMap } from "../services/redirect-map-generator";
 import { evaluateEventSchedule } from "../services/evaluate-schedule";
 import { enforceOrgAccess } from "../lib/auth";
 import { ACTIVE } from "../lib/soft-delete";
+
+const CACHE_INVALIDATION_BATCH = 1_000;
+
+/** Invalidate all band-level Redis caches for an event (batched to avoid Redis CPU spikes). */
+async function invalidateBandsForEvent(eventId: string) {
+  const event = await db.event.findUnique({
+    where: { id: eventId },
+    select: { org: { select: { slug: true } } },
+  });
+  const bands = await db.band.findMany({
+    where: { eventId, deletedAt: null },
+    select: { bandId: true },
+  });
+  const slug = event?.org.slug;
+
+  for (let i = 0; i < bands.length; i += CACHE_INVALIDATION_BATCH) {
+    const batch = bands.slice(i, i + CACHE_INVALIDATION_BATCH);
+    await Promise.all(batch.flatMap((b) => [
+      ...(slug ? [invalidateBandCache(slug, b.bandId)] : []),
+      invalidateBandCacheByEvent(eventId, b.bandId),
+    ]));
+  }
+}
 
 export const windowsRouter = router({
   list: protectedProcedure
@@ -23,6 +46,7 @@ export const windowsRouter = router({
         if (result.changed) {
           // Fire-and-forget: update cache and redirect map
           invalidateEventCache(input.eventId).catch(console.error);
+          invalidateBandsForEvent(input.eventId).catch(console.error);
           generateRedirectMap({ eventIds: [input.eventId] }).catch(console.error);
         }
       }
@@ -103,6 +127,7 @@ export const windowsRouter = router({
       });
 
       invalidateEventCache(input.eventId).catch(console.error);
+      invalidateBandsForEvent(input.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [input.eventId] }).catch(console.error);
 
       return window;
@@ -150,6 +175,7 @@ export const windowsRouter = router({
       });
 
       invalidateEventCache(window.eventId).catch(console.error);
+      invalidateBandsForEvent(window.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [window.eventId] }).catch(console.error);
       return updated;
     }),
@@ -218,6 +244,7 @@ export const windowsRouter = router({
       });
 
       invalidateEventCache(existing.eventId).catch(console.error);
+      invalidateBandsForEvent(existing.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [existing.eventId] }).catch(console.error);
 
       return updated;
@@ -243,6 +270,7 @@ export const windowsRouter = router({
       });
 
       invalidateEventCache(input.eventId).catch(console.error);
+      invalidateBandsForEvent(input.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [input.eventId] }).catch(console.error);
       return result;
     }),
@@ -260,6 +288,7 @@ export const windowsRouter = router({
 
       await db.eventWindow.delete({ where: { id: input.id } });
       invalidateEventCache(window.eventId).catch(console.error);
+      invalidateBandsForEvent(window.eventId).catch(console.error);
       generateRedirectMap({ eventIds: [window.eventId] }).catch(console.error);
     }),
 });
