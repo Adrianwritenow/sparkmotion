@@ -366,7 +366,11 @@ async function writeKVBatch(
     const batch = [];
     const end = Math.min(i + KV_BATCH_SIZE, BAND_COUNT);
     for (let j = i + 1; j <= end; j++) {
-      batch.push({ key: `${prefix}${String(j).padStart(6, "0")}`, value: kvValue });
+      const bandId = `${prefix}${String(j).padStart(6, "0")}`;
+      // orgSlug-keyed for old subdomain URL format
+      batch.push({ key: bandId, value: kvValue });
+      // eventId-keyed for new direct URL format
+      batch.push({ key: `evt:${eventId}:${bandId}`, value: kvValue });
     }
 
     const res = await fetch(
