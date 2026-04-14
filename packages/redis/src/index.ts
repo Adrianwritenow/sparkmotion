@@ -4,6 +4,9 @@ export {
   getCachedBand,
   setCachedBand,
   invalidateBandCache,
+  getCachedBandByEvent,
+  setCachedBandByEvent,
+  invalidateBandCacheByEvent,
   invalidateEventCache,
   invalidateEventAnalytics,
 } from "./cache";

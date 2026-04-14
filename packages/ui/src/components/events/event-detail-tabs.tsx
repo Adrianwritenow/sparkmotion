@@ -14,7 +14,7 @@ interface EventDetailTabsProps {
   event: Omit<Event, "latitude" | "longitude"> & {
     latitude: number | null;
     longitude: number | null;
-    org?: { name: string } | null;
+    org?: { name: string; slug?: string } | null;
     campaign?: { id: string; name: string } | null;
     campaignId?: string | null;
     _count: { bands: number };
@@ -51,8 +51,12 @@ export function EventDetailTabs({
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [transitionDismissed, setTransitionDismissed] = useState(false);
+  const [urlFormat, setUrlFormat] = useState<"new" | "legacy">("new");
 
-  const sampleRedirectUrl = `https://${process.env.NEXT_PUBLIC_SPARK_MOTION_URL || "sparkmotion.net"}/e?bandId=****&eventId=${event.id}&orgId=${event.orgId}`;
+  const baseUrl = process.env.NEXT_PUBLIC_SPARK_MOTION_URL || "sparkmotion.net";
+  const sampleRedirectUrl = urlFormat === "new"
+    ? `https://${baseUrl}/e?bandId=****&eventId=${event.id}&orgId=${event.orgId}`
+    : `https://${event.org?.slug || "org"}.${baseUrl}/e?bandId=****`;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(sampleRedirectUrl);
@@ -125,8 +129,34 @@ export function EventDetailTabs({
               </div>
             )}
             {showSampleUrl && (
-              <div className="mb-4 space-y-1">
-                <label className="text-sm font-medium text-muted-foreground">Sample Redirect URL</label>
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-muted-foreground">Sample Redirect URL</label>
+                  <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setUrlFormat("new")}
+                      className={`px-2 py-1 rounded transition-colors ${
+                        urlFormat === "new"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Direct
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUrlFormat("legacy")}
+                      className={`px-2 py-1 rounded transition-colors ${
+                        urlFormat === "legacy"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Subdomain
+                    </button>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
@@ -142,6 +172,11 @@ export function EventDetailTabs({
                     {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {urlFormat === "new"
+                    ? "Direct format — routes by eventId + orgId params (no subdomain needed)"
+                    : "Subdomain format — routes by org subdomain + GeoIP proximity"}
+                </p>
               </div>
             )}
             <h3 className="font-semibold text-foreground mb-6">

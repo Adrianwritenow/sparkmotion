@@ -1,5 +1,6 @@
 export const KEYS = {
   band: (orgSlug: string, bandId: string) => `band:${orgSlug}:${bandId}` as const,
+  bandByEvent: (eventId: string, bandId: string) => `band:evt:${eventId}:${bandId}` as const,
   eventStatus: (eventId: string) => `event:${eventId}:status` as const,
   tapsTotal: (eventId: string) => `analytics:${eventId}:taps:total` as const,
   tapsUnique: (eventId: string) => `analytics:${eventId}:taps:unique` as const,

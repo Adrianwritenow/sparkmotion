@@ -24,7 +24,7 @@ export default async function EventDetailPage({
   const event = await db.event.findUnique({
     where: { id: params.id, deletedAt: null },
     include: {
-      org: { select: { name: true } },
+      org: { select: { name: true, slug: true } },
       windows: { orderBy: { startTime: "asc" } },
       _count: { select: { bands: { where: { deletedAt: null } } } },
       campaign: { select: { id: true, name: true } },
