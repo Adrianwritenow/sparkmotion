@@ -1,5 +1,5 @@
 import { db } from "@sparkmotion/database";
-import { invalidateEventCache, invalidateBandCache } from "@sparkmotion/redis";
+import { invalidateEventCache, invalidateBandCache, invalidateBandCacheByEvent } from "@sparkmotion/redis";
 import { generateRedirectMap, purgeEventFromKV } from "./redirect-map-generator";
 import { evaluateEventSchedule } from "./evaluate-schedule";
 import { TZDate } from "@date-fns/tz";
@@ -186,6 +186,7 @@ export async function updateEventWindows() {
         Promise.all([
           purgeEventFromKV(event.id),
           ...(slug ? bands.map((b) => invalidateBandCache(slug, b.bandId)) : []),
+          ...bands.map((b) => invalidateBandCacheByEvent(event.id, b.bandId)),
         ]).catch(console.error);
 
         db.changeLog.create({

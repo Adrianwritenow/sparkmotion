@@ -25,6 +25,20 @@ export async function invalidateBandCache(orgSlug: string, bandId: string): Prom
   await redis.del(KEYS.band(orgSlug, bandId));
 }
 
+// Event-scoped cache functions for new URL format (?eventId=X&orgId=Z)
+export async function getCachedBandByEvent(eventId: string, bandId: string): Promise<CachedBand | null> {
+  const data = await redis.get(KEYS.bandByEvent(eventId, bandId));
+  return data ? JSON.parse(data) : null;
+}
+
+export async function setCachedBandByEvent(eventId: string, bandId: string, band: CachedBand): Promise<void> {
+  await redis.set(KEYS.bandByEvent(eventId, bandId), JSON.stringify(band), "EX", BAND_TTL);
+}
+
+export async function invalidateBandCacheByEvent(eventId: string, bandId: string): Promise<void> {
+  await redis.del(KEYS.bandByEvent(eventId, bandId));
+}
+
 export async function invalidateEventAnalytics(eventId: string): Promise<void> {
   const pattern = `analytics:${eventId}:*`;
   let cursor = "0";

@@ -4,6 +4,8 @@ import {
   redis,
   getCachedBand,
   setCachedBand,
+  getCachedBandByEvent,
+  setCachedBandByEvent,
   recordTap,
   KEYS,
 } from "@sparkmotion/redis";
@@ -447,12 +449,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "bandId is required" }, { status: 400 });
   }
 
-  // Optional: explicit eventId from dev test panel (not used in production NFC flow)
+  // Optional: explicit eventId for deterministic routing (skips geo)
   const eventId = request.nextUrl.searchParams.get("eventId");
+  // Optional: orgId for org lookup by ID (new URL format, no subdomain)
+  const orgId = request.nextUrl.searchParams.get("orgId");
 
   // Extract org slug from subdomain early — used for org-scoped Redis/DB lookups
   const hostname = request.headers.get("host") || "";
-  const orgSlug = extractOrgSlug(hostname)
+  let orgSlug = extractOrgSlug(hostname)
     ?? request.nextUrl.searchParams.get("orgSlug");
 
   // Parse UTM parameters
@@ -462,13 +466,156 @@ export async function GET(request: NextRequest) {
   const utmTerm = request.nextUrl.searchParams.get("utm_term") || undefined;
   const utmContent = request.nextUrl.searchParams.get("utm_content") || undefined;
 
-  // 1. Redis cache lookup (org-scoped — skip if no orgSlug)
-  let cached = orgSlug ? await getCachedBand(orgSlug, bandId) : null;
+  // 1. Redis cache lookup
+  let cached = eventId
+    ? await getCachedBandByEvent(eventId, bandId)    // New URL: event-scoped
+    : orgSlug ? await getCachedBand(orgSlug, bandId)  // Old URL: orgSlug-scoped
+    : null;
 
   // 2. Cache miss → DB fallback
   if (!cached) {
    try {
-    // Find all bands with this bandId (supports multi-event bands)
+    // Deterministic path: when eventId is present, direct lookup by (bandId, eventId)
+    if (eventId) {
+      const band = await db.band.findFirst({
+        where: {
+          bandId,
+          eventId,
+          deletedAt: null,
+        },
+        include: {
+          event: {
+            include: {
+              windows: {
+                where: { isActive: true },
+                take: 1,
+              },
+              org: {
+                select: { slug: true, websiteUrl: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (band) {
+        // Validate orgId matches if provided (security check)
+        if (orgId && band.event.orgId !== orgId) {
+          console.log(`[Hub] orgId mismatch: URL=${orgId}, event.orgId=${band.event.orgId}`);
+          trackError("invalid_event_org_mismatch", bandId, eventId, `orgId ${orgId} != event.orgId ${band.event.orgId}`, FALLBACK_URL);
+          return NextResponse.redirect(FALLBACK_URL, 302);
+        }
+
+        // Validate event is active
+        if (band.event.status !== "ACTIVE") {
+          const dest = band.event.org?.websiteUrl || FALLBACK_URL;
+          console.log(`[Hub] Event ${eventId} is ${band.event.status}, redirecting to: ${dest}`);
+          return NextResponse.redirect(dest, 302);
+        }
+
+        // Flagged band check
+        if (band.flagged && !band.event.assignOnFlag) {
+          return redirectFlaggedBand(request, {
+            bandId,
+            eventId: band.eventId,
+            safeUrl: band.event.org?.websiteUrl || FALLBACK_URL,
+            distance: band.autoAssignDistance ?? null,
+            utmSource, utmMedium, utmCampaign, utmTerm, utmContent,
+          });
+        }
+
+        const activeWindow = band.event.windows[0];
+        const redirectUrl = activeWindow?.url ?? band.event.fallbackUrl;
+        if (!redirectUrl) {
+          const dest = band.event.org?.websiteUrl || FALLBACK_URL;
+          logTapAsync(request, {
+            bandId: band.bandId, eventId: band.eventId,
+            mode: activeWindow?.windowType?.toLowerCase() ?? "pre",
+            windowId: null, redirectUrl: dest,
+            utmSource, utmMedium, utmCampaign, utmTerm, utmContent,
+          });
+          return NextResponse.redirect(dest, 302);
+        }
+
+        cached = {
+          id: band.id,
+          bandId: band.bandId,
+          eventId: band.eventId,
+          currentMode: activeWindow?.windowType.toLowerCase() ?? "pre",
+          redirectUrl,
+          windowId: activeWindow?.id ?? null,
+        };
+
+        // Dual cache: event-scoped + orgSlug-scoped (fire-and-forget)
+        setCachedBandByEvent(eventId, bandId, cached).catch(console.error);
+        const resolvedSlug = orgSlug || band.event.org?.slug;
+        if (resolvedSlug) {
+          setCachedBand(resolvedSlug, bandId, cached).catch(console.error);
+        }
+      } else {
+        // Band not found at this event — try auto-assign
+        // Resolve orgSlug from orgId if we don't have it from subdomain
+        if (!orgSlug && orgId) {
+          const org = await db.organization.findUnique({
+            where: { id: orgId, deletedAt: null },
+            select: { slug: true, websiteUrl: true },
+          });
+          if (org) orgSlug = org.slug;
+        }
+
+        if (orgSlug) {
+          const assigned = await autoAssignBand(bandId, orgSlug, extractGeo(request), eventId);
+
+          if (assigned) {
+            console.log(`[Hub] Auto-assigned band ${bandId} to event ${assigned.event.name} (via eventId)`);
+
+            if (assigned.band.flagged && !assigned.band.event.assignOnFlag) {
+              return redirectFlaggedBand(request, {
+                bandId,
+                eventId: assigned.event.id,
+                safeUrl: assigned.orgWebsiteUrl || FALLBACK_URL,
+                distance: assigned.band.autoAssignDistance,
+                utmSource, utmMedium, utmCampaign, utmTerm, utmContent,
+              });
+            }
+
+            const activeWindow = assigned.activeWindow;
+            const redirectUrl = activeWindow?.url ?? assigned.event.fallbackUrl;
+            if (redirectUrl) {
+              cached = {
+                id: assigned.band.id,
+                bandId: assigned.band.bandId,
+                eventId: assigned.event.id,
+                currentMode: activeWindow?.windowType.toLowerCase() ?? "pre",
+                redirectUrl,
+                windowId: activeWindow?.id ?? null,
+              };
+
+              setCachedBandByEvent(eventId, bandId, cached).catch(console.error);
+              if (orgSlug) setCachedBand(orgSlug, bandId, cached).catch(console.error);
+            } else {
+              const dest = assigned.orgWebsiteUrl || FALLBACK_URL;
+              return NextResponse.redirect(dest, 302);
+            }
+          } else {
+            const org = await db.organization.findUnique({
+              where: { slug: orgSlug, deletedAt: null },
+              select: { websiteUrl: true },
+            });
+            const dest = org?.websiteUrl || FALLBACK_URL;
+            trackError("auto_assign_failed", bandId, eventId, `No ACTIVE events for org (via eventId)`, dest);
+            return NextResponse.redirect(dest, 302);
+          }
+        } else {
+          console.log(`[Hub] No org resolved for orgId=${orgId}, redirecting to fallback`);
+          trackError("no_org_slug", bandId, eventId, `Could not resolve org from orgId ${orgId}`, FALLBACK_URL);
+          return NextResponse.redirect(FALLBACK_URL, 302);
+        }
+      }
+    }
+
+    // Legacy path: orgSlug-based lookup with geo-routing for multi-event bands
+    if (!cached) {
     const bands = await db.band.findMany({
       where: {
         bandId,
@@ -670,6 +817,7 @@ export async function GET(request: NextRequest) {
     if (bands.length === 1 && orgSlug) {
       setCachedBand(orgSlug, bandId, cached).catch(console.error);
     }
+    } // end if (!cached) — legacy path
    } catch (dbError) {
     console.error(`[Hub] DB error for band ${bandId}:`, dbError);
     // Graceful fallback: redirect to org website or generic fallback
