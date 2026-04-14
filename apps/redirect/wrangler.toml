@@ -6,7 +6,8 @@ account_id = "efeaec566e12863d8012fe1708d204fb"
 # Production traffic reaches Worker via *.sparkmotion.net/* (wildcard route)
 # workers.dev URL also remains active as a direct fallback
 routes = [
-  { pattern = "*.sparkmotion.net/*", zone_name = "sparkmotion.net" }
+  { pattern = "*.sparkmotion.net/*", zone_name = "sparkmotion.net" },
+  { pattern = "sparkmotion.net/e*", zone_name = "sparkmotion.net" }
 ]
 
 # KV namespace — replace with actual ID after: wrangler kv namespace create REDIRECT_MAP
