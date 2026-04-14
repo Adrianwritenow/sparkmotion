@@ -513,16 +513,8 @@ export async function GET(request: NextRequest) {
           return NextResponse.redirect(dest, 302);
         }
 
-        // Flagged band check
-        if (band.flagged && !band.event.assignOnFlag) {
-          return redirectFlaggedBand(request, {
-            bandId,
-            eventId: band.eventId,
-            safeUrl: band.event.org?.websiteUrl || FALLBACK_URL,
-            distance: band.autoAssignDistance ?? null,
-            utmSource, utmMedium, utmCampaign, utmTerm, utmContent,
-          });
-        }
+        // Skip flagged-band check: eventId was explicitly provided in URL,
+        // so the caller knows which event they want — distance is irrelevant.
 
         const activeWindow = band.event.windows[0];
         const redirectUrl = activeWindow?.url ?? band.event.fallbackUrl;
@@ -569,15 +561,7 @@ export async function GET(request: NextRequest) {
           if (assigned) {
             console.log(`[Hub] Auto-assigned band ${bandId} to event ${assigned.event.name} (via eventId)`);
 
-            if (assigned.band.flagged && !assigned.band.event.assignOnFlag) {
-              return redirectFlaggedBand(request, {
-                bandId,
-                eventId: assigned.event.id,
-                safeUrl: assigned.orgWebsiteUrl || FALLBACK_URL,
-                distance: assigned.band.autoAssignDistance,
-                utmSource, utmMedium, utmCampaign, utmTerm, utmContent,
-              });
-            }
+            // Skip flagged-band check: eventId was explicitly provided in URL.
 
             const activeWindow = assigned.activeWindow;
             const redirectUrl = activeWindow?.url ?? assigned.event.fallbackUrl;
