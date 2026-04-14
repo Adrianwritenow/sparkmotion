@@ -111,17 +111,17 @@ export default {
     const eventId = url.searchParams.get("eventId");
     const orgId = url.searchParams.get("orgId");
 
-    // KV lookup — edge-cached for 5 min (band→URL mappings rarely change)
+    // KV lookup — edge-cached for 60s (balances speed with consistency after window changes)
     let entry: KVEntry | null = null;
     if (eventId) {
       // New URL format: use eventId-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 300 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 60 });
     } else if (orgSlug) {
       // Old URL format: use orgSlug-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 300 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 60 });
       // Migration fallback: try bare bandId key (remove after migration)
       if (!entry) {
-        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 300 });
+        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 60 });
       }
     }
 
