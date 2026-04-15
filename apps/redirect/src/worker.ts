@@ -115,13 +115,13 @@ export default {
     let entry: KVEntry | null = null;
     if (eventId) {
       // New URL format: use eventId-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 60 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 10 });
     } else if (orgSlug) {
       // Old URL format: use orgSlug-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 60 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 10 });
       // Migration fallback: try bare bandId key (remove after migration)
       if (!entry) {
-        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 60 });
+        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 10 });
       }
     }
 
