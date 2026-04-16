@@ -81,6 +81,7 @@ document.cookie="sm-scanned-band=${bandId};domain=.sparkmotion.net;path=/;max-ag
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    try {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") {
@@ -111,17 +112,17 @@ export default {
     const eventId = url.searchParams.get("eventId");
     const orgId = url.searchParams.get("orgId");
 
-    // KV lookup — edge-cached for 60s (balances speed with consistency after window changes)
+    // KV lookup — edge-cached for 30s (Cloudflare KV minimum cacheTtl is 30s)
     let entry: KVEntry | null = null;
     if (eventId) {
       // New URL format: use eventId-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 10 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 30 });
     } else if (orgSlug) {
       // Old URL format: use orgSlug-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 10 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 30 });
       // Migration fallback: try bare bandId key (remove after migration)
       if (!entry) {
-        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 10 });
+        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 30 });
       }
     }
 
@@ -177,6 +178,13 @@ export default {
       status: 302,
       headers: { Location: redirectUrl },
     }));
+    } catch (err) {
+      console.error("Worker unhandled error:", err);
+      return withSecurityHeaders(new Response(null, {
+        status: 302,
+        headers: { Location: env.FALLBACK_URL || "https://sparkmotion.net" },
+      }));
+    }
   },
 } satisfies ExportedHandler<Env>;
 
