@@ -81,8 +81,8 @@ document.cookie="sm-scanned-band=${bandId};domain=.sparkmotion.net;path=/;max-ag
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    try {
     const url = new URL(request.url);
+    try {
 
     if (url.pathname === "/health") {
       return withSecurityHeaders(Response.json({ status: "ok" }));
@@ -180,6 +180,28 @@ export default {
     }));
     } catch (err) {
       console.error("Worker unhandled error:", err);
+
+      // Fire-and-forget: log to existing Redis error monitoring pipeline
+      ctx.waitUntil((async () => {
+        try {
+          const upstash = getRedis(env);
+          const p = upstash.pipeline();
+          p.incr("monitoring:errors:worker_unhandled");
+          p.lpush("monitoring:errors:log", JSON.stringify({
+            ts: new Date().toISOString(),
+            type: "worker_unhandled",
+            bandId: url?.searchParams.get("bandId") ?? null,
+            eventId: null,
+            reason: err instanceof Error ? err.message : String(err),
+            redirectTo: env.FALLBACK_URL || "https://sparkmotion.net",
+          }));
+          p.ltrim("monitoring:errors:log", 0, 199);
+          await p.exec();
+        } catch {
+          // Redis also down — nothing we can do
+        }
+      })());
+
       return withSecurityHeaders(new Response(null, {
         status: 302,
         headers: { Location: env.FALLBACK_URL || "https://sparkmotion.net" },
