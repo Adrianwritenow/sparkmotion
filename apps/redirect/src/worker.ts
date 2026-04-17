@@ -82,6 +82,7 @@ document.cookie="sm-scanned-band=${bandId};domain=.sparkmotion.net;path=/;max-ag
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    try {
 
     if (url.pathname === "/health") {
       return withSecurityHeaders(Response.json({ status: "ok" }));
@@ -111,17 +112,17 @@ export default {
     const eventId = url.searchParams.get("eventId");
     const orgId = url.searchParams.get("orgId");
 
-    // KV lookup — edge-cached for 60s (balances speed with consistency after window changes)
+    // KV lookup — edge-cached for 30s (Cloudflare KV minimum cacheTtl is 30s)
     let entry: KVEntry | null = null;
     if (eventId) {
       // New URL format: use eventId-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 10 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`evt:${eventId}:${bandId}`, { type: "json", cacheTtl: 30 });
     } else if (orgSlug) {
       // Old URL format: use orgSlug-scoped key
-      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 10 });
+      entry = await env.REDIRECT_MAP.get<KVEntry>(`${orgSlug}:${bandId}`, { type: "json", cacheTtl: 30 });
       // Migration fallback: try bare bandId key (remove after migration)
       if (!entry) {
-        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 10 });
+        entry = await env.REDIRECT_MAP.get<KVEntry>(bandId, { type: "json", cacheTtl: 30 });
       }
     }
 
@@ -177,6 +178,35 @@ export default {
       status: 302,
       headers: { Location: redirectUrl },
     }));
+    } catch (err) {
+      console.error("Worker unhandled error:", err);
+
+      // Fire-and-forget: log to existing Redis error monitoring pipeline
+      ctx.waitUntil((async () => {
+        try {
+          const upstash = getRedis(env);
+          const p = upstash.pipeline();
+          p.incr("monitoring:errors:worker_unhandled");
+          p.lpush("monitoring:errors:log", JSON.stringify({
+            ts: new Date().toISOString(),
+            type: "worker_unhandled",
+            bandId: url?.searchParams.get("bandId") ?? null,
+            eventId: null,
+            reason: err instanceof Error ? err.message : String(err),
+            redirectTo: env.FALLBACK_URL || "https://sparkmotion.net",
+          }));
+          p.ltrim("monitoring:errors:log", 0, 199);
+          await p.exec();
+        } catch {
+          // Redis also down — nothing we can do
+        }
+      })());
+
+      return withSecurityHeaders(new Response(null, {
+        status: 302,
+        headers: { Location: env.FALLBACK_URL || "https://sparkmotion.net" },
+      }));
+    }
   },
 } satisfies ExportedHandler<Env>;
 
