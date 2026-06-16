@@ -8,7 +8,14 @@ import { trpc } from "./trpc";
 
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: { queries: { refetchOnWindowFocus: false } },
+    // networkMode "always": run queries/mutations regardless of navigator.onLine.
+    // Some browsers (notably macOS/Chrome after VPN or sleep) falsely report
+    // onLine === false, which pauses every query and freezes data-fetching pages.
+    // This admin app is always server-backed, so the online gate adds no value.
+    defaultOptions: {
+      queries: { refetchOnWindowFocus: false, networkMode: "always" },
+      mutations: { networkMode: "always" },
+    },
   }));
   const [trpcClient] = useState(() =>
     trpc.createClient({
