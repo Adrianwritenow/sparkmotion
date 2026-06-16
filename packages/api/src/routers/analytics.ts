@@ -89,6 +89,34 @@ function buildDateFilter(params: {
   return { dateFilter: Prisma.sql``, windowFilter };
 }
 
+/** Date-range filter against AnalyticsSummary's `date` column (alias `s`). */
+function buildSummaryDateFilter(from?: Date, to?: Date): Prisma.Sql {
+  if (from && to) return Prisma.sql`AND s."date" >= ${from} AND s."date" <= ${to}`;
+  if (from) return Prisma.sql`AND s."date" >= ${from}`;
+  if (to) return Prisma.sql`AND s."date" <= ${to}`;
+  return Prisma.sql``;
+}
+
+// Taps older than the retention window are purged from TapLog into the
+// AnalyticsSummary daily rollup. The "seam" is the oldest surviving raw tap per
+// event: TapLog owns dates >= seam, AnalyticsSummary owns dates < seam. This
+// partition guarantees no double-count and no gap. The helpers below let any
+// aggregate UNION its TapLog query with the matching summary rows (alias `s`).
+
+/** Single-event seam predicate for `s."date"` ('infinity' when fully purged). */
+function summarySeam(eventId: string): Prisma.Sql {
+  return Prisma.sql`s."date" < COALESCE(
+    (SELECT MIN("tappedAt")::date FROM "TapLog" WHERE "eventId" = ${eventId}),
+    'infinity'::date
+  )`;
+}
+
+/** Per-event seam join + predicate for multi-event summary merges (alias `s`). */
+const PER_EVENT_SEAM_JOIN = Prisma.sql`LEFT JOIN (
+  SELECT "eventId", MIN("tappedAt")::date AS d FROM "TapLog" GROUP BY "eventId"
+) seam ON seam."eventId" = s."eventId"`;
+const PER_EVENT_SEAM_COND = Prisma.sql`s."date" < COALESCE(seam.d, 'infinity'::date)`;
+
 /** True when both dates exist and span < 24 hours. */
 function isSubDayRange(from?: Date, to?: Date): boolean {
   if (!from || !to) return false;
@@ -295,9 +323,21 @@ export const analyticsRouter = router({
   eventSummary: protectedProcedure
     .input(eventAnalyticsFilterInput)
     .query(async ({ input }) => {
-      const { dateFilter, windowFilter } = buildDateFilter(input);
+      const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
       const hasFilters = !!(input.windowId || input.from || input.to);
-      const [tapCounts, totalBandCount, event, repeatBandsResult] = await Promise.all([
+
+      // Merge purged history from AnalyticsSummary (daily rollup). total_taps is
+      // exact (sum of daily counts); unique_bands is an upper bound (daily uniques
+      // can't dedupe cross-day, so it's clamped to bandCount below). Skip for
+      // sub-day ranges (always recent data). repeatBands stays TapLog-only —
+      // per-band repeat history isn't reconstructable from the rollup.
+      const mergeSummary = !isSubDayRange(fromDate, toDate);
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+      const summaryWindowFilter = input.windowId
+        ? Prisma.sql`AND s."windowId" = ${input.windowId}`
+        : Prisma.sql``;
+
+      const [tapCounts, totalBandCount, event, repeatBandsResult, summaryTotals] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
             COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
@@ -321,8 +361,30 @@ export const analyticsRouter = router({
             HAVING COUNT(DISTINCT tl."tappedAt") > 1
           ) sub
         `),
+        mergeSummary
+          ? db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
+              SELECT
+                COALESCE(SUM(s."tapCount"), 0)::int AS total_taps,
+                COALESCE(SUM(s."uniqueBands"), 0)::int AS unique_bands
+              FROM "AnalyticsSummary" s
+              WHERE s."eventId" = ${input.eventId}
+                AND s."date" < COALESCE(
+                  (SELECT MIN("tappedAt")::date FROM "TapLog" WHERE "eventId" = ${input.eventId}),
+                  'infinity'::date
+                )
+                ${summaryDateFilter}
+                ${summaryWindowFilter}
+            `)
+          : Promise.resolve([{ total_taps: 0n, unique_bands: 0n }] as const),
       ]);
-      const uniqueBands = Number(tapCounts[0]?.unique_bands ?? 0);
+      const summaryTaps = Number(summaryTotals?.[0]?.total_taps ?? 0);
+      const summaryUnique = Number(summaryTotals?.[0]?.unique_bands ?? 0);
+      const tapCount = Number(tapCounts[0]?.total_taps ?? 0) + summaryTaps;
+      // Upper bound (daily uniques can't dedupe cross-day) — clamp to total bands.
+      const uniqueBands = Math.min(
+        Number(tapCounts[0]?.unique_bands ?? 0) + summaryUnique,
+        totalBandCount,
+      );
       const estimatedAttendees = event?.estimatedAttendees ?? null;
 
       let engagementPercent: number;
@@ -343,7 +405,7 @@ export const analyticsRouter = router({
 
       return {
         bandCount,
-        tapCount: Number(tapCounts[0]?.total_taps ?? 0),
+        tapCount,
         uniqueBands,
         repeatBands: Number(repeatBandsResult[0]?.repeat_bands ?? 0),
         engagementPercent,
@@ -546,17 +608,40 @@ export const analyticsRouter = router({
         ? Prisma.sql`AND tl."eventId" IN (${Prisma.join(eventIds)})`
         : Prisma.sql`AND 1=1`;
 
+      // Merge purged history from AnalyticsSummary (per-event seam). Only when
+      // the query is scoped to concrete events — never widen scope to all orgs.
+      const summaryEventFilter = eventId
+        ? Prisma.sql`AND s."eventId" = ${eventId}`
+        : eventIds.length > 0
+        ? Prisma.sql`AND s."eventId" IN (${Prisma.join(eventIds)})`
+        : null;
+      const summaryUnion = summaryEventFilter
+        ? Prisma.sql`
+          UNION ALL
+          SELECT s."date" AS date, SUM(s."tapCount") AS cnt
+          FROM "AnalyticsSummary" s
+          ${PER_EVENT_SEAM_JOIN}
+          WHERE s."date" >= ${new Date(from)} AND s."date" <= ${new Date(to)}
+            AND ${PER_EVENT_SEAM_COND}
+            ${summaryEventFilter}
+          GROUP BY s."date"`
+        : Prisma.sql``;
+
       // Use raw SQL for date bucketing with PostgreSQL DATE_TRUNC
       const results = await db.$queryRaw<Array<{ date: Date; count: bigint }>>(Prisma.sql`
-        SELECT
-          DATE_TRUNC('day', "tappedAt")::date as date,
-          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int as count
-        FROM "TapLog" tl
-        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-        WHERE "tappedAt" >= ${new Date(from)}
-          AND "tappedAt" <= ${new Date(to)}
-          ${eventFilter}
-        GROUP BY DATE_TRUNC('day', "tappedAt")
+        SELECT date, SUM(cnt)::int as count FROM (
+          SELECT
+            DATE_TRUNC('day', "tappedAt")::date as date,
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt")) as cnt
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          WHERE "tappedAt" >= ${new Date(from)}
+            AND "tappedAt" <= ${new Date(to)}
+            ${eventFilter}
+          GROUP BY 1
+          ${summaryUnion}
+        ) u
+        GROUP BY date
         ORDER BY date ASC
       `);
 
@@ -587,19 +672,38 @@ export const analyticsRouter = router({
         ? Prisma.sql`AND t."eventId" IN (${Prisma.join(eventIds)})`
         : Prisma.sql`AND 1=1`;
 
+      // Merge purged history (per-event seam). Only when scoped to concrete
+      // events — never widen to all orgs.
+      const summaryUnion = eventIds.length > 0
+        ? Prisma.sql`
+          UNION ALL
+          SELECT s."eventId", e."name" AS "eventName", SUM(s."tapCount") AS "tapCount"
+          FROM "AnalyticsSummary" s
+          INNER JOIN "Event" e ON s."eventId" = e."id"
+          ${PER_EVENT_SEAM_JOIN}
+          WHERE s."date" >= ${new Date(from)} AND s."date" <= ${new Date(to)}
+            AND ${PER_EVENT_SEAM_COND}
+            AND s."eventId" IN (${Prisma.join(eventIds)})
+          GROUP BY s."eventId", e."name"`
+        : Prisma.sql``;
+
       // Use raw SQL to join TapLog with Event and group by event
       const results = await db.$queryRaw<Array<{ eventId: string; eventName: string; tapCount: bigint }>>(Prisma.sql`
-        SELECT
-          t."eventId",
-          e."name" as "eventName",
-          COUNT(DISTINCT (t."bandId", t."tappedAt"))::int as "tapCount"
-        FROM "TapLog" t
-        INNER JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
-        INNER JOIN "Event" e ON t."eventId" = e."id"
-        WHERE t."tappedAt" >= ${new Date(from)}
-          AND t."tappedAt" <= ${new Date(to)}
-          ${eventFilter}
-        GROUP BY t."eventId", e."name"
+        SELECT "eventId", "eventName", SUM("tapCount")::int AS "tapCount" FROM (
+          SELECT
+            t."eventId",
+            e."name" as "eventName",
+            COUNT(DISTINCT (t."bandId", t."tappedAt")) as "tapCount"
+          FROM "TapLog" t
+          INNER JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
+          INNER JOIN "Event" e ON t."eventId" = e."id"
+          WHERE t."tappedAt" >= ${new Date(from)}
+            AND t."tappedAt" <= ${new Date(to)}
+            ${eventFilter}
+          GROUP BY t."eventId", e."name"
+          ${summaryUnion}
+        ) u
+        GROUP BY "eventId", "eventName"
         ORDER BY "tapCount" DESC
         LIMIT 10
       `);
@@ -637,9 +741,39 @@ export const analyticsRouter = router({
       const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
       const intervalSql = Prisma.raw(`'${granularityInterval(granularity)}'::interval`);
 
+      // Taps older than the retention window are purged from TapLog into the
+      // AnalyticsSummary daily rollup. Merge both so purged events still render.
+      // Seam = oldest surviving raw tap; everything strictly before it is in
+      // summary, which guarantees no double-count. Summary is daily-only, so
+      // skip the merge for sub-day granularity (always recent data anyway).
+      const mergeSummary = !isSubDay;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+      const summaryWindowFilter = input.windowId
+        ? Prisma.sql`AND s."windowId" = ${input.windowId}`
+        : Prisma.sql``;
+      const rawSeam = Prisma.sql`COALESCE((SELECT MIN("tappedAt")::date FROM "TapLog" WHERE "eventId" = ${eventId}), 'infinity'::date)`;
+      const summaryUnion = mergeSummary
+        ? Prisma.sql`
+            UNION ALL
+            SELECT
+              DATE_TRUNC(${truncUnit}, s."date"::timestamp)${dateCast} AS date,
+              SUM(s."tapCount") AS cnt
+            FROM "AnalyticsSummary" s
+            WHERE s."eventId" = ${eventId}
+              AND s."date" < ${rawSeam}
+              ${summaryDateFilter}
+              ${summaryWindowFilter}
+            GROUP BY 1`
+        : Prisma.sql``;
+
       const seriesStart = fromDate
         ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-        : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
+        : mergeSummary
+          ? Prisma.sql`DATE_TRUNC(${truncUnit}, LEAST(
+              (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz},
+              (SELECT MIN("date")::timestamp FROM "AnalyticsSummary" WHERE "eventId" = ${eventId})
+            ))${dateCast}`
+          : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = toDate
         ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
         : isSubDay
@@ -655,15 +789,19 @@ export const analyticsRouter = router({
           ${dateSeries}
         ),
         daily_counts AS (
-          SELECT
-            ${truncExpr} AS date,
-            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          WHERE tl."eventId" = ${eventId}
-            ${dateFilter}
-            ${windowFilter}
-          GROUP BY 1
+          SELECT date, SUM(cnt)::int AS count FROM (
+            SELECT
+              ${truncExpr} AS date,
+              COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS cnt
+            FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            WHERE tl."eventId" = ${eventId}
+              ${dateFilter}
+              ${windowFilter}
+            GROUP BY 1
+            ${summaryUnion}
+          ) u
+          GROUP BY date
         )
         SELECT
           ds.date,
@@ -815,9 +953,21 @@ export const analyticsRouter = router({
       const dateCast = isSubDay ? Prisma.sql`` : Prisma.raw("::date");
       const intervalSql = Prisma.raw(`'${granularityInterval(granularity)}'::interval`);
 
+      // Merge purged history from AnalyticsSummary (daily rollup). Seam = oldest
+      // surviving raw tap; summary covers everything strictly before it. Summary
+      // is daily-only, so skip for sub-day granularity. See engagementByHour.
+      const mergeSummary = !isSubDay;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+      const rawSeam = Prisma.sql`COALESCE((SELECT MIN("tappedAt")::date FROM "TapLog" WHERE "eventId" = ${eventId}), 'infinity'::date)`;
+
       const seriesStart = fromDate
         ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-        : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
+        : mergeSummary
+          ? Prisma.sql`DATE_TRUNC(${truncUnit}, LEAST(
+              (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz},
+              (SELECT MIN("date")::timestamp FROM "AnalyticsSummary" WHERE "eventId" = ${eventId})
+            ))${dateCast}`
+          : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" WHERE "eventId" = ${eventId}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
       const seriesEnd = toDate
         ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
         : isSubDay
@@ -827,6 +977,29 @@ export const analyticsRouter = router({
       const dateSeries = Prisma.sql`SELECT generate_series(${seriesStart}, ${seriesEnd}, ${intervalSql})${dateCast} AS date`;
 
       const truncExpr = Prisma.sql`DATE_TRUNC(${truncUnit}, tl."tappedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
+
+      // Same window-categorization against AnalyticsSummary's stored windowId
+      // (empty string = null window) + redirectUrl, for purged historical rows.
+      const summaryUnion = mergeSummary
+        ? Prisma.sql`
+            UNION ALL
+            SELECT
+              DATE_TRUNC(${truncUnit}, s."date"::timestamp)${dateCast} AS date,
+              CASE
+                WHEN s."windowId" <> '' THEN s."windowId"
+                WHEN e."fallbackUrl" IS NOT NULL AND s."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+                WHEN o."websiteUrl" IS NOT NULL AND s."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+                ELSE '__DEFAULT__'
+              END AS "windowId",
+              SUM(s."tapCount") AS cnt
+            FROM "AnalyticsSummary" s
+            INNER JOIN "Event" e ON s."eventId" = e."id"
+            INNER JOIN "Organization" o ON e."orgId" = o."id"
+            WHERE s."eventId" = ${eventId}
+              AND s."date" < ${rawSeam}
+              ${summaryDateFilter}
+            GROUP BY 1, 2`
+        : Prisma.sql``;
 
       // Build window VALUES list with ::text casts, plus synthetic non-window categories
       const windowEntries = [
@@ -845,28 +1018,32 @@ export const analyticsRouter = router({
           VALUES ${windowNameValues}
         ),
         daily_counts AS (
-          SELECT
-            ${truncExpr} AS date,
-            CASE
-              WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
-              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
-              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
-              ELSE '__DEFAULT__'
-            END AS "windowId",
-            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          INNER JOIN "Event" e ON tl."eventId" = e."id"
-          INNER JOIN "Organization" o ON e."orgId" = o."id"
-          WHERE tl."eventId" = ${eventId}
-            ${dateFilter}
-          GROUP BY 1,
-            CASE
-              WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
-              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
-              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
-              ELSE '__DEFAULT__'
-            END
+          SELECT date, "windowId", SUM(cnt)::int AS count FROM (
+            SELECT
+              ${truncExpr} AS date,
+              CASE
+                WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
+                WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+                WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+                ELSE '__DEFAULT__'
+              END AS "windowId",
+              COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS cnt
+            FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            INNER JOIN "Event" e ON tl."eventId" = e."id"
+            INNER JOIN "Organization" o ON e."orgId" = o."id"
+            WHERE tl."eventId" = ${eventId}
+              ${dateFilter}
+            GROUP BY 1,
+              CASE
+                WHEN tl."windowId" IS NOT NULL THEN tl."windowId"
+                WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+                WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+                ELSE '__DEFAULT__'
+              END
+            ${summaryUnion}
+          ) u
+          GROUP BY date, "windowId"
         )
         SELECT
           ds.date,
@@ -1523,6 +1700,18 @@ export const analyticsRouter = router({
       const fromDate = input.from ? new Date(input.from) : undefined;
       const toDate = input.to ? new Date(input.to) : undefined;
 
+      // Purged history per window from AnalyticsSummary (stored windowId).
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+      const summaryRows = await db.$queryRaw<Array<{ windowId: string; count: bigint }>>(Prisma.sql`
+        SELECT s."windowId" AS "windowId", SUM(s."tapCount")::int AS count
+        FROM "AnalyticsSummary" s
+        WHERE s."eventId" = ${eventId}
+          AND ${summarySeam(eventId)}
+          ${summaryDateFilter}
+        GROUP BY s."windowId"
+      `);
+      const summaryByWindow = new Map(summaryRows.map((r) => [r.windowId, Number(r.count)]));
+
       // Separate windows with/without time ranges
       const windowCases = windows
         .filter((w) => w.startTime && w.endTime)
@@ -1555,7 +1744,7 @@ export const analyticsRouter = router({
               windowType: w.windowType,
               title: w.title,
               url: w.url,
-              count: Number(row?.count ?? 0),
+              count: Number(row?.count ?? 0) + (summaryByWindow.get(w.id) ?? 0),
             };
           })
         );
@@ -1636,17 +1825,35 @@ export const analyticsRouter = router({
       const eventFilter = eventIds.length === 1
         ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
         : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
+      const summaryEventFilter = eventIds.length === 1
+        ? Prisma.sql`s."eventId" = ${eventIds[0]}`
+        : Prisma.sql`s."eventId" IN (${Prisma.join(eventIds)})`;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
 
       const results = await db.$queryRaw<Array<{ type: string; count: number }>>(Prisma.sql`
-        SELECT
-          ew."windowType" AS type,
-          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
-        FROM "TapLog" tl
-        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-        JOIN "EventWindow" ew ON tl."windowId" = ew."id"
-        WHERE ${eventFilter}
-          ${dateFilter}
-        GROUP BY ew."windowType"
+        SELECT type, SUM(cnt)::int AS count FROM (
+          SELECT
+            ew."windowType" AS type,
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS cnt
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          JOIN "EventWindow" ew ON tl."windowId" = ew."id"
+          WHERE ${eventFilter}
+            ${dateFilter}
+          GROUP BY ew."windowType"
+          UNION ALL
+          SELECT
+            ew."windowType" AS type,
+            SUM(s."tapCount") AS cnt
+          FROM "AnalyticsSummary" s
+          JOIN "EventWindow" ew ON s."windowId" = ew."id"
+          ${PER_EVENT_SEAM_JOIN}
+          WHERE ${summaryEventFilter}
+            AND ${PER_EVENT_SEAM_COND}
+            ${summaryDateFilter}
+          GROUP BY ew."windowType"
+        ) u
+        GROUP BY type
         ORDER BY count DESC
       `);
 
@@ -1683,23 +1890,44 @@ export const analyticsRouter = router({
         : toDate
         ? Prisma.sql`AND tl."tappedAt" <= ${toDate}`
         : Prisma.sql``;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
 
       const results = await db.$queryRaw<Array<{ category: string; count: number }>>(Prisma.sql`
-        SELECT
-          CASE
-            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"::text
-            WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
-            WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
-            ELSE 'DEFAULT'
-          END AS category,
-          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
-        FROM "TapLog" tl
-        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-        INNER JOIN "Event" e ON tl."eventId" = e."id"
-        INNER JOIN "Organization" o ON e."orgId" = o."id"
-        LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
-        WHERE tl."eventId" = ${eventId}
-          ${dateFilter}
+        SELECT category, SUM(cnt)::int AS count FROM (
+          SELECT
+            CASE
+              WHEN tl."windowId" IS NOT NULL THEN ew."windowType"::text
+              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
+              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
+              ELSE 'DEFAULT'
+            END AS category,
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS cnt
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          INNER JOIN "Event" e ON tl."eventId" = e."id"
+          INNER JOIN "Organization" o ON e."orgId" = o."id"
+          LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
+          WHERE tl."eventId" = ${eventId}
+            ${dateFilter}
+          GROUP BY category
+          UNION ALL
+          SELECT
+            CASE
+              WHEN s."windowId" <> '' THEN ew."windowType"::text
+              WHEN e."fallbackUrl" IS NOT NULL AND s."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
+              WHEN o."websiteUrl" IS NOT NULL AND s."redirectUrl" = o."websiteUrl" THEN 'ORG'
+              ELSE 'DEFAULT'
+            END AS category,
+            SUM(s."tapCount") AS cnt
+          FROM "AnalyticsSummary" s
+          INNER JOIN "Event" e ON s."eventId" = e."id"
+          INNER JOIN "Organization" o ON e."orgId" = o."id"
+          LEFT JOIN "EventWindow" ew ON s."windowId" = ew."id"
+          WHERE s."eventId" = ${eventId}
+            AND ${summarySeam(eventId)}
+            ${summaryDateFilter}
+          GROUP BY category
+        ) u
         GROUP BY category
         ORDER BY count DESC
       `);
@@ -1947,15 +2175,39 @@ export const analyticsRouter = router({
         GROUP BY e."id", e."name", e."city"
       `);
 
-      return results.map(r => ({
-        eventId: r.eventId,
-        eventName: r.eventName,
-        city: r.city,
-        totalTaps: Number(r.totalTaps),
-        uniqueBands: Number(r.uniqueBands),
-        peakTpm: Number(r.peakTpm),
-        postEventTaps: Number(r.postEventTaps),
-      }));
+      // Purged history per event (per-event seam). peakTpm is per-minute and
+      // unrecoverable from the daily rollup — it stays TapLog-only. uniqueBands
+      // is an upper bound (daily uniques can't dedupe cross-day).
+      const summaryRows = await db.$queryRaw<Array<{
+        eventId: string; totalTaps: bigint; uniqueBands: bigint; postEventTaps: bigint;
+      }>>(Prisma.sql`
+        SELECT
+          s."eventId" AS "eventId",
+          SUM(s."tapCount")::int AS "totalTaps",
+          SUM(s."uniqueBands")::int AS "uniqueBands",
+          SUM(CASE WHEN ew."windowType" = 'POST' THEN s."tapCount" ELSE 0 END)::int AS "postEventTaps"
+        FROM "AnalyticsSummary" s
+        LEFT JOIN "EventWindow" ew ON s."windowId" = ew."id"
+        ${PER_EVENT_SEAM_JOIN}
+        WHERE s."eventId" IN (${Prisma.join(eventIds)})
+          AND s."date" >= ${fromDate} AND s."date" <= ${toDate}
+          AND ${PER_EVENT_SEAM_COND}
+        GROUP BY s."eventId"
+      `);
+      const summaryByEvent = new Map(summaryRows.map((r) => [r.eventId, r]));
+
+      return results.map(r => {
+        const sum = summaryByEvent.get(r.eventId);
+        return {
+          eventId: r.eventId,
+          eventName: r.eventName,
+          city: r.city,
+          totalTaps: Number(r.totalTaps) + Number(sum?.totalTaps ?? 0),
+          uniqueBands: Number(r.uniqueBands) + Number(sum?.uniqueBands ?? 0),
+          peakTpm: Number(r.peakTpm),
+          postEventTaps: Number(r.postEventTaps) + Number(sum?.postEventTaps ?? 0),
+        };
+      });
     }),
 
   topOrgs: protectedProcedure
