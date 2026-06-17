@@ -226,7 +226,7 @@ function tzExpr(col: string, tz?: string): Prisma.Sql {
 
 /** Build series start/end + truncation SQL based on granularity.
  *  When `tz` is provided, series boundaries are converted to that timezone. */
-function buildSeriesSql(g: Granularity, fromDate: Date | undefined, toDate: Date | undefined, eventFilter: Prisma.Sql, tz?: string) {
+function buildSeriesSql(g: Granularity, fromDate: Date | undefined, toDate: Date | undefined, eventFilter: Prisma.Sql, tz?: string, summaryEventFilter?: Prisma.Sql) {
   const unit = granularityUnit(g);
   const interval = granularityInterval(g);
   const isSubDay = g === "hourly" || g === "minute";
@@ -235,13 +235,24 @@ function buildSeriesSql(g: Granularity, fromDate: Date | undefined, toDate: Date
   const truncUnit = Prisma.raw(`'${unit}'`);
   const intervalSql = Prisma.raw(`'${interval}'::interval`);
 
+  // When summaryEventFilter is given (and not sub-day), extend the series start
+  // back to the oldest AnalyticsSummary date too, so purged history is in range.
+  const minTapTz = Prisma.sql`(SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz}`;
+  const minTap = Prisma.sql`(SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter})`;
+  const minStartTz = summaryEventFilter && !isSubDay
+    ? Prisma.sql`LEAST(${minTapTz}, (SELECT MIN("date")::timestamp FROM "AnalyticsSummary" s WHERE ${summaryEventFilter}))`
+    : minTapTz;
+  const minStart = summaryEventFilter && !isSubDay
+    ? Prisma.sql`LEAST(${minTap}, (SELECT MIN("date")::timestamp FROM "AnalyticsSummary" s WHERE ${summaryEventFilter}))`
+    : minTap;
+
   let seriesStart: Prisma.Sql;
   let seriesEnd: Prisma.Sql;
 
   if (tz) {
     seriesStart = fromDate
       ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
-      : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter}) AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
+      : Prisma.sql`DATE_TRUNC(${truncUnit}, ${minStartTz})${dateCast}`;
     seriesEnd = toDate
       ? Prisma.sql`(${toDate}::timestamptz AT TIME ZONE ${tz})${dateCast}`
       : isSubDay
@@ -250,7 +261,7 @@ function buildSeriesSql(g: Granularity, fromDate: Date | undefined, toDate: Date
   } else {
     seriesStart = fromDate
       ? Prisma.sql`DATE_TRUNC(${truncUnit}, ${fromDate}::timestamptz)${dateCast}`
-      : Prisma.sql`DATE_TRUNC(${truncUnit}, (SELECT MIN("tappedAt") FROM "TapLog" tl WHERE ${eventFilter}))${dateCast}`;
+      : Prisma.sql`DATE_TRUNC(${truncUnit}, ${minStart})${dateCast}`;
     seriesEnd = toDate
       ? isSubDay
         ? Prisma.sql`${toDate}::timestamptz`
@@ -1241,8 +1252,21 @@ export const analyticsRouter = router({
       const eventFilter = eventIds.length === 1
         ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
         : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
+      const summaryEventFilter = eventIds.length === 1
+        ? Prisma.sql`s."eventId" = ${eventIds[0]}`
+        : Prisma.sql`s."eventId" IN (${Prisma.join(eventIds)})`;
 
-      const { seriesStart, seriesEnd, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter, tz);
+      const isSubDay = granularity === "hourly" || granularity === "minute";
+      const mergeSummary = !isSubDay;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+      const summaryWindowFilter = input.windowId
+        ? Prisma.sql`AND s."windowId" = ${input.windowId}`
+        : Prisma.sql``;
+
+      const { seriesStart, seriesEnd, dateCast, intervalSql, unit } = buildSeriesSql(
+        granularity, fromDate, toDate, eventFilter, tz,
+        mergeSummary ? summaryEventFilter : undefined,
+      );
 
       const eventNameValues = Prisma.join(
         campaignEvents.map((e) => Prisma.sql`(${e.id}, ${e.name})`),
@@ -1250,6 +1274,22 @@ export const analyticsRouter = router({
       );
 
       const truncSql = Prisma.raw(`'${unit}'`);
+
+      const bucketSummaryUnion = mergeSummary
+        ? Prisma.sql`
+            UNION ALL
+            SELECT
+              DATE_TRUNC(${truncSql}, s."date"::timestamp)${dateCast} AS date,
+              s."eventId",
+              SUM(s."tapCount") AS count
+            FROM "AnalyticsSummary" s
+            ${PER_EVENT_SEAM_JOIN}
+            WHERE ${summaryEventFilter}
+              AND ${PER_EVENT_SEAM_COND}
+              ${summaryDateFilter}
+              ${summaryWindowFilter}
+            GROUP BY 1, 2`
+        : Prisma.sql``;
 
       const results = await db.$queryRaw<Array<{ date: Date; eventId: string; eventName: string; count: bigint }>>(Prisma.sql`
         WITH date_series AS (
@@ -1263,17 +1303,21 @@ export const analyticsRouter = router({
           VALUES ${eventNameValues}
         ),
         bucket_counts AS (
-          SELECT
-            DATE_TRUNC(${truncSql}, ${tzExpr('"tappedAt"', tz)})${dateCast} AS date,
-            tl."eventId",
-            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          INNER JOIN "Event" e ON tl."eventId" = e."id"
-          WHERE ${eventFilter}
-            ${dateFilter}
-            ${windowFilter}
-          GROUP BY 1, 2
+          SELECT date, "eventId", SUM(count)::int AS count FROM (
+            SELECT
+              DATE_TRUNC(${truncSql}, ${tzExpr('"tappedAt"', tz)})${dateCast} AS date,
+              tl."eventId",
+              COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS count
+            FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            INNER JOIN "Event" e ON tl."eventId" = e."id"
+            WHERE ${eventFilter}
+              ${dateFilter}
+              ${windowFilter}
+            GROUP BY 1, 2
+            ${bucketSummaryUnion}
+          ) u
+          GROUP BY date, "eventId"
         )
         SELECT
           ds.date,
@@ -1374,12 +1418,13 @@ export const analyticsRouter = router({
         campaign_events(id, name) AS (
           VALUES ${eventNameValues}
         ),
+        -- Source first-tap from Band.firstTapAt (survives the 90d TapLog purge).
         first_taps AS (
-          SELECT tl."bandId", tl."eventId", MIN("tappedAt") AS first_tap_at
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          WHERE ${eventFilter}
-          GROUP BY tl."bandId", tl."eventId"
+          SELECT b."id" AS "bandId", b."eventId", b."firstTapAt" AS first_tap_at
+          FROM "Band" b
+          WHERE b."eventId" IN (${Prisma.join(eventIds)})
+            AND b."deletedAt" IS NULL
+            AND b."firstTapAt" IS NOT NULL
         ),
         bucket_counts AS (
           SELECT
@@ -1456,6 +1501,13 @@ export const analyticsRouter = router({
         ? Prisma.sql`"id" = ${eventIds[0]}`
         : Prisma.sql`"id" IN (${Prisma.join(eventIds)})`;
 
+      const summaryEventFilter = eventIds.length === 1
+        ? Prisma.sql`s."eventId" = ${eventIds[0]}`
+        : Prisma.sql`s."eventId" IN (${Prisma.join(eventIds)})`;
+      const isSubDay = granularity === "hourly" || granularity === "minute";
+      const mergeSummary = !isSubDay;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+
       const { seriesStart: ss, seriesEnd: se, dateCast, intervalSql, unit } = buildSeriesSql(granularity, fromDate, toDate, eventFilter, tz);
       const seriesStart = fromDate
         ? ss
@@ -1488,16 +1540,31 @@ export const analyticsRouter = router({
           VALUES ${eventNameValues}
         ),
         bucket_counts AS (
-          SELECT
-            DATE_TRUNC(${truncSql}, ${tzExpr('tl."tappedAt"', tz)})${dateCast} AS date,
-            tl."eventId",
-            COUNT(DISTINCT tl."bandId")::int AS "uniqueCount"
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          INNER JOIN "Event" e ON tl."eventId" = e."id"
-          WHERE ${eventFilter}
-            ${tapDateFilter}
-          GROUP BY 1, 2
+          SELECT date, "eventId", SUM("uniqueCount")::int AS "uniqueCount" FROM (
+            SELECT
+              DATE_TRUNC(${truncSql}, ${tzExpr('tl."tappedAt"', tz)})${dateCast} AS date,
+              tl."eventId",
+              COUNT(DISTINCT tl."bandId") AS "uniqueCount"
+            FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            INNER JOIN "Event" e ON tl."eventId" = e."id"
+            WHERE ${eventFilter}
+              ${tapDateFilter}
+            GROUP BY 1, 2
+            ${mergeSummary ? Prisma.sql`
+            UNION ALL
+            SELECT
+              DATE_TRUNC(${truncSql}, s."date"::timestamp)${dateCast} AS date,
+              s."eventId",
+              SUM(s."uniqueBands") AS "uniqueCount"
+            FROM "AnalyticsSummary" s
+            ${PER_EVENT_SEAM_JOIN}
+            WHERE ${summaryEventFilter}
+              AND ${PER_EVENT_SEAM_COND}
+              ${summaryDateFilter}
+            GROUP BY 1, 2` : Prisma.sql``}
+          ) u
+          GROUP BY date, "eventId"
         )
         SELECT
           ds.date,
@@ -2025,23 +2092,48 @@ export const analyticsRouter = router({
       const eventFilter = eventIds.length === 1
         ? Prisma.sql`tl."eventId" = ${eventIds[0]}`
         : Prisma.sql`tl."eventId" IN (${Prisma.join(eventIds)})`;
+      const summaryEventFilter = eventIds.length === 1
+        ? Prisma.sql`s."eventId" = ${eventIds[0]}`
+        : Prisma.sql`s."eventId" IN (${Prisma.join(eventIds)})`;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
 
       const results = await db.$queryRaw<Array<{ category: string; count: number }>>(Prisma.sql`
-        SELECT
-          CASE
-            WHEN tl."windowId" IS NOT NULL THEN ew."windowType"::text
-            WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
-            WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
-            ELSE 'DEFAULT'
-          END AS category,
-          COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS count
-        FROM "TapLog" tl
-        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-        INNER JOIN "Event" e ON tl."eventId" = e."id"
-        INNER JOIN "Organization" o ON e."orgId" = o."id"
-        LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
-        WHERE ${eventFilter}
-          ${dateFilter}
+        SELECT category, SUM(cnt)::int AS count FROM (
+          SELECT
+            CASE
+              WHEN tl."windowId" IS NOT NULL THEN ew."windowType"::text
+              WHEN e."fallbackUrl" IS NOT NULL AND tl."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
+              WHEN o."websiteUrl" IS NOT NULL AND tl."redirectUrl" = o."websiteUrl" THEN 'ORG'
+              ELSE 'DEFAULT'
+            END AS category,
+            COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS cnt
+          FROM "TapLog" tl
+          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+          INNER JOIN "Event" e ON tl."eventId" = e."id"
+          INNER JOIN "Organization" o ON e."orgId" = o."id"
+          LEFT JOIN "EventWindow" ew ON tl."windowId" = ew."id"
+          WHERE ${eventFilter}
+            ${dateFilter}
+          GROUP BY category
+          UNION ALL
+          SELECT
+            CASE
+              WHEN s."windowId" <> '' THEN ew."windowType"::text
+              WHEN e."fallbackUrl" IS NOT NULL AND s."redirectUrl" = e."fallbackUrl" THEN 'FALLBACK'
+              WHEN o."websiteUrl" IS NOT NULL AND s."redirectUrl" = o."websiteUrl" THEN 'ORG'
+              ELSE 'DEFAULT'
+            END AS category,
+            SUM(s."tapCount") AS cnt
+          FROM "AnalyticsSummary" s
+          INNER JOIN "Event" e ON s."eventId" = e."id"
+          INNER JOIN "Organization" o ON e."orgId" = o."id"
+          LEFT JOIN "EventWindow" ew ON s."windowId" = ew."id"
+          ${PER_EVENT_SEAM_JOIN}
+          WHERE ${summaryEventFilter}
+            AND ${PER_EVENT_SEAM_COND}
+            ${summaryDateFilter}
+          GROUP BY category
+        ) u
         GROUP BY category
         ORDER BY count DESC
       `);
