@@ -1550,32 +1550,71 @@ export const analyticsRouter = router({
         return { eventCount: 0, bandCount: 0, tapCount: 0, uniqueBands: 0, repeatBands: 0, breakdown: [] };
       }
 
-      const { dateFilter, windowFilter } = buildDateFilter(input);
+      const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
       const hasFilters = !!(input.windowId || input.from || input.to);
+
+      // Merge purged history from AnalyticsSummary (per-event seam). total_taps
+      // exact; unique_bands upper bound (clamped to bandCount below). repeatBands
+      // stays TapLog-only — per-band repeat isn't reconstructable from the rollup.
+      const mergeSummary = !isSubDayRange(fromDate, toDate);
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+      const summaryWindowFilter = input.windowId
+        ? Prisma.sql`AND s."windowId" = ${input.windowId}`
+        : Prisma.sql``;
+      const aggSummaryUnion = mergeSummary
+        ? Prisma.sql`
+          UNION ALL
+          SELECT SUM(s."tapCount") AS total_taps, SUM(s."uniqueBands") AS unique_bands
+          FROM "AnalyticsSummary" s
+          ${PER_EVENT_SEAM_JOIN}
+          WHERE s."eventId" IN (${Prisma.join(eventIds)})
+            AND ${PER_EVENT_SEAM_COND}
+            ${summaryDateFilter}
+            ${summaryWindowFilter}`
+        : Prisma.sql``;
+      const perEventSummaryUnion = mergeSummary
+        ? Prisma.sql`
+          UNION ALL
+          SELECT s."eventId" AS "eventId", SUM(s."tapCount") AS total_taps, SUM(s."uniqueBands") AS unique_bands
+          FROM "AnalyticsSummary" s
+          ${PER_EVENT_SEAM_JOIN}
+          WHERE s."eventId" IN (${Prisma.join(eventIds)})
+            AND ${PER_EVENT_SEAM_COND}
+            ${summaryDateFilter}
+            ${summaryWindowFilter}
+          GROUP BY s."eventId"`
+        : Prisma.sql``;
 
       const [tapCounts, totalBandCount, perEvent, repeatBandsResult] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
-          SELECT
-            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
-            COUNT(DISTINCT tl."bandId")::int AS unique_bands
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          WHERE tl."eventId" IN (${Prisma.join(eventIds)})
-            ${dateFilter}
-            ${windowFilter}
+          SELECT SUM(total_taps)::int AS total_taps, SUM(unique_bands)::int AS unique_bands FROM (
+            SELECT
+              COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS total_taps,
+              COUNT(DISTINCT tl."bandId") AS unique_bands
+            FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            WHERE tl."eventId" IN (${Prisma.join(eventIds)})
+              ${dateFilter}
+              ${windowFilter}
+            ${aggSummaryUnion}
+          ) u
         `),
         db.band.count({ where: { eventId: { in: eventIds }, ...ACTIVE } }),
         db.$queryRaw<Array<{ eventId: string; total_taps: bigint; unique_bands: bigint }>>(Prisma.sql`
-          SELECT
-            tl."eventId",
-            COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
-            COUNT(DISTINCT tl."bandId")::int AS unique_bands
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          WHERE tl."eventId" IN (${Prisma.join(eventIds)})
-            ${dateFilter}
-            ${windowFilter}
-          GROUP BY tl."eventId"
+          SELECT "eventId", SUM(total_taps)::int AS total_taps, SUM(unique_bands)::int AS unique_bands FROM (
+            SELECT
+              tl."eventId" AS "eventId",
+              COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS total_taps,
+              COUNT(DISTINCT tl."bandId") AS unique_bands
+            FROM "TapLog" tl
+            INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+            WHERE tl."eventId" IN (${Prisma.join(eventIds)})
+              ${dateFilter}
+              ${windowFilter}
+            GROUP BY tl."eventId"
+            ${perEventSummaryUnion}
+          ) u
+          GROUP BY "eventId"
         `),
         db.$queryRaw<[{ repeat_bands: bigint }]>(Prisma.sql`
           SELECT COUNT(*)::int AS repeat_bands FROM (
@@ -1592,7 +1631,8 @@ export const analyticsRouter = router({
 
       const perEventMap = new Map(perEvent.map((r) => [r.eventId, r]));
       const filteredEvents = campaign.events.filter((e) => eventIds.includes(e.id));
-      const uniqueBands = Number(tapCounts[0]?.unique_bands ?? 0);
+      // Clamp upper-bound summary uniques to actual band count.
+      const uniqueBands = Math.min(Number(tapCounts[0]?.unique_bands ?? 0), totalBandCount);
 
       let aggregateEngagement: number;
       let bandCount: number;
@@ -1618,7 +1658,7 @@ export const analyticsRouter = router({
         breakdown = filteredEvents.map((e) => {
           const stats = perEventMap.get(e.id);
           const tapCount = Number(stats?.total_taps ?? 0);
-          const eventUniqueBands = Number(stats?.unique_bands ?? 0);
+          const eventUniqueBands = Math.min(Number(stats?.unique_bands ?? 0), e._count.bands);
           const estAtt = e.estimatedAttendees;
           const engagementPercent = estAtt && estAtt > 0
             ? Math.round((eventUniqueBands / estAtt) * 10000) / 100
@@ -2229,34 +2269,52 @@ export const analyticsRouter = router({
       const fromDate = new Date(from);
       const toDate = new Date(to);
 
-      const results = await db.$queryRaw<
-        Array<{ orgId: string; orgName: string; eventCount: bigint; tapCount: bigint }>
-      >(Prisma.sql`
-        SELECT
-          o."id" as "orgId",
-          o."name" as "orgName",
-          COUNT(DISTINCT e."id")::int as "eventCount",
-          COUNT(_b."id")::int as "tapCount"
-        FROM "Organization" o
-        LEFT JOIN "Event" e ON e."orgId" = o."id"
-        LEFT JOIN "TapLog" t ON t."eventId" = e."id"
-          AND t."tappedAt" >= ${fromDate}
-          AND t."tappedAt" <= ${toDate}
-        LEFT JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
-        GROUP BY o."id", o."name"
-        ORDER BY "tapCount" DESC
-        LIMIT 20
-      `);
+      // No LIMIT here: merge purged history (summaryByOrg) before ranking, else
+      // the top-20 cut would drop orgs whose volume lives in the rollup.
+      const [results, summaryByOrgRows] = await Promise.all([
+        db.$queryRaw<
+          Array<{ orgId: string; orgName: string; eventCount: bigint; tapCount: bigint }>
+        >(Prisma.sql`
+          SELECT
+            o."id" as "orgId",
+            o."name" as "orgName",
+            COUNT(DISTINCT e."id")::int as "eventCount",
+            COUNT(_b."id")::int as "tapCount"
+          FROM "Organization" o
+          LEFT JOIN "Event" e ON e."orgId" = o."id"
+          LEFT JOIN "TapLog" t ON t."eventId" = e."id"
+            AND t."tappedAt" >= ${fromDate}
+            AND t."tappedAt" <= ${toDate}
+          LEFT JOIN "Band" _b ON _b."id" = t."bandId" AND _b."deletedAt" IS NULL
+          GROUP BY o."id", o."name"
+        `),
+        db.$queryRaw<Array<{ orgId: string; tapCount: bigint }>>(Prisma.sql`
+          SELECT e."orgId" AS "orgId", SUM(s."tapCount")::int AS "tapCount"
+          FROM "AnalyticsSummary" s
+          INNER JOIN "Event" e ON e."id" = s."eventId"
+          ${PER_EVENT_SEAM_JOIN}
+          WHERE s."date" >= ${fromDate} AND s."date" <= ${toDate}
+            AND ${PER_EVENT_SEAM_COND}
+          GROUP BY e."orgId"
+        `),
+      ]);
+      const summaryByOrg = new Map(summaryByOrgRows.map((r) => [r.orgId, Number(r.tapCount)]));
 
       const minutesInRange = Math.max(1, (toDate.getTime() - fromDate.getTime()) / 60000);
 
-      return results.map((row) => ({
-        orgId: row.orgId,
-        orgName: row.orgName,
-        eventCount: Number(row.eventCount),
-        tapCount: Number(row.tapCount),
-        tpm: Math.round((Number(row.tapCount) / minutesInRange) * 100) / 100,
-      }));
+      return results
+        .map((row) => {
+          const tapCount = Number(row.tapCount) + (summaryByOrg.get(row.orgId) ?? 0);
+          return {
+            orgId: row.orgId,
+            orgName: row.orgName,
+            eventCount: Number(row.eventCount),
+            tapCount,
+            tpm: Math.round((tapCount / minutesInRange) * 100) / 100,
+          };
+        })
+        .sort((a, b) => b.tapCount - a.tapCount)
+        .slice(0, 20);
     }),
 
   uniqueTapsTimeline: protectedProcedure
