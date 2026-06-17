@@ -1144,6 +1144,15 @@ export const analyticsRouter = router({
 
       const truncExpr = Prisma.sql`DATE_TRUNC(${truncUnit}, first_tap_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})${dateCast}`;
 
+      // For dates older than the seam, first-tap-by-window is unrecoverable (the
+      // early per-window taps were purged). Blend in AnalyticsSummary's per-window
+      // per-day uniqueBands so the multi-window distribution still shows for >90d
+      // events. Semantics differ slightly (unique-active-by-window vs strict
+      // first-tap); recent days stay exact.
+      const mergeSummary = !isSubDay;
+      const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
+      const rawSeam = Prisma.sql`COALESCE((SELECT MIN("tappedAt")::date FROM "TapLog" WHERE "eventId" = ${eventId}), 'infinity'::date)`;
+
       // Date filter on first_tap_at
       const firstTapDateFilter = fromDate && toDate
         ? Prisma.sql`AND first_tap_at >= ${fromDate} AND first_tap_at <= ${toDate}`
@@ -1193,14 +1202,35 @@ export const analyticsRouter = router({
           GROUP BY tl."bandId"
         ),
         daily_counts AS (
-          SELECT
-            ${truncExpr} AS date,
-            "windowId",
-            COUNT(*)::int AS count
-          FROM first_taps
-          WHERE 1=1
-            ${firstTapDateFilter}
-          GROUP BY 1, "windowId"
+          SELECT date, "windowId", SUM(cnt)::int AS count FROM (
+            SELECT
+              ${truncExpr} AS date,
+              "windowId",
+              COUNT(*) AS cnt
+            FROM first_taps
+            WHERE 1=1
+              ${firstTapDateFilter}
+            GROUP BY 1, "windowId"
+            ${mergeSummary ? Prisma.sql`
+            UNION ALL
+            SELECT
+              DATE_TRUNC(${truncUnit}, s."date"::timestamp)${dateCast} AS date,
+              CASE
+                WHEN s."windowId" <> '' THEN s."windowId"
+                WHEN e."fallbackUrl" IS NOT NULL AND s."redirectUrl" = e."fallbackUrl" THEN '__FALLBACK__'
+                WHEN o."websiteUrl" IS NOT NULL AND s."redirectUrl" = o."websiteUrl" THEN '__ORG__'
+                ELSE '__DEFAULT__'
+              END AS "windowId",
+              SUM(s."uniqueBands") AS cnt
+            FROM "AnalyticsSummary" s
+            INNER JOIN "Event" e ON s."eventId" = e."id"
+            INNER JOIN "Organization" o ON e."orgId" = o."id"
+            WHERE s."eventId" = ${eventId}
+              AND s."date" < ${rawSeam}
+              ${summaryDateFilter}
+            GROUP BY 1, 2` : Prisma.sql``}
+          ) u
+          GROUP BY date, "windowId"
         )
         SELECT
           ds.date,
