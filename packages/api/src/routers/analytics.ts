@@ -1906,7 +1906,7 @@ export const analyticsRouter = router({
             windowType: w.windowType,
             title: w.title,
             url: w.url,
-            count: Number(row?.count ?? 0),
+            count: Number(row?.count ?? 0) + (summaryByWindow.get(w.id) ?? 0),
           };
         })
       );
