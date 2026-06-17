@@ -874,12 +874,17 @@ export const analyticsRouter = router({
         WITH date_series AS (
           ${dateSeries}
         ),
+        -- Source first-tap from Band.firstTapAt, not TapLog. TapLog older than
+        -- the 90d retention window is purged into AnalyticsSummary, but the
+        -- denormalized Band.firstTapAt survives — so registration timing stays
+        -- intact for events past retention. (Caveat: firstTapAt resets to the
+        -- reassignment time for physically-reused bands.)
         first_taps AS (
-          SELECT tl."bandId", MIN("tappedAt") AS first_tap_at
-          FROM "TapLog" tl
-          INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-          WHERE tl."eventId" = ${eventId}
-          GROUP BY tl."bandId"
+          SELECT b."id" AS "bandId", b."firstTapAt" AS first_tap_at
+          FROM "Band" b
+          WHERE b."eventId" = ${eventId}
+            AND b."deletedAt" IS NULL
+            AND b."firstTapAt" IS NOT NULL
         ),
         daily_counts AS (
           SELECT
