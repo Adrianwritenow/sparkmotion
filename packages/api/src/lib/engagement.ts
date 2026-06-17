@@ -20,11 +20,11 @@ export async function getEventEngagement(
 
   if (eventIds.length === 0) return result;
 
-  // Merge purged history from AnalyticsSummary (daily rollup). Taps older than
-  // the 90d retention window are aggregated there per-event/day; the seam is the
-  // oldest surviving raw tap per event (TapLog owns >= seam, summary owns < seam).
-  // total_taps is exact; unique_bands is an upper bound (daily uniques can't
-  // dedupe cross-day) — engagementPercent is clamped to 100 below.
+  // total_taps merges TapLog (recent) + AnalyticsSummary rollup (purged history),
+  // per-event seam (oldest surviving raw tap). unique_bands does NOT sum the
+  // rollup's daily uniqueBands — that double-counts bands across days. Instead it
+  // comes from Band.firstTapAt, which is denormalized, exact, and survives the
+  // purge (it's the true count of bands that ever tapped this event).
   const rows = await db.$queryRaw<
     Array<{
       eventId: string;
@@ -32,29 +32,41 @@ export async function getEventEngagement(
       unique_bands: number;
     }>
   >(Prisma.sql`
-    SELECT "eventId", SUM(total_taps)::int AS total_taps, SUM(unique_bands)::int AS unique_bands FROM (
-      SELECT
-        tl."eventId" AS "eventId",
-        COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS total_taps,
-        COUNT(DISTINCT tl."bandId") AS unique_bands
-      FROM "TapLog" tl
-      INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-      WHERE tl."eventId" IN (${Prisma.join(eventIds)})
-      GROUP BY tl."eventId"
-      UNION ALL
-      SELECT
-        s."eventId" AS "eventId",
-        SUM(s."tapCount") AS total_taps,
-        SUM(s."uniqueBands") AS unique_bands
-      FROM "AnalyticsSummary" s
-      LEFT JOIN (
-        SELECT "eventId", MIN("tappedAt")::date AS d FROM "TapLog" GROUP BY "eventId"
-      ) seam ON seam."eventId" = s."eventId"
-      WHERE s."eventId" IN (${Prisma.join(eventIds)})
-        AND s."date" < COALESCE(seam.d, 'infinity'::date)
-      GROUP BY s."eventId"
-    ) u
-    GROUP BY "eventId"
+    WITH taps AS (
+      SELECT "eventId", SUM(total_taps)::int AS total_taps FROM (
+        SELECT
+          tl."eventId" AS "eventId",
+          COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS total_taps
+        FROM "TapLog" tl
+        INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+        WHERE tl."eventId" IN (${Prisma.join(eventIds)})
+        GROUP BY tl."eventId"
+        UNION ALL
+        SELECT s."eventId" AS "eventId", SUM(s."tapCount") AS total_taps
+        FROM "AnalyticsSummary" s
+        LEFT JOIN (
+          SELECT "eventId", MIN("tappedAt")::date AS d FROM "TapLog" GROUP BY "eventId"
+        ) seam ON seam."eventId" = s."eventId"
+        WHERE s."eventId" IN (${Prisma.join(eventIds)})
+          AND s."date" < COALESCE(seam.d, 'infinity'::date)
+        GROUP BY s."eventId"
+      ) u
+      GROUP BY "eventId"
+    ),
+    uniques AS (
+      SELECT b."eventId" AS "eventId", COUNT(*)::int AS unique_bands
+      FROM "Band" b
+      WHERE b."eventId" IN (${Prisma.join(eventIds)})
+        AND b."deletedAt" IS NULL
+        AND b."firstTapAt" IS NOT NULL
+      GROUP BY b."eventId"
+    )
+    SELECT
+      COALESCE(t."eventId", uq."eventId") AS "eventId",
+      COALESCE(t.total_taps, 0) AS total_taps,
+      COALESCE(uq.unique_bands, 0) AS unique_bands
+    FROM taps t
+    FULL OUTER JOIN uniques uq ON uq."eventId" = t."eventId"
   `);
 
   for (const row of rows) {

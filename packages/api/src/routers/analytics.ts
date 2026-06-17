@@ -337,18 +337,19 @@ export const analyticsRouter = router({
       const { dateFilter, windowFilter, fromDate, toDate } = buildDateFilter(input);
       const hasFilters = !!(input.windowId || input.from || input.to);
 
-      // Merge purged history from AnalyticsSummary (daily rollup). total_taps is
-      // exact (sum of daily counts); unique_bands is an upper bound (daily uniques
-      // can't dedupe cross-day, so it's clamped to bandCount below). Skip for
-      // sub-day ranges (always recent data). repeatBands stays TapLog-only —
-      // per-band repeat history isn't reconstructable from the rollup.
+      // total_taps merges TapLog (recent) + AnalyticsSummary rollup (purged
+      // history). unique/repeat band COUNTS come from the Band table (firstTapAt,
+      // tapCount) — denormalized, exact, and survive the purge — NOT from summing
+      // the rollup's daily uniqueBands (that double-counts bands across days).
+      // Band-table counts ignore date/window filters, so they're only used on the
+      // unfiltered overview; filtered queries fall back to recent TapLog.
       const mergeSummary = !isSubDayRange(fromDate, toDate);
       const summaryDateFilter = buildSummaryDateFilter(fromDate, toDate);
       const summaryWindowFilter = input.windowId
         ? Prisma.sql`AND s."windowId" = ${input.windowId}`
         : Prisma.sql``;
 
-      const [tapCounts, totalBandCount, event, repeatBandsResult, summaryTotals] = await Promise.all([
+      const [tapCounts, totalBandCount, event, repeatBandsResult, summaryTotals, bandStats] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT
             COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
@@ -387,15 +388,24 @@ export const analyticsRouter = router({
                 ${summaryWindowFilter}
             `)
           : Promise.resolve([{ total_taps: 0n, unique_bands: 0n }] as const),
+        db.$queryRaw<[{ unique_bands: bigint; repeat_bands: bigint }]>(Prisma.sql`
+          SELECT
+            COUNT(*) FILTER (WHERE "firstTapAt" IS NOT NULL)::int AS unique_bands,
+            COUNT(*) FILTER (WHERE "tapCount" > 1)::int AS repeat_bands
+          FROM "Band"
+          WHERE "eventId" = ${input.eventId} AND "deletedAt" IS NULL
+        `),
       ]);
       const summaryTaps = Number(summaryTotals?.[0]?.total_taps ?? 0);
-      const summaryUnique = Number(summaryTotals?.[0]?.unique_bands ?? 0);
       const tapCount = Number(tapCounts[0]?.total_taps ?? 0) + summaryTaps;
-      // Upper bound (daily uniques can't dedupe cross-day) — clamp to total bands.
-      const uniqueBands = Math.min(
-        Number(tapCounts[0]?.unique_bands ?? 0) + summaryUnique,
-        totalBandCount,
-      );
+      // Unfiltered overview: exact unique/repeat from the Band table (survive the
+      // purge). Filtered: recent TapLog only (Band counts can't honor date/window).
+      const uniqueBands = hasFilters
+        ? Number(tapCounts[0]?.unique_bands ?? 0)
+        : Number(bandStats?.[0]?.unique_bands ?? 0);
+      const repeatBands = hasFilters
+        ? Number(repeatBandsResult[0]?.repeat_bands ?? 0)
+        : Number(bandStats?.[0]?.repeat_bands ?? 0);
       const estimatedAttendees = event?.estimatedAttendees ?? null;
 
       let engagementPercent: number;
@@ -418,7 +428,7 @@ export const analyticsRouter = router({
         bandCount,
         tapCount,
         uniqueBands,
-        repeatBands: Number(repeatBandsResult[0]?.repeat_bands ?? 0),
+        repeatBands,
         engagementPercent,
         estimatedAttendees,
       };
@@ -1652,7 +1662,7 @@ export const analyticsRouter = router({
           GROUP BY s."eventId"`
         : Prisma.sql``;
 
-      const [tapCounts, totalBandCount, perEvent, repeatBandsResult] = await Promise.all([
+      const [tapCounts, totalBandCount, perEvent, repeatBandsResult, bandStats] = await Promise.all([
         db.$queryRaw<[{ total_taps: bigint; unique_bands: bigint }]>(Prisma.sql`
           SELECT SUM(total_taps)::int AS total_taps, SUM(unique_bands)::int AS unique_bands FROM (
             SELECT
@@ -1694,12 +1704,22 @@ export const analyticsRouter = router({
             HAVING COUNT(DISTINCT tl."tappedAt") > 1
           ) sub
         `),
+        db.$queryRaw<[{ unique_bands: bigint; repeat_bands: bigint }]>(Prisma.sql`
+          SELECT
+            COUNT(*) FILTER (WHERE "firstTapAt" IS NOT NULL)::int AS unique_bands,
+            COUNT(*) FILTER (WHERE "tapCount" > 1)::int AS repeat_bands
+          FROM "Band"
+          WHERE "eventId" IN (${Prisma.join(eventIds)}) AND "deletedAt" IS NULL
+        `),
       ]);
 
       const perEventMap = new Map(perEvent.map((r) => [r.eventId, r]));
       const filteredEvents = campaign.events.filter((e) => eventIds.includes(e.id));
-      // Clamp upper-bound summary uniques to actual band count.
-      const uniqueBands = Math.min(Number(tapCounts[0]?.unique_bands ?? 0), totalBandCount);
+      // Unfiltered: exact unique from Band table (survives purge). Filtered:
+      // recent TapLog unique (clamped). See eventSummary for the same pattern.
+      const uniqueBands = hasFilters
+        ? Math.min(Number(tapCounts[0]?.unique_bands ?? 0), totalBandCount)
+        : Number(bandStats[0]?.unique_bands ?? 0);
 
       let aggregateEngagement: number;
       let bandCount: number;
@@ -1772,7 +1792,9 @@ export const analyticsRouter = router({
         bandCount,
         tapCount: Number(tapCounts[0]?.total_taps ?? 0),
         uniqueBands,
-        repeatBands: Number(repeatBandsResult[0]?.repeat_bands ?? 0),
+        repeatBands: hasFilters
+          ? Number(repeatBandsResult[0]?.repeat_bands ?? 0)
+          : Number(bandStats[0]?.repeat_bands ?? 0),
         aggregateEngagement,
         estimatedAttendees: totalEstimatedAttendees > 0 ? totalEstimatedAttendees : null,
         breakdown,

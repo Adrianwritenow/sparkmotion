@@ -98,9 +98,13 @@ describe('analytics.eventSummary', () => {
   });
 
   it('returns bandCount, tapCount, uniqueBands for ADMIN caller', async () => {
+    // Unfiltered queryRaw order: tapCounts, repeatBands(unused), summaryTotals, bandStats.
+    // Unfiltered unique/repeat come from the Band table (bandStats), not TapLog.
     prismaMock.$queryRaw
       .mockResolvedValueOnce([{ total_taps: BigInt(5), unique_bands: BigInt(3) }] as any)
-      .mockResolvedValueOnce([{ repeat_bands: BigInt(1) }] as any);
+      .mockResolvedValueOnce([{ repeat_bands: BigInt(1) }] as any)
+      .mockResolvedValueOnce([{ total_taps: BigInt(0), unique_bands: BigInt(0) }] as any)
+      .mockResolvedValueOnce([{ unique_bands: BigInt(3), repeat_bands: BigInt(1) }] as any);
     prismaMock.band.count.mockResolvedValue(10);
     prismaMock.event.findUnique.mockResolvedValue({ estimatedAttendees: null } as any);
 
@@ -113,7 +117,9 @@ describe('analytics.eventSummary', () => {
   it('handles empty tap results gracefully (returns zeros)', async () => {
     prismaMock.$queryRaw
       .mockResolvedValueOnce([] as any)
-      .mockResolvedValueOnce([{ repeat_bands: BigInt(0) }] as any);
+      .mockResolvedValueOnce([{ repeat_bands: BigInt(0) }] as any)
+      .mockResolvedValueOnce([{ total_taps: BigInt(0), unique_bands: BigInt(0) }] as any)
+      .mockResolvedValueOnce([{ unique_bands: BigInt(0), repeat_bands: BigInt(0) }] as any);
     prismaMock.band.count.mockResolvedValue(0);
     prismaMock.event.findUnique.mockResolvedValue({ estimatedAttendees: null } as any);
 
