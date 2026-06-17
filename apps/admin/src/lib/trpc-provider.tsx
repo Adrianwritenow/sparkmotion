@@ -13,7 +13,13 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
     // onLine === false, which pauses every query and freezes data-fetching pages.
     // This admin app is always server-backed, so the online gate adds no value.
     defaultOptions: {
-      queries: { refetchOnWindowFocus: false, networkMode: "always" },
+      // refetchOnReconnect: false — navigator.onLine flaps falsely on some
+      // browsers (VPN/sleep), firing rapid online events. With networkMode
+      // "always" each reconnect refetched every query, causing a request storm
+      // (windows.list/events.byId/flaggedCount looping). Mount + staleTime +
+      // explicit intervals already keep data fresh, so the reconnect trigger is
+      // pure noise here.
+      queries: { refetchOnWindowFocus: false, refetchOnReconnect: false, networkMode: "always" },
       mutations: { networkMode: "always" },
     },
   }));
