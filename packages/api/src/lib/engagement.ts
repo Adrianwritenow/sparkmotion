@@ -20,6 +20,11 @@ export async function getEventEngagement(
 
   if (eventIds.length === 0) return result;
 
+  // Merge purged history from AnalyticsSummary (daily rollup). Taps older than
+  // the 90d retention window are aggregated there per-event/day; the seam is the
+  // oldest surviving raw tap per event (TapLog owns >= seam, summary owns < seam).
+  // total_taps is exact; unique_bands is an upper bound (daily uniques can't
+  // dedupe cross-day) — engagementPercent is clamped to 100 below.
   const rows = await db.$queryRaw<
     Array<{
       eventId: string;
@@ -27,20 +32,35 @@ export async function getEventEngagement(
       unique_bands: number;
     }>
   >(Prisma.sql`
-    SELECT
-      tl."eventId",
-      COUNT(DISTINCT (tl."bandId", tl."tappedAt"))::int AS total_taps,
-      COUNT(DISTINCT tl."bandId")::int AS unique_bands
-    FROM "TapLog" tl
-    INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
-    WHERE tl."eventId" IN (${Prisma.join(eventIds)})
-    GROUP BY tl."eventId"
+    SELECT "eventId", SUM(total_taps)::int AS total_taps, SUM(unique_bands)::int AS unique_bands FROM (
+      SELECT
+        tl."eventId" AS "eventId",
+        COUNT(DISTINCT (tl."bandId", tl."tappedAt")) AS total_taps,
+        COUNT(DISTINCT tl."bandId") AS unique_bands
+      FROM "TapLog" tl
+      INNER JOIN "Band" _b ON _b."id" = tl."bandId" AND _b."deletedAt" IS NULL
+      WHERE tl."eventId" IN (${Prisma.join(eventIds)})
+      GROUP BY tl."eventId"
+      UNION ALL
+      SELECT
+        s."eventId" AS "eventId",
+        SUM(s."tapCount") AS total_taps,
+        SUM(s."uniqueBands") AS unique_bands
+      FROM "AnalyticsSummary" s
+      LEFT JOIN (
+        SELECT "eventId", MIN("tappedAt")::date AS d FROM "TapLog" GROUP BY "eventId"
+      ) seam ON seam."eventId" = s."eventId"
+      WHERE s."eventId" IN (${Prisma.join(eventIds)})
+        AND s."date" < COALESCE(seam.d, 'infinity'::date)
+      GROUP BY s."eventId"
+    ) u
+    GROUP BY "eventId"
   `);
 
   for (const row of rows) {
     const estimatedAttendees = estimatedAttendeesByEvent.get(row.eventId) ?? null;
     const engagementPercent = estimatedAttendees && estimatedAttendees > 0
-      ? Math.round((row.unique_bands / estimatedAttendees) * 100)
+      ? Math.min(100, Math.round((row.unique_bands / estimatedAttendees) * 100))
       : 0;
 
     result.set(row.eventId, {
