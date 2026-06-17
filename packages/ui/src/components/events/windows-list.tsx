@@ -93,6 +93,13 @@ export function WindowsList({ eventId }: WindowsListProps) {
     // Add 500ms buffer to ensure the server evaluates correctly
     const delay = nextTransition - now + 500;
 
+    // Only schedule for transitions within the next 24h. Far-future window times
+    // (e.g. a POST window ending in 2027) overflow setTimeout's 32-bit ms cap
+    // (~24.8 days), which makes it fire immediately → invalidate → refetch →
+    // effect reruns → tight request loop. Skipping distant transitions avoids it.
+    const MAX_DELAY = 24 * 60 * 60 * 1000;
+    if (delay > MAX_DELAY) return;
+
     const timer = setTimeout(() => {
       utils.windows.list.invalidate({ eventId });
       utils.events.byId.invalidate({ id: eventId });
